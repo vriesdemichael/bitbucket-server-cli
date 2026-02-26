@@ -1,0 +1,12 @@
+__pycache__/
+.pytest_cache/
+.venv/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.env
+.env.*
+/local-data/
+/docker/bitbucket/data/
+/docker/postgres/data/

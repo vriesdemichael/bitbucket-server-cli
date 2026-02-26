@@ -1,0 +1,32 @@
+name: bitbucket-server-cli
+
+services:
+  postgres:
+    image: postgres:15
+    container_name: bbsc-postgres
+    environment:
+      POSTGRES_DB: bitbucket
+      POSTGRES_USER: bitbucket
+      POSTGRES_PASSWORD: bitbucket
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data
+
+  bitbucket:
+    image: atlassian/bitbucket:9.4.16
+    container_name: bbsc-bitbucket
+    depends_on:
+      - postgres
+    environment:
+      JDBC_DRIVER: org.postgresql.Driver
+      JDBC_URL: jdbc:postgresql://postgres:5432/bitbucket
+      JDBC_USER: bitbucket
+      JDBC_PASSWORD: bitbucket
+      JVM_MINIMUM_MEMORY: 1g
+      JVM_MAXIMUM_MEMORY: 2g
+    ports:
+      - "7990:7990"
+      - "7999:7999"
+    volumes:
+      - ./bitbucket/data:/var/atlassian/application-data/bitbucket
