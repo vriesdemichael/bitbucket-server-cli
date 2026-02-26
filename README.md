@@ -42,6 +42,10 @@ Authentication workflow:
 - `go run ./cmd/bbsc diff refs main feature --repo TEST/my-repo`
 - `go run ./cmd/bbsc diff pr 123 --repo TEST/my-repo --patch`
 - `go run ./cmd/bbsc diff commit <sha> --repo TEST/my-repo --path seed.txt`
+- `go run ./cmd/bbsc repo comment list --repo TEST/my-repo --commit <sha> --path seed.txt`
+- `go run ./cmd/bbsc repo comment create --repo TEST/my-repo --pr 123 --text "Looks good"`
+- `go run ./cmd/bbsc repo comment update --repo TEST/my-repo --commit <sha> --id 42 --text "Updated text"`
+- `go run ./cmd/bbsc repo comment delete --repo TEST/my-repo --pr 123 --id 42`
 
 Runtime config precedence:
 

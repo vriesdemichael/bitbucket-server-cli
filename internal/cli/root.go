@@ -5,12 +5,15 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
+	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	diffservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
@@ -208,8 +211,215 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 	})
 
 	repoCmd.AddCommand(newRepoSettingsCommand(options))
+	repoCmd.AddCommand(newRepoCommentCommand(options))
 
 	return repoCmd
+}
+
+func newRepoCommentCommand(options *rootOptions) *cobra.Command {
+	var repositorySelector string
+	var commitID string
+	var pullRequestID string
+
+	commentCmd := &cobra.Command{
+		Use:   "comment",
+		Short: "Comment commands for commits and pull requests",
+	}
+
+	commentCmd.PersistentFlags().StringVar(&repositorySelector, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	commentCmd.PersistentFlags().StringVar(&commitID, "commit", "", "Commit ID context")
+	commentCmd.PersistentFlags().StringVar(&pullRequestID, "pr", "", "Pull request ID context")
+
+	var listLimit int
+	var listPath string
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List comments",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			target, err := resolveCommentTarget(repositorySelector, commitID, pullRequestID, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := commentservice.NewService(client)
+			comments, err := service.List(cmd.Context(), target, listPath, listLimit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"context": target.Context(), "comments": comments})
+			}
+
+			if len(comments) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No comments found")
+				return nil
+			}
+
+			for _, comment := range comments {
+				fmt.Fprintln(cmd.OutOrStdout(), formatCommentSummary(comment))
+			}
+
+			return nil
+		},
+	}
+	listCmd.Flags().StringVar(&listPath, "path", "", "File path for comment listing scope")
+	listCmd.Flags().IntVar(&listLimit, "limit", 25, "Page size for Bitbucket comment list operations")
+	_ = listCmd.MarkFlagRequired("path")
+	commentCmd.AddCommand(listCmd)
+
+	var createText string
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a comment",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			target, err := resolveCommentTarget(repositorySelector, commitID, pullRequestID, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := commentservice.NewService(client)
+			created, err := service.Create(cmd.Context(), target, createText)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"context": target.Context(), "comment": created})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Created comment %s\n", commentIDString(created))
+			return nil
+		},
+	}
+	createCmd.Flags().StringVar(&createText, "text", "", "Comment text")
+	_ = createCmd.MarkFlagRequired("text")
+	commentCmd.AddCommand(createCmd)
+
+	var updateCommentID string
+	var updateText string
+	var updateVersion int32
+	updateCmd := &cobra.Command{
+		Use:   "update",
+		Short: "Update a comment",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			target, err := resolveCommentTarget(repositorySelector, commitID, pullRequestID, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := commentservice.NewService(client)
+
+			var version *int32
+			if cmd.Flags().Changed("version") {
+				version = &updateVersion
+			}
+
+			updated, err := service.Update(cmd.Context(), target, updateCommentID, updateText, version)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"context": target.Context(), "comment": updated})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Updated comment %s\n", commentIDString(updated))
+			return nil
+		},
+	}
+	updateCmd.Flags().StringVar(&updateCommentID, "id", "", "Comment ID")
+	updateCmd.Flags().StringVar(&updateText, "text", "", "Comment text")
+	updateCmd.Flags().Int32Var(&updateVersion, "version", 0, "Expected comment version")
+	_ = updateCmd.MarkFlagRequired("id")
+	_ = updateCmd.MarkFlagRequired("text")
+	commentCmd.AddCommand(updateCmd)
+
+	var deleteCommentID string
+	var deleteVersion int32
+	deleteCmd := &cobra.Command{
+		Use:   "delete",
+		Short: "Delete a comment",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			target, err := resolveCommentTarget(repositorySelector, commitID, pullRequestID, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := commentservice.NewService(client)
+
+			var version *int32
+			if cmd.Flags().Changed("version") {
+				version = &deleteVersion
+			}
+
+			resolvedVersion, err := service.Delete(cmd.Context(), target, deleteCommentID, version)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{
+					"context": target.Context(),
+					"deleted": map[string]any{"id": deleteCommentID, "version": resolvedVersion},
+				})
+			}
+
+			if resolvedVersion == nil {
+				fmt.Fprintf(cmd.OutOrStdout(), "Deleted comment %s\n", strings.TrimSpace(deleteCommentID))
+				return nil
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted comment %s (version=%d)\n", strings.TrimSpace(deleteCommentID), *resolvedVersion)
+			return nil
+		},
+	}
+	deleteCmd.Flags().StringVar(&deleteCommentID, "id", "", "Comment ID")
+	deleteCmd.Flags().Int32Var(&deleteVersion, "version", 0, "Expected comment version")
+	_ = deleteCmd.MarkFlagRequired("id")
+	commentCmd.AddCommand(deleteCmd)
+
+	return commentCmd
 }
 
 func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
@@ -764,6 +974,28 @@ func resolveRepositorySettingsReference(selector string, cfg config.AppConfig) (
 	return reposettings.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, nil
 }
 
+func resolveCommentTarget(selector string, commitID string, pullRequestID string, cfg config.AppConfig) (commentservice.Target, error) {
+	repo, err := resolveRepositorySelector(selector, cfg)
+	if err != nil {
+		return commentservice.Target{}, err
+	}
+
+	trimmedCommitID := strings.TrimSpace(commitID)
+	trimmedPullRequestID := strings.TrimSpace(pullRequestID)
+	hasCommit := trimmedCommitID != ""
+	hasPullRequest := trimmedPullRequestID != ""
+
+	if hasCommit == hasPullRequest {
+		return commentservice.Target{}, apperrors.New(apperrors.KindValidation, "exactly one of --commit or --pr is required", nil)
+	}
+
+	return commentservice.Target{
+		Repository:    commentservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug},
+		CommitID:      trimmedCommitID,
+		PullRequestID: trimmedPullRequestID,
+	}, nil
+}
+
 func resolveDiffOutputMode(patch, stat, nameOnly bool) (diffservice.OutputKind, error) {
 	selected := 0
 	if patch {
@@ -819,6 +1051,31 @@ func writeDiffResult(writer io.Writer, asJSON bool, mode diffservice.OutputKind,
 		}
 		return nil
 	}
+}
+
+func commentIDString(comment openapigenerated.RestComment) string {
+	if comment.Id == nil {
+		return "unknown"
+	}
+
+	return strconv.FormatInt(*comment.Id, 10)
+}
+
+func formatCommentSummary(comment openapigenerated.RestComment) string {
+	text := ""
+	if comment.Text != nil {
+		text = strings.TrimSpace(*comment.Text)
+	}
+	if text == "" {
+		text = "<empty>"
+	}
+
+	version := "?"
+	if comment.Version != nil {
+		version = strconv.Itoa(int(*comment.Version))
+	}
+
+	return fmt.Sprintf("[%s v%s] %s", commentIDString(comment), version, text)
 }
 
 func newIssueCommand(options *rootOptions) *cobra.Command {
