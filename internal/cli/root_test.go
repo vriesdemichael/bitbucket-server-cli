@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -481,5 +482,147 @@ func TestRepoSettingsPullRequestsUpdateApprovers(t *testing.T) {
 
 	if !strings.Contains(buffer.String(), "Updated pull-request settings: requiredApprovers=2") {
 		t.Fatalf("expected pull-request approvers update output, got: %s", buffer.String())
+	}
+}
+
+func TestRepoCommentListCommitJSON(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/commits/abc123/comments" {
+			http.NotFound(writer, request)
+			return
+		}
+		if request.URL.Query().Get("path") != "seed.txt" {
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte("path query must be seed.txt"))
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`{"values":[{"id":101,"text":"hello commit","version":1}],"isLastPage":true}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "repo", "comment", "list", "--commit", "abc123", "--path", "seed.txt"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(buffer.Bytes(), &parsed); err != nil {
+		t.Fatalf("expected valid json output, got: %s (%v)", buffer.String(), err)
+	}
+
+	contextPayload, ok := parsed["context"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected context payload, got: %#v", parsed["context"])
+	}
+
+	if contextPayload["type"] != "commit" || contextPayload["commit_id"] != "abc123" {
+		t.Fatalf("unexpected context payload: %#v", contextPayload)
+	}
+
+	comments, ok := parsed["comments"].([]any)
+	if !ok || len(comments) != 1 {
+		t.Fatalf("expected one comment in output, got: %#v", parsed["comments"])
+	}
+}
+
+func TestRepoCommentCreatePRJSON(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || !strings.HasSuffix(request.URL.Path, "/projects/TEST/repos/demo/pull-requests/77/comments") {
+			http.NotFound(writer, request)
+			return
+		}
+
+		body, _ := io.ReadAll(request.Body)
+		if !strings.Contains(string(body), `"text":"hello pr"`) {
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte("missing text"))
+			return
+		}
+
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		writer.WriteHeader(http.StatusCreated)
+		_, _ = writer.Write([]byte(`{"id":202,"text":"hello pr","version":0}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "repo", "comment", "create", "--pr", "77", "--text", "hello pr"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(buffer.Bytes(), &parsed); err != nil {
+		t.Fatalf("expected valid json output, got: %s (%v)", buffer.String(), err)
+	}
+
+	contextPayload, ok := parsed["context"].(map[string]any)
+	if !ok || contextPayload["type"] != "pull_request" || contextPayload["pull_request_id"] != "77" {
+		t.Fatalf("unexpected context payload: %#v", parsed["context"])
+	}
+}
+
+func TestRepoCommentDeleteAutoResolvesVersion(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	var getCommentCalls atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc123/comments/300":
+			getCommentCalls.Add(1)
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":300,"text":"to-delete","version":4}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc123/comments/300":
+			if request.URL.Query().Get("version") != "4" {
+				writer.WriteHeader(http.StatusBadRequest)
+				_, _ = writer.Write([]byte("expected version=4"))
+				return
+			}
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"repo", "comment", "delete", "--commit", "abc123", "--id", "300"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if getCommentCalls.Load() != 1 {
+		t.Fatalf("expected one version lookup call, got: %d", getCommentCalls.Load())
+	}
+
+	if !strings.Contains(buffer.String(), "Deleted comment 300 (version=4)") {
+		t.Fatalf("expected delete output with resolved version, got: %s", buffer.String())
 	}
 }
