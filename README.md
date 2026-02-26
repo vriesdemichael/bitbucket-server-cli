@@ -5,12 +5,9 @@ Go CLI and client for Bitbucket Server/Data Center automation with **live-behavi
 ## Current state
 
 This repository is scaffolded with:
-- a detailed migration/implementation plan
 - minimal package and CLI skeleton
 - local Bitbucket Docker stack skeleton
 - test layout for unit + live integration suites
-
-Start with the plan in [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
 
 ## Development workflow
 
@@ -42,6 +39,9 @@ Authentication workflow:
 - `go run ./cmd/bbsc auth login --host http://localhost:7990 --username admin --password admin`
 - `go run ./cmd/bbsc auth status`
 - `go run ./cmd/bbsc auth logout`
+- `go run ./cmd/bbsc diff refs main feature --repo TEST/my-repo`
+- `go run ./cmd/bbsc diff pr 123 --repo TEST/my-repo --patch`
+- `go run ./cmd/bbsc diff commit <sha> --repo TEST/my-repo --path seed.txt`
 
 Runtime config precedence:
 
@@ -56,6 +56,7 @@ API reference source:
 - Vendored OpenAPI reference: [docs/reference/atlassian/bitbucket-9.4-openapi.json](docs/reference/atlassian/bitbucket-9.4-openapi.json)
 - Generated client baseline: [internal/openapi/generated/bitbucket_client.gen.go](internal/openapi/generated/bitbucket_client.gen.go)
 - OpenAPI fix registry: [docs/openapi/fixes.yaml](docs/openapi/fixes.yaml)
+- Repository settings command mapping: [docs/REPO_SETTINGS_COMMANDS.md](docs/REPO_SETTINGS_COMMANDS.md)
 - Real server behavior must still be validated through live integration tests
 
 ## Licensing note
