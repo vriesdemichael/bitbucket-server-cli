@@ -1,0 +1,19 @@
+number: 9
+title: Transport policy for Bitbucket API calls
+category: architecture
+status: accepted
+decision: >
+  Centralize all HTTP transport behavior in a shared client package that provides
+  authentication injection, timeout defaults, retry/backoff policy, rate-limit handling,
+  and pagination primitives.
+agent_instructions: >
+  Do not implement ad-hoc HTTP behavior in service or workflow packages.
+  New endpoints must use the shared transport interfaces and error mapping.
+  Keep retry behavior explicit and safe for idempotent operations.
+rationale: >
+  Bitbucket behavior and reliability concerns should be handled once and reused everywhere.
+  Centralization prevents subtle drift in auth, timeout, and pagination logic.
+rejected_alternatives:
+  - alternative: Per-service custom HTTP clients
+    reason: Produces inconsistent behavior and duplicated reliability logic.
+provenance: guided-ai

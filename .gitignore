@@ -10,3 +10,5 @@ __pycache__/
 /local-data/
 /docker/bitbucket/data/
 /docker/postgres/data/
+/.tmp/*
+!/.tmp/.gitkeep

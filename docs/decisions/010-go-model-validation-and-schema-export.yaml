@@ -1,0 +1,20 @@
+number: 10
+title: Go model validation and schema export
+category: architecture
+status: accepted
+decision: >
+  Use typed Go structs with explicit runtime validation rules for inputs and configuration,
+  and support JSON schema export for machine validation of JSON/YAML examples and docs.
+agent_instructions: >
+  Define validation close to model definitions and validate at boundaries (config load,
+  request payload construction, and external input parsing).
+  Keep schemas generated from the model source of truth rather than hand-maintained files.
+rationale: >
+  This preserves core benefits previously achieved with Pydantic: strict data validation,
+  explicit contracts, and schema-driven validation for documentation examples.
+rejected_alternatives:
+  - alternative: Validation only in business logic
+    reason: Error-prone and inconsistent, with weaker contract guarantees.
+  - alternative: Handwritten schemas detached from model types
+    reason: High drift risk and duplicate maintenance burden.
+provenance: guided-ai

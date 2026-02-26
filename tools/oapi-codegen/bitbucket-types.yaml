@@ -1,0 +1,4 @@
+package: generated
+output: internal/models/generated/bitbucket_types.gen.go
+generate:
+  models: true

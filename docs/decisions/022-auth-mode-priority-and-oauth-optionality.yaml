@@ -1,0 +1,25 @@
+number: 22
+title: Auth mode priority and OAuth optionality
+category: architecture
+status: accepted
+decision: >
+  Use a practical auth priority for runtime operations: CLI flags/env and stored credentials
+  with token or basic auth are first-class and required for milestone delivery.
+  OAuth is supported as an optional advanced mode and is explicitly non-blocking for local
+  Docker/evaluation environments.
+agent_instructions: >
+  Implement and maintain token/basic auth as the default operational path.
+  Do not block milestone features on OAuth availability.
+  If OAuth is added, keep it additive and preserve fallback behavior to token/basic.
+  Document authentication mode in status output and troubleshooting guidance.
+rationale: >
+  Bitbucket Server/Data Center OAuth setup is not consistently available in local or restricted
+  environments and often requires extra administrative configuration.
+  Token/basic auth provides reliable behavior for live testing and day-to-day development while
+  keeping a path open for stronger auth deployments.
+rejected_alternatives:
+  - alternative: OAuth-only authentication
+    reason: Incompatible with many local/eval setups and increases onboarding friction.
+  - alternative: No OAuth support at all
+    reason: Prevents future enterprise integrations where OAuth is mandated.
+provenance: guided-ai

@@ -1,0 +1,19 @@
+number: 11
+title: Error taxonomy and CLI exit contract
+category: architecture
+status: accepted
+decision: >
+  Define a stable error taxonomy (authentication, authorization, validation, not-found,
+  conflict, transient, permanent) and map it to deterministic CLI exit codes and structured
+  JSON error payloads.
+agent_instructions: >
+  Map transport and service errors into canonical categories before returning from workflows.
+  Keep human output and JSON output consistent with the same underlying error classification.
+  Avoid leaking raw upstream errors directly to users.
+rationale: >
+  Deterministic error behavior is required for both scriptability and operator trust.
+  A consistent taxonomy simplifies retries, diagnostics, and support workflows.
+rejected_alternatives:
+  - alternative: Free-form error strings and ad-hoc exit codes
+    reason: Breaks machine consumption and makes behavior unpredictable.
+provenance: guided-ai

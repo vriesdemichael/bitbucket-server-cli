@@ -3,7 +3,7 @@
 ## 1) Goal and constraints
 
 ### Goal
-Build a dependable Python library + CLI for Bitbucket Server/Data Center operations, validated against **real server behavior** (not only docs), targeting **Atlassian Bitbucket 9.4.16**.
+Build a dependable Go client + CLI for Bitbucket Server/Data Center operations, validated against **real server behavior** (not only docs), targeting **Atlassian Bitbucket 9.4.16**.
 
 ### Constraints
 - Keep this repo independent from `cog-lib-bitbucket` while reusing design lessons.
@@ -19,7 +19,7 @@ Use a layered architecture that keeps wrappers, but narrows each layer’s respo
 
 ### Layers
 1. **Transport layer**
-   - `httpx` client
+   - shared Go HTTP client
    - auth, timeout, retry policy, pagination primitives
 2. **Bitbucket API services**
    - focused modules by domain (`repo`, `pr`, `issues`, `webhook`, `project`)
@@ -39,7 +39,7 @@ You keep one public, stable interface while isolating undocumented behavior hand
 
 From existing `cog-lib-bitbucket`:
 - Keep domain intent and command workflows around repo creation and PR automation.
-- Keep pydantic model approach for typed API responses.
+- Keep strict typed model validation and schema export approach.
 - Keep retry and throttling concepts (but centralize transport behavior).
 
 ---
@@ -65,9 +65,9 @@ From existing `cog-lib-bitbucket`:
    - tiny suite against a remote sandbox if needed
 
 ## Test markers
-- `live`: requires local Bitbucket stack
-- `slow`: long-running setup/operations
-- `destructive`: creates/deletes server state
+- unit tests run in default local checks
+- live tests run explicitly against local Bitbucket stack
+- destructive live tests are isolated and opt-in
 
 ## Determinism tactics
 - Seed known users/projects/repos before tests.
@@ -153,5 +153,5 @@ From existing `cog-lib-bitbucket`:
 First milestone is complete when:
 - local Bitbucket 9.4.16 stack is documented and runnable
 - `bbsc auth status` and `bbsc repo list` work against local instance
-- at least one `@pytest.mark.live` test passes in CI/manual local run
+- at least one live integration test passes in manual/local run
 - docs include reset + troubleshooting steps

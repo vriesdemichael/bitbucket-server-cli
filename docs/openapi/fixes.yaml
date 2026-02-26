@@ -1,0 +1,76 @@
+version: 1
+updated_at: "2026-02-26"
+source_openapi: docs/reference/atlassian/bitbucket-9.4-openapi.json
+fixes:
+  - id: OPENAPI-001
+    area: spec-path-parameters
+    description: Add missing path parameter declarations required by oapi-codegen.
+    reference:
+      type: endpoint
+      value: /api/latest/projects/{projectKey}/repos/{repositorySlug}/secret-scanning/exempt
+      upstream_issue: positional path params present in URL template but absent from operation parameters
+    change:
+      files:
+        - tools/openapi-sanitize/main.go
+      detail: >
+        The sanitizer injects required path parameters into operations when placeholders are present
+        in the route template but not declared in the OpenAPI operation parameter list.
+    verification:
+      commands:
+        - task models:generate
+        - task client:generate
+
+  - id: OPENAPI-002
+    area: spec-operationid-collisions
+    description: Normalize and de-duplicate operationIds to keep generated symbols deterministic and unique.
+    reference:
+      type: generation
+      value: oapi-codegen operation/type naming
+      upstream_issue: duplicate or empty operationIds can create conflicting generated declarations
+    change:
+      files:
+        - tools/openapi-sanitize/main.go
+      detail: >
+        The sanitizer canonicalizes operationIds and applies stable suffixing when collisions are found,
+        including generation of fallback operationIds for operations missing one.
+    verification:
+      commands:
+        - task models:verify
+        - task client:verify
+
+  - id: OPENAPI-003
+    area: model-generation-dedupe
+    description: Preserve a deterministic cleanup step for generated model type collisions.
+    reference:
+      type: generation
+      value: internal/models/generated/bitbucket_types.gen.go
+      upstream_issue: duplicate type declarations can be emitted for specific schema combinations
+    change:
+      files:
+        - tools/oapi-fix-generated/main.go
+        - Taskfile.yml
+      detail: >
+        models:generate runs a post-generation dedupe pass that removes repeated type declarations
+        while preserving first occurrence and formatting output with gofmt.
+    verification:
+      commands:
+        - task models:verify
+
+  - id: OPENAPI-004
+    area: live-contract-parity
+    description: Seed live data before parity checks to validate non-empty contract behavior.
+    reference:
+      type: test
+      value: tests/integration/live/openapi_parity_test.go
+      upstream_issue: empty-list parity can pass without validating end-to-end contract fidelity
+    change:
+      files:
+        - tests/integration/live/openapi_parity_test.go
+        - internal/services/repository/service.go
+      detail: >
+        The live test provisions a unique user, project, and repository, retrieves project-scoped
+        repositories through both manual and generated clients, asserts seeded repository presence,
+        and performs cleanup.
+    verification:
+      commands:
+        - go test -tags=live ./tests/integration/live -run TestOpenAPIParity

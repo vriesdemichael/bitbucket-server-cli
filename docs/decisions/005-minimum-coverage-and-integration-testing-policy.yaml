@@ -1,0 +1,22 @@
+number: 5
+title: Minimum coverage and integration testing policy
+category: development
+status: accepted
+decision: >
+  Maintain at least 85% line coverage for unit tests and require integration tests for all behavior
+  that interacts with Bitbucket APIs, authentication, permissions, pagination, or server-managed state.
+  Contract tests are deferred until live tests reach maturity.
+agent_instructions: >
+  Keep unit tests focused on fast local correctness and parsing/normalization behavior.
+  Add live tests for endpoint semantics and side effects.
+  If coverage drops below 85%, restore coverage before considering work complete.
+  Contract tests can be proposed only when live tests show stable low flake rates and broad endpoint coverage.
+rationale: >
+  A clear coverage floor prevents regression in local correctness while live tests validate real server behavior.
+  This split keeps feedback fast and realistic, matching the project's reliability goals.
+rejected_alternatives:
+  - alternative: No explicit coverage threshold
+    reason: Lacks a clear quality baseline and encourages uneven test discipline.
+  - alternative: Unit tests only
+    reason: Insufficient for validating real Bitbucket behavior.
+provenance: guided-ai

@@ -1,0 +1,5 @@
+package: openapigenerated
+output: internal/openapi/generated/bitbucket_client.gen.go
+generate:
+  models: true
+  client: true

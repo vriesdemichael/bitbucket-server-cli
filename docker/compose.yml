@@ -18,6 +18,8 @@ services:
     container_name: bbsc-bitbucket
     depends_on:
       - postgres
+    env_file:
+      - ../.env
     environment:
       JDBC_DRIVER: org.postgresql.Driver
       JDBC_URL: jdbc:postgresql://postgres:5432/bitbucket
@@ -25,6 +27,7 @@ services:
       JDBC_PASSWORD: bitbucket
       JVM_MINIMUM_MEMORY: 1g
       JVM_MAXIMUM_MEMORY: 2g
+      BITBUCKET_LICENSE_KEY: ${BITBUCKET_LICENSE_KEY}
     ports:
       - "7990:7990"
       - "7999:7999"
