@@ -27,6 +27,16 @@ Common commands:
 - `task stack:status`
 - `go test -tags=live ./tests/integration/live -run TestOpenAPIParity`
 
+## GitHub Actions
+
+- CI workflow: `.github/workflows/ci.yml`
+	- Runs on pull requests to `main` and pushes to `main`
+	- Executes `task quality:check`
+- Release workflow: `.github/workflows/release.yml`
+	- Manual trigger only via `workflow_dispatch`
+	- Requires a version input (for example `v0.1.0`)
+	- Generates release notes from Conventional Commit history, tags the commit, and publishes a GitHub release
+
 Runtime environment variables:
 
 - `BITBUCKET_URL` (default `http://localhost:7990`)
