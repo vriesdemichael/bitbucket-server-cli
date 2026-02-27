@@ -45,6 +45,98 @@ func TestAuthStatusSmoke(t *testing.T) {
 	}
 }
 
+func TestTagCreateJSON(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/tags" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`{"displayId":"v1.0.0","latestCommit":"abc123","type":"ANNOTATED"}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "tag", "create", "v1.0.0", "--start-point", "abc123"})
+
+	err := command.Execute()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if !strings.Contains(buffer.String(), "v1.0.0") {
+		t.Fatalf("expected created tag output, got: %s", buffer.String())
+	}
+}
+
+func TestBuildStatusSetJSON(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost || request.URL.Path != "/rest/build-status/latest/commits/abc123" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.WriteHeader(http.StatusNoContent)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "build", "status", "set", "abc123", "--key", "ci/main", "--state", "SUCCESSFUL", "--url", "https://example.invalid/build/1"})
+
+	err := command.Execute()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if !strings.Contains(buffer.String(), "\"status\": \"ok\"") {
+		t.Fatalf("expected ok response, got: %s", buffer.String())
+	}
+}
+
+func TestInsightsReportSetJSON(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPut || request.URL.Path != "/rest/insights/latest/projects/TEST/repos/demo/commits/abc123/reports/lint" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`{"key":"lint","title":"Lint","result":"PASS"}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "insights", "report", "set", "abc123", "lint", "--body", `{"title":"Lint","result":"PASS","data":[{"title":"warnings","type":"NUMBER","value":{"value":0}}]}`})
+
+	err := command.Execute()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if !strings.Contains(buffer.String(), "\"key\": \"lint\"") {
+		t.Fatalf("expected report key in output, got: %s", buffer.String())
+	}
+}
 func TestAuthStatusJSON(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost:7990")

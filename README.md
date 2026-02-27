@@ -46,6 +46,18 @@ Authentication workflow:
 - `go run ./cmd/bbsc repo comment create --repo TEST/my-repo --pr 123 --text "Looks good"`
 - `go run ./cmd/bbsc repo comment update --repo TEST/my-repo --commit <sha> --id 42 --text "Updated text"`
 - `go run ./cmd/bbsc repo comment delete --repo TEST/my-repo --pr 123 --id 42`
+- `go run ./cmd/bbsc tag list --repo TEST/my-repo --limit 50 --order-by ALPHABETICAL`
+- `go run ./cmd/bbsc tag create v1.2.3 --repo TEST/my-repo --start-point <sha> --message "release v1.2.3"`
+- `go run ./cmd/bbsc tag view v1.2.3 --repo TEST/my-repo`
+- `go run ./cmd/bbsc tag delete v1.2.3 --repo TEST/my-repo`
+- `go run ./cmd/bbsc build status set <sha> --key ci/main --state SUCCESSFUL --url https://ci.example/build/42`
+- `go run ./cmd/bbsc build status get <sha> --order-by NEWEST --limit 25`
+- `go run ./cmd/bbsc build status stats <sha> --include-unique`
+- `go run ./cmd/bbsc build required list --repo TEST/my-repo`
+- `go run ./cmd/bbsc build required create --repo TEST/my-repo --body '{"buildParentKeys":["ci"],"refMatcher":{"id":"refs/heads/master"}}'`
+- `go run ./cmd/bbsc insights report set <sha> lint --repo TEST/my-repo --body '{"title":"Lint","result":"PASS","data":[{"title":"warnings","type":"NUMBER","value":{"value":0}}]}'`
+- `go run ./cmd/bbsc insights report get <sha> lint --repo TEST/my-repo`
+- `go run ./cmd/bbsc insights annotation add <sha> lint --repo TEST/my-repo --body '[{"externalId":"lint-1","message":"Fix warning","severity":"MEDIUM","path":"seed.txt","line":1}]'`
 
 Runtime config precedence:
 

@@ -15,8 +15,10 @@ import (
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	diffservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
+	qualityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/quality"
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
+	tagservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/tag"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
 )
 
@@ -34,7 +36,10 @@ func NewRootCommand() *cobra.Command {
 
 	rootCmd.AddCommand(newAuthCommand(options))
 	rootCmd.AddCommand(newRepoCommand(options))
+	rootCmd.AddCommand(newTagCommand(options))
 	rootCmd.AddCommand(newDiffCommand(options))
+	rootCmd.AddCommand(newBuildCommand(options))
+	rootCmd.AddCommand(newInsightsCommand(options))
 	rootCmd.AddCommand(newPRCommand(options))
 	rootCmd.AddCommand(newIssueCommand(options))
 	rootCmd.AddCommand(newAdminCommand(options))
@@ -911,6 +916,806 @@ func newDiffCommand(options *rootOptions) *cobra.Command {
 	return diffCmd
 }
 
+func newTagCommand(options *rootOptions) *cobra.Command {
+	var repositorySelector string
+	var limit int
+	var orderBy string
+	var filterText string
+
+	tagCmd := &cobra.Command{
+		Use:   "tag",
+		Short: "Repository tag lifecycle commands",
+	}
+
+	tagCmd.PersistentFlags().StringVar(&repositorySelector, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	tagCmd.PersistentFlags().IntVar(&limit, "limit", 25, "Page size for list operations")
+	tagCmd.PersistentFlags().StringVar(&orderBy, "order-by", "", "Tag ordering: ALPHABETICAL or MODIFICATION")
+	tagCmd.PersistentFlags().StringVar(&filterText, "filter", "", "Filter text for tag names")
+
+	tagCmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List repository tags",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveTagRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := tagservice.NewService(client)
+			tags, err := service.List(cmd.Context(), repo, tagservice.ListOptions{Limit: limit, OrderBy: orderBy, FilterText: filterText})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), tags)
+			}
+
+			if len(tags) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No tags found")
+				return nil
+			}
+
+			for _, tag := range tags {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", safeString(tag.DisplayId), safeStringFromTagType(tag.Type), safeString(tag.LatestCommit))
+			}
+
+			return nil
+		},
+	})
+
+	var startPoint string
+	var message string
+	createCmd := &cobra.Command{
+		Use:   "create <name>",
+		Short: "Create repository tag",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveTagRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := tagservice.NewService(client)
+			createdTag, err := service.Create(cmd.Context(), repo, args[0], startPoint, message)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), createdTag)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Created tag %s (%s)\n", safeString(createdTag.DisplayId), safeString(createdTag.LatestCommit))
+			return nil
+		},
+	}
+	createCmd.Flags().StringVar(&startPoint, "start-point", "", "Commit ID or ref to tag")
+	createCmd.Flags().StringVar(&message, "message", "", "Optional annotated tag message")
+	_ = createCmd.MarkFlagRequired("start-point")
+	tagCmd.AddCommand(createCmd)
+
+	tagCmd.AddCommand(&cobra.Command{
+		Use:   "view <name>",
+		Short: "View repository tag",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveTagRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := tagservice.NewService(client)
+			tag, err := service.Get(cmd.Context(), repo, args[0])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), tag)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Tag: %s\n", safeString(tag.DisplayId))
+			fmt.Fprintf(cmd.OutOrStdout(), "Type: %s\n", safeStringFromTagType(tag.Type))
+			fmt.Fprintf(cmd.OutOrStdout(), "Commit: %s\n", safeString(tag.LatestCommit))
+			return nil
+		},
+	})
+
+	tagCmd.AddCommand(&cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete repository tag",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveTagRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := tagservice.NewService(client)
+			if err := service.Delete(cmd.Context(), repo, args[0]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok", "tag": args[0]})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted tag %s\n", args[0])
+			return nil
+		},
+	})
+
+	return tagCmd
+}
+
+func newBuildCommand(options *rootOptions) *cobra.Command {
+	var repositorySelector string
+
+	buildCmd := &cobra.Command{
+		Use:   "build",
+		Short: "Build status and required merge-check commands",
+	}
+
+	statusCmd := &cobra.Command{
+		Use:   "status",
+		Short: "Build status commands by commit",
+	}
+
+	var setKey string
+	var setState string
+	var setURL string
+	var setName string
+	var setDescription string
+	var setRef string
+	var setParent string
+	var setBuildNumber string
+	var setDuration int64
+	setCmd := &cobra.Command{
+		Use:   "set <commit>",
+		Short: "Set build status for a commit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			if err := service.SetBuildStatus(cmd.Context(), args[0], qualityservice.BuildStatusSetInput{
+				Key:         setKey,
+				State:       setState,
+				URL:         setURL,
+				Name:        setName,
+				Description: setDescription,
+				Ref:         setRef,
+				Parent:      setParent,
+				BuildNumber: setBuildNumber,
+				DurationMS:  setDuration,
+			}); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok", "commit": args[0], "key": setKey})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Build status %s set on %s\n", setKey, args[0])
+			return nil
+		},
+	}
+	setCmd.Flags().StringVar(&setKey, "key", "", "Build status key")
+	setCmd.Flags().StringVar(&setState, "state", "", "Build state (SUCCESSFUL, FAILED, INPROGRESS, UNKNOWN)")
+	setCmd.Flags().StringVar(&setURL, "url", "", "Build URL")
+	setCmd.Flags().StringVar(&setName, "name", "", "Build display name")
+	setCmd.Flags().StringVar(&setDescription, "description", "", "Build description")
+	setCmd.Flags().StringVar(&setRef, "ref", "", "Build ref")
+	setCmd.Flags().StringVar(&setParent, "parent", "", "Build parent key")
+	setCmd.Flags().StringVar(&setBuildNumber, "build-number", "", "Build number")
+	setCmd.Flags().Int64Var(&setDuration, "duration-ms", 0, "Duration in milliseconds")
+	_ = setCmd.MarkFlagRequired("key")
+	_ = setCmd.MarkFlagRequired("state")
+	_ = setCmd.MarkFlagRequired("url")
+	statusCmd.AddCommand(setCmd)
+
+	var getLimit int
+	var getOrderBy string
+	statusCmd.AddCommand(&cobra.Command{
+		Use:   "get <commit>",
+		Short: "Get build statuses for a commit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			statuses, err := service.GetBuildStatuses(cmd.Context(), args[0], getLimit, getOrderBy)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), statuses)
+			}
+
+			if len(statuses) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No build statuses found")
+				return nil
+			}
+
+			for _, status := range statuses {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", safeString(status.Key), safeStringFromBuildState(status.State), safeString(status.Url))
+			}
+
+			return nil
+		},
+	})
+	statusCmd.PersistentFlags().IntVar(&getLimit, "limit", 25, "Page size for list operations")
+	statusCmd.PersistentFlags().StringVar(&getOrderBy, "order-by", "", "Order by NEWEST, OLDEST, or STATUS")
+
+	var includeUnique bool
+	statusCmd.AddCommand(&cobra.Command{
+		Use:   "stats <commit>",
+		Short: "Get build status summary counts for a commit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			stats, err := service.GetBuildStatusStats(cmd.Context(), args[0], includeUnique)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), stats)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Successful: %d\n", safeInt32(stats.Successful))
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed: %d\n", safeInt32(stats.Failed))
+			fmt.Fprintf(cmd.OutOrStdout(), "In Progress: %d\n", safeInt32(stats.InProgress))
+			fmt.Fprintf(cmd.OutOrStdout(), "Unknown: %d\n", safeInt32(stats.Unknown))
+			fmt.Fprintf(cmd.OutOrStdout(), "Cancelled: %d\n", safeInt32(stats.Cancelled))
+			return nil
+		},
+	})
+	statusCmd.PersistentFlags().BoolVar(&includeUnique, "include-unique", false, "Include unique result details when available")
+
+	requiredCmd := &cobra.Command{
+		Use:   "required",
+		Short: "Required build merge-check management",
+	}
+	requiredCmd.PersistentFlags().StringVar(&repositorySelector, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+
+	var requiredLimit int
+	requiredCmd.PersistentFlags().IntVar(&requiredLimit, "limit", 25, "Page size for list operations")
+
+	requiredCmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List required build merge checks",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			checks, err := service.ListRequiredBuildChecks(cmd.Context(), repo, requiredLimit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), checks)
+			}
+
+			if len(checks) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No required build merge checks found")
+				return nil
+			}
+
+			for _, check := range checks {
+				fmt.Fprintf(cmd.OutOrStdout(), "id=%d buildParentKeys=%v\n", safeInt64(check.Id), safeStringSlice(check.BuildParentKeys))
+			}
+
+			return nil
+		},
+	})
+
+	var createBody string
+	createRequiredCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create required build merge check",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			payload := map[string]any{}
+			if err := json.Unmarshal([]byte(createBody), &payload); err != nil {
+				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			created, err := service.CreateRequiredBuildCheck(cmd.Context(), repo, payload)
+			if err != nil {
+				return err
+			}
+
+			return writeJSON(cmd.OutOrStdout(), created)
+		},
+	}
+	createRequiredCmd.Flags().StringVar(&createBody, "body", "", "Raw JSON payload for required build merge check")
+	_ = createRequiredCmd.MarkFlagRequired("body")
+	requiredCmd.AddCommand(createRequiredCmd)
+
+	var updateBody string
+	updateRequiredCmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update required build merge check",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			id, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil {
+				return apperrors.New(apperrors.KindValidation, "merge check id must be a valid integer", err)
+			}
+
+			payload := map[string]any{}
+			if err := json.Unmarshal([]byte(updateBody), &payload); err != nil {
+				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			updated, err := service.UpdateRequiredBuildCheck(cmd.Context(), repo, id, payload)
+			if err != nil {
+				return err
+			}
+
+			return writeJSON(cmd.OutOrStdout(), updated)
+		},
+	}
+	updateRequiredCmd.Flags().StringVar(&updateBody, "body", "", "Raw JSON payload for required build merge check")
+	_ = updateRequiredCmd.MarkFlagRequired("body")
+	requiredCmd.AddCommand(updateRequiredCmd)
+
+	requiredCmd.AddCommand(&cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete required build merge check",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			id, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil {
+				return apperrors.New(apperrors.KindValidation, "merge check id must be a valid integer", err)
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			if err := service.DeleteRequiredBuildCheck(cmd.Context(), repo, id); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "id": id})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted required build merge check %d\n", id)
+			return nil
+		},
+	})
+
+	buildCmd.AddCommand(statusCmd)
+	buildCmd.AddCommand(requiredCmd)
+
+	return buildCmd
+}
+
+func newInsightsCommand(options *rootOptions) *cobra.Command {
+	var repositorySelector string
+	var reportLimit int
+
+	insightsCmd := &cobra.Command{
+		Use:   "insights",
+		Short: "Code Insights report and annotation commands",
+	}
+	insightsCmd.PersistentFlags().StringVar(&repositorySelector, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+
+	reportCmd := &cobra.Command{
+		Use:   "report",
+		Short: "Code Insights report commands",
+	}
+	reportCmd.PersistentFlags().IntVar(&reportLimit, "limit", 25, "Page size for list operations")
+
+	var reportBody string
+	setReportCmd := &cobra.Command{
+		Use:   "set <commit> <key>",
+		Short: "Create or update a Code Insights report",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			request := openapigenerated.SetACodeInsightsReportJSONRequestBody{}
+			if err := json.Unmarshal([]byte(reportBody), &request); err != nil {
+				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			report, err := service.SetReport(cmd.Context(), repo, args[0], args[1], request)
+			if err != nil {
+				return err
+			}
+
+			return writeJSON(cmd.OutOrStdout(), report)
+		},
+	}
+	setReportCmd.Flags().StringVar(&reportBody, "body", "", "Raw JSON payload for Code Insights report")
+	_ = setReportCmd.MarkFlagRequired("body")
+	reportCmd.AddCommand(setReportCmd)
+
+	reportCmd.AddCommand(&cobra.Command{
+		Use:   "get <commit> <key>",
+		Short: "Get a Code Insights report",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			report, err := service.GetReport(cmd.Context(), repo, args[0], args[1])
+			if err != nil {
+				return err
+			}
+
+			return writeJSON(cmd.OutOrStdout(), report)
+		},
+	})
+
+	reportCmd.AddCommand(&cobra.Command{
+		Use:   "delete <commit> <key>",
+		Short: "Delete a Code Insights report",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			if err := service.DeleteReport(cmd.Context(), repo, args[0], args[1]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "commit": args[0], "key": args[1]})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted report %s for commit %s\n", args[1], args[0])
+			return nil
+		},
+	})
+
+	reportCmd.AddCommand(&cobra.Command{
+		Use:   "list <commit>",
+		Short: "List Code Insights reports for a commit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			reports, err := service.ListReports(cmd.Context(), repo, args[0], reportLimit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), reports)
+			}
+
+			if len(reports) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No reports found")
+				return nil
+			}
+
+			for _, report := range reports {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", safeString(report.Key), safeString(report.Title), safeStringFromInsightResult(report.Result))
+			}
+
+			return nil
+		},
+	})
+
+	annotationCmd := &cobra.Command{
+		Use:   "annotation",
+		Short: "Code Insights annotation commands",
+	}
+
+	var annotationBody string
+	addAnnotationCmd := &cobra.Command{
+		Use:   "add <commit> <key>",
+		Short: "Add annotations to a Code Insights report",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			annotations := make([]openapigenerated.RestSingleAddInsightAnnotationRequest, 0)
+			if err := json.Unmarshal([]byte(annotationBody), &annotations); err != nil {
+				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body (expected array of annotations)", err)
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			if err := service.AddAnnotations(cmd.Context(), repo, args[0], args[1], annotations); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "count": len(annotations)})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Added %d annotations to report %s\n", len(annotations), args[1])
+			return nil
+		},
+	}
+	addAnnotationCmd.Flags().StringVar(&annotationBody, "body", "", "Raw JSON array payload for annotations")
+	_ = addAnnotationCmd.MarkFlagRequired("body")
+	annotationCmd.AddCommand(addAnnotationCmd)
+
+	annotationCmd.AddCommand(&cobra.Command{
+		Use:   "list <commit> <key>",
+		Short: "List annotations for a Code Insights report",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			annotations, err := service.ListAnnotations(cmd.Context(), repo, args[0], args[1])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), annotations)
+			}
+
+			if len(annotations) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No annotations found")
+				return nil
+			}
+
+			for _, annotation := range annotations {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", safeString(annotation.ExternalId), safeString(annotation.Severity), safeString(annotation.Message))
+			}
+
+			return nil
+		},
+	})
+
+	var externalID string
+	deleteAnnotationCmd := &cobra.Command{
+		Use:   "delete <commit> <key>",
+		Short: "Delete annotation(s) by external id for a report",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := config.LoadFromEnv()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
+			if err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+			}
+
+			service := qualityservice.NewService(client)
+			if err := service.DeleteAnnotations(cmd.Context(), repo, args[0], args[1], externalID); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "external_id": externalID})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted annotations for external id %s\n", externalID)
+			return nil
+		},
+	}
+	deleteAnnotationCmd.Flags().StringVar(&externalID, "external-id", "", "External annotation ID to delete")
+	_ = deleteAnnotationCmd.MarkFlagRequired("external-id")
+	annotationCmd.AddCommand(deleteAnnotationCmd)
+
+	insightsCmd.AddCommand(reportCmd)
+	insightsCmd.AddCommand(annotationCmd)
+
+	return insightsCmd
+}
+
 func newPRCommand(options *rootOptions) *cobra.Command {
 	prCmd := &cobra.Command{
 		Use:   "pr",
@@ -972,6 +1777,24 @@ func resolveRepositorySettingsReference(selector string, cfg config.AppConfig) (
 	}
 
 	return reposettings.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, nil
+}
+
+func resolveTagRepositoryReference(selector string, cfg config.AppConfig) (tagservice.RepositoryRef, error) {
+	repo, err := resolveRepositorySelector(selector, cfg)
+	if err != nil {
+		return tagservice.RepositoryRef{}, err
+	}
+
+	return tagservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, nil
+}
+
+func resolveQualityRepositoryReference(selector string, cfg config.AppConfig) (qualityservice.RepositoryRef, error) {
+	repo, err := resolveRepositorySelector(selector, cfg)
+	if err != nil {
+		return qualityservice.RepositoryRef{}, err
+	}
+
+	return qualityservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, nil
 }
 
 func resolveCommentTarget(selector string, commitID string, pullRequestID string, cfg config.AppConfig) (commentservice.Target, error) {
@@ -1141,4 +1964,60 @@ func writeJSON(writer io.Writer, payload any) error {
 
 	fmt.Fprintln(writer, string(encoded))
 	return nil
+}
+
+func safeString(value *string) string {
+	if value == nil {
+		return ""
+	}
+
+	return *value
+}
+
+func safeInt32(value *int32) int32 {
+	if value == nil {
+		return 0
+	}
+
+	return *value
+}
+
+func safeInt64(value *int64) int64 {
+	if value == nil {
+		return 0
+	}
+
+	return *value
+}
+
+func safeStringSlice(values *[]string) []string {
+	if values == nil {
+		return []string{}
+	}
+
+	return *values
+}
+
+func safeStringFromTagType(tagType *openapigenerated.RestTagType) string {
+	if tagType == nil {
+		return ""
+	}
+
+	return string(*tagType)
+}
+
+func safeStringFromBuildState(state *openapigenerated.RestBuildStatusState) string {
+	if state == nil {
+		return ""
+	}
+
+	return string(*state)
+}
+
+func safeStringFromInsightResult(result *openapigenerated.RestInsightReportResult) string {
+	if result == nil {
+		return ""
+	}
+
+	return string(*result)
 }
