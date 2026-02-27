@@ -31,7 +31,10 @@ Common commands:
 
 - CI workflow: `.github/workflows/ci.yml`
 	- Runs on pull requests to `main` and pushes to `main`
-	- Executes `task quality:check`
+	- Executes `task quality:validate-decisions`
+	- Executes `task test:unit`
+	- Publishes a final aggregate check named `CI Complete` (recommended PR required check)
+	- Does not run `test:live` because live integration tests require Bitbucket/Postgres infrastructure
 - Release workflow: `.github/workflows/release.yml`
 	- Manual trigger only via `workflow_dispatch`
 	- Requires a version input (for example `v0.1.0`)
