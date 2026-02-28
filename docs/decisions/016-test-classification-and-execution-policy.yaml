@@ -3,17 +3,19 @@ title: Test classification and execution policy
 category: development
 status: accepted
 decision: >
-  Maintain unit and live integration suites as the default test layers.
-  Contract tests are intentionally out of scope for now and may be added only after
-  live-test maturity criteria are met and documented.
+  Maintain three test layers: unit tests for hand-written logic, generated-surface contract tests
+  for used OpenAPI operations/models, and live integration tests for real Bitbucket behavior.
+  Contract coverage is required for used generated operations and is part of CI quality gates.
 agent_instructions: >
-  Tag and organize tests by execution profile (fast unit vs live integration).
-  Keep quick local checks free of live dependencies by default.
-  Proposals for contract tests must include maturity evidence and migration rationale.
+  Organize tests by execution profile and purpose: unit, contract, and live integration.
+  Keep default local checks free of live dependencies.
+  For each used generated operation, ensure contract tests assert success parsing and at least one
+  mapped failure path; add pagination assertions for paged operations.
+  Maintain automated used-operation inventory and keep contract mapping current in CI.
 rationale: >
-  This policy optimizes for real behavior correctness first while preserving developer velocity.
-  It prevents premature abstraction around contracts before behavior is fully characterized.
+  This structure preserves fast feedback while giving explicit guarantees for the generated code
+  surfaces consumed by hand-written services.
 rejected_alternatives:
-  - alternative: Introduce contract tests immediately
-    reason: Premature while live behavior knowledge is still evolving.
+  - alternative: Unit + live tests only
+    reason: Leaves generated operation parsing/mapping guarantees implicit and non-auditable.
 provenance: guided-ai

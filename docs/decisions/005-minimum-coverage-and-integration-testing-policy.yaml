@@ -3,20 +3,34 @@ title: Minimum coverage and integration testing policy
 category: development
 status: accepted
 decision: >
-  Maintain at least 85% line coverage for unit tests and require integration tests for all behavior
-  that interacts with Bitbucket APIs, authentication, permissions, pagination, or server-managed state.
-  Contract tests are deferred until live tests reach maturity.
+  Enforce at least 85% line coverage for hand-written Go code while excluding generated packages from
+  the primary line-coverage denominator. For generated OpenAPI clients/models, require operation-level
+  contract coverage for the generated surface that is actually used by hand-written services.
+  Continue to require live integration tests for behavior that depends on real Bitbucket semantics
+  (auth, permissions, pagination, and server-managed state).
 agent_instructions: >
-  Keep unit tests focused on fast local correctness and parsing/normalization behavior.
-  Add live tests for endpoint semantics and side effects.
-  If coverage drops below 85%, restore coverage before considering work complete.
-  Contract tests can be proposed only when live tests show stable low flake rates and broad endpoint coverage.
+  Keep unit tests focused on deterministic local correctness and domain/error mapping.
+  Do not inflate coverage with assertion-light tests.
+  Apply three gates: (A) hand-written code line coverage >=85%,
+  (B) patch coverage >=85% for changed non-test lines,
+  (C) used generated operation contract coverage = 100%.
+  Contract tests for generated code must cover success parsing plus at least one negative path
+  for each used operation, and include pagination/edge semantics when the operation is paged.
+  Treat generated line coverage as informational only, not a quality gate.
+  CI rollout plan:
+  Phase 1 (reporting): publish A/B/C metrics in CI summary without failing on C.
+  Phase 2 (enforcement): fail CI on A and B; require manifest + mapping for C.
+  Phase 3 (strict): fail CI when used generated operation contract coverage is below 100%.
 rationale: >
-  A clear coverage floor prevents regression in local correctness while live tests validate real server behavior.
-  This split keeps feedback fast and realistic, matching the project's reliability goals.
+  Repository-wide line coverage is distorted by large generated artifacts and does not represent
+  engineering confidence. Splitting policy by code ownership keeps line-coverage pressure on
+  maintainable code while ensuring generated code quality through contract guarantees on the
+  subset that is actually used. The phased rollout keeps CI adoption practical.
 rejected_alternatives:
   - alternative: No explicit coverage threshold
     reason: Lacks a clear quality baseline and encourages uneven test discipline.
-  - alternative: Unit tests only
-    reason: Insufficient for validating real Bitbucket behavior.
+  - alternative: Repository-wide 85% including all generated code
+    reason: Encourages meaningless tests and hides risk in actually used generated operations.
+  - alternative: Track generated line coverage only
+    reason: Measures execution volume, not behavioral guarantees for consumed API contracts.
 provenance: guided-ai

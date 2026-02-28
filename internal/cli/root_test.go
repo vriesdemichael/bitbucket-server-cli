@@ -176,6 +176,83 @@ func TestAuthStatusJSON(t *testing.T) {
 	}
 }
 
+func TestPRListJSON(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/api/latest/dashboard/pull-requests" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[{"id":123,"state":"OPEN","title":"Demo PR","fromRef":{"displayId":"feature/demo"},"toRef":{"displayId":"master","repository":{"slug":"demo","project":{"key":"TEST"}}}}]}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "pr", "list", "--repo", "TEST/demo"})
+
+	err := command.Execute()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	var parsed map[string]any
+	if err := json.Unmarshal(buffer.Bytes(), &parsed); err != nil {
+		t.Fatalf("expected valid json output, got: %s (%v)", buffer.String(), err)
+	}
+
+	if count, ok := parsed["count"].(float64); !ok || int(count) != 1 {
+		t.Fatalf("expected count=1, got: %#v", parsed["count"])
+	}
+}
+
+func TestIssueListJSON(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/jira/latest/projects/TEST/repos/demo/pull-requests/123/issues" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`[{"key":"DEMO-42","url":"https://jira.example/DEMO-42"}]`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "issue", "list", "--pr", "123"})
+
+	err := command.Execute()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if !strings.Contains(buffer.String(), "DEMO-42") {
+		t.Fatalf("expected issue key in output, got: %s", buffer.String())
+	}
+}
+
 func TestAdminHealthSmoke(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

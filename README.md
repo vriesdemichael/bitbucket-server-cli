@@ -4,10 +4,14 @@ Go CLI and client for Bitbucket Server/Data Center automation with **live-behavi
 
 ## Current state
 
-This repository is scaffolded with:
-- minimal package and CLI skeleton
-- local Bitbucket Docker stack skeleton
-- test layout for unit + live integration suites
+This repository is an actively implemented CLI with:
+- production-style command groups for auth, repo settings, comments, diff, tags, build status/merge checks, and code insights
+- local Bitbucket Docker stack support for live behavior validation
+- unit tests and live integration test suites
+
+Current caveats:
+- `bbsc pr list` is currently a placeholder (`not_implemented`)
+- `bbsc issue list` is currently a placeholder (`not_implemented`)
 
 ## Development workflow
 
@@ -23,9 +27,20 @@ Common commands:
 - `task models:verify`
 - `task client:generate`
 - `task client:verify`
+- `task test:unit:coverage`
+- `task quality:coverage`
 - `task stack:up`
 - `task stack:status`
 - `go test -tags=live ./tests/integration/live -run TestOpenAPIParity`
+
+Local coverage gate (not enforced in GitHub Actions due live infra constraints):
+
+- Global unit coverage threshold: `85%`
+- Patch coverage threshold versus `main`: `85%`
+- Configurable via Task vars in `Taskfile.yml`:
+	- `COVERAGE_MIN_TOTAL`
+	- `COVERAGE_MIN_PATCH`
+	- `COVERAGE_BASE_REF`
 
 ## GitHub Actions
 
@@ -78,6 +93,30 @@ Runtime config precedence:
 2. Environment variables / `.env`
 3. Stored config (`~/.config/bbsc/config.yaml`) + keyring/fallback secrets
 4. Built-in defaults
+
+## Script contract status and gaps
+
+`--json` output is supported broadly, but script contracts are not yet fully formalized for long-term automation stability.
+
+Current gaps:
+- JSON responses are not yet wrapped in a versioned envelope for all commands
+- output schemas are not published as explicit compatibility contracts
+- no dedicated golden-contract test layer for machine-output stability
+
+Desired target state:
+- versioned machine envelope (for example `version`, `data`, optional `meta`)
+- documented compatibility policy for adding/deprecating/renaming fields
+- contract-focused tests that fail on unplanned output shape changes
+
+## Bulk operations wanted for enterprise use
+
+For large corporate Bitbucket estates, single-repository imperative commands are not enough. Useful bulk capabilities include:
+
+- apply one settings policy to many repositories selected by project/team pattern
+- bulk permission grants/revocations with preview and validation before apply
+- bulk webhook create/update/delete with drift detection and reconciliation reporting
+- batch build-required-check and pull-request-settings updates across repo sets
+- plan/apply workflows with `--dry-run` and machine-readable summary output
 
 API reference source:
 

@@ -6,3 +6,9 @@ Planned scripts:
 - `wait_for_bitbucket.py`: poll readiness endpoint before live test execution
 
 Not implemented in minimal scaffold.
+
+Coverage tooling:
+- Local coverage gate is implemented as Go tool: `go run ./tools/coverage-gate`
+- Task integration:
+	- `task test:unit:coverage` generates `.tmp/coverage.out`
+	- `task quality:coverage` enforces global + patch thresholds

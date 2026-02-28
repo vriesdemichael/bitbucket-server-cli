@@ -6,6 +6,9 @@ vars:
   BITBUCKET_OPENAPI_TARGET: docs/reference/atlassian/bitbucket-9.4-openapi.json
   BITBUCKET_OPENAPI_TMP: .tmp/bitbucket-9.4-openapi.json
   BITBUCKET_OPENAPI_SANITIZED_TMP: .tmp/bitbucket-9.4-openapi.sanitized.json
+  COVERAGE_MIN_TOTAL: "85"
+  COVERAGE_MIN_PATCH: "85"
+  COVERAGE_BASE_REF: main
 
 tasks:
   default:
@@ -57,11 +60,24 @@ tasks:
     desc: Run core quality checks
     deps:
       - quality:validate-decisions
-      - test:unit
+      - quality:coverage
+
+  quality:coverage:
+    desc: Enforce local global + patch coverage thresholds
+    cmds:
+      - task: test:unit:coverage
+      - go run ./tools/coverage-gate -coverprofile .tmp/coverage.out -base-ref {{.COVERAGE_BASE_REF}} -min-total {{.COVERAGE_MIN_TOTAL}} -min-patch {{.COVERAGE_MIN_PATCH}}
 
   test:unit:
     desc: Run Go unit tests
     cmd: go test ./cmd/... ./internal/... ./tools/...
+
+  test:unit:coverage:
+    desc: Run Go unit tests with coverage profile output
+    cmds:
+      - mkdir -p .tmp
+      - go test -covermode=count -coverprofile=.tmp/coverage.out ./cmd/... ./internal/... ./tools/...
+      - go tool cover -func=.tmp/coverage.out | tail -n 1
 
   test:live:
     desc: Run live integration tests against local Bitbucket stack

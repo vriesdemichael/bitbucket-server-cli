@@ -1716,23 +1716,6 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 	return insightsCmd
 }
 
-func newPRCommand(options *rootOptions) *cobra.Command {
-	prCmd := &cobra.Command{
-		Use:   "pr",
-		Short: "Pull request commands",
-	}
-
-	prCmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List pull requests",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return apperrors.New(apperrors.KindNotImplemented, "pr list is not implemented yet", nil)
-		},
-	})
-
-	return prCmd
-}
-
 func resolveRepositoryReference(selector string, cfg config.AppConfig) (diffservice.RepositoryRef, error) {
 	repo, err := resolveRepositorySelector(selector, cfg)
 	if err != nil {
@@ -1899,61 +1882,6 @@ func formatCommentSummary(comment openapigenerated.RestComment) string {
 	}
 
 	return fmt.Sprintf("[%s v%s] %s", commentIDString(comment), version, text)
-}
-
-func newIssueCommand(options *rootOptions) *cobra.Command {
-	issueCmd := &cobra.Command{
-		Use:   "issue",
-		Short: "Issue commands",
-	}
-
-	issueCmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List issues",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return apperrors.New(apperrors.KindNotImplemented, "issue list is not implemented yet", nil)
-		},
-	})
-
-	return issueCmd
-}
-
-func newAdminCommand(options *rootOptions) *cobra.Command {
-	adminCmd := &cobra.Command{
-		Use:   "admin",
-		Short: "Local environment/admin commands",
-	}
-
-	adminCmd.AddCommand(&cobra.Command{
-		Use:   "health",
-		Short: "Check local stack health",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
-			if err != nil {
-				return err
-			}
-
-			client := httpclient.NewFromConfig(cfg)
-			health, err := client.Health(cmd.Context())
-			if err != nil {
-				return err
-			}
-
-			if options.JSON {
-				return writeJSON(cmd.OutOrStdout(), health)
-			}
-
-			if health.Authenticated {
-				fmt.Fprintf(cmd.OutOrStdout(), "Bitbucket health: OK (status=%d, auth=ok)\n", health.StatusCode)
-				return nil
-			}
-
-			fmt.Fprintf(cmd.OutOrStdout(), "Bitbucket health: OK (status=%d, auth=limited)\n", health.StatusCode)
-			return nil
-		},
-	})
-
-	return adminCmd
 }
 
 func writeJSON(writer io.Writer, payload any) error {
