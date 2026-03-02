@@ -6,8 +6,8 @@ vars:
   BITBUCKET_OPENAPI_TARGET: docs/reference/atlassian/bitbucket-9.4-openapi.json
   BITBUCKET_OPENAPI_TMP: .tmp/bitbucket-9.4-openapi.json
   BITBUCKET_OPENAPI_SANITIZED_TMP: .tmp/bitbucket-9.4-openapi.sanitized.json
-  COVERAGE_BASE_REF: main
-  COVERAGE_MIN_SCOPED: "40"
+  COVERAGE_BASE_REF: origin/main
+  COVERAGE_MIN_GLOBAL_COMBINED: "85"
   COVERAGE_MIN_PATCH: "85"
   COVERAGE_MIN_CONTRACT: "0"
 
@@ -64,11 +64,12 @@ tasks:
       - quality:coverage:report:verify
 
   quality:coverage:
-    desc: Run combined (unit + live) scoped + patch coverage checks and generated-operation coverage metric
+    desc: Run combined (unit + live) global + patch coverage checks and generated-operation coverage metric
     cmds:
+      - git fetch origin main
       - task: test:unit:coverage
       - task: test:live:coverage
-      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -min-scoped {{.COVERAGE_MIN_SCOPED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   quality:coverage:origin-main:
     desc: Run combined (unit + live) patch coverage gate against origin/main (requires live infra)
@@ -76,26 +77,28 @@ tasks:
       - git fetch origin main
       - task: test:unit:coverage
       - task: test:live:coverage
-      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref origin/main -manifest docs/quality/generated-operation-contracts.json -min-scoped {{.COVERAGE_MIN_SCOPED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref origin/main -manifest docs/quality/generated-operation-contracts.json -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   quality:coverage:report:update:
     desc: Update committed combined coverage report artifact
     cmds:
+      - git fetch origin main
       - task: test:unit:coverage
       - task: test:live:coverage
-      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -report-file docs/quality/coverage-report.json -write-report -min-scoped {{.COVERAGE_MIN_SCOPED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -report-file docs/quality/coverage-report.json -write-report -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   quality:coverage:report:verify:
     desc: Verify committed coverage report artifact is current (local recompute, requires live infra)
     cmds:
+      - git fetch origin main
       - task: test:unit:coverage
       - task: test:live:coverage
-      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -report-file docs/quality/coverage-report.json -verify-report -min-scoped {{.COVERAGE_MIN_SCOPED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -report-file docs/quality/coverage-report.json -verify-report -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   quality:coverage:report:verify:committed:
     desc: Verify committed coverage report artifact thresholds (CI-safe, no live execution)
     cmds:
-      - go run ./tools/quality-report -report-file docs/quality/coverage-report.json -verify-committed -min-scoped {{.COVERAGE_MIN_SCOPED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -report-file docs/quality/coverage-report.json -verify-committed -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   test:unit:
     desc: Run Go unit tests

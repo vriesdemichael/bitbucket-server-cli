@@ -51,21 +51,21 @@ type report struct {
 }
 
 type coverageSummary struct {
-	UnitRawPercent       float64      `json:"unit_raw_percent"`
-	UnitScopedPercent    float64      `json:"unit_scoped_percent"`
-	LiveRawPercent       float64      `json:"live_raw_percent"`
-	LiveScopedPercent    float64      `json:"live_scoped_percent"`
-	CombinedRawPercent   float64      `json:"combined_raw_percent"`
-	CombinedScopedPercent float64     `json:"combined_scoped_percent"`
-	PatchPercent         float64      `json:"patch_percent"`
-	UnitStatements       countSummary `json:"unit_statements"`
-	LiveStatements       countSummary `json:"live_statements"`
-	CombinedStatements   countSummary `json:"combined_statements"`
-	UnitScopedStatements countSummary `json:"unit_scoped_statements"`
-	LiveScopedStatements countSummary `json:"live_scoped_statements"`
+	UnitRawPercent           float64      `json:"unit_raw_percent"`
+	UnitScopedPercent        float64      `json:"unit_scoped_percent"`
+	LiveRawPercent           float64      `json:"live_raw_percent"`
+	LiveScopedPercent        float64      `json:"live_scoped_percent"`
+	CombinedRawPercent       float64      `json:"combined_raw_percent"`
+	CombinedScopedPercent    float64      `json:"combined_scoped_percent"`
+	PatchPercent             float64      `json:"patch_percent"`
+	UnitStatements           countSummary `json:"unit_statements"`
+	LiveStatements           countSummary `json:"live_statements"`
+	CombinedStatements       countSummary `json:"combined_statements"`
+	UnitScopedStatements     countSummary `json:"unit_scoped_statements"`
+	LiveScopedStatements     countSummary `json:"live_scoped_statements"`
 	CombinedScopedStatements countSummary `json:"combined_scoped_statements"`
-	PatchLines           countSummary `json:"patch_lines"`
-	Scope                scopeSummary `json:"scope"`
+	PatchLines               countSummary `json:"patch_lines"`
+	Scope                    scopeSummary `json:"scope"`
 }
 
 type countSummary struct {
@@ -79,9 +79,9 @@ type scopeSummary struct {
 }
 
 type generatedContractSummary struct {
-	CoveragePercent   float64  `json:"coverage_percent"`
-	UsedOperations    []string `json:"used_operations"`
-	MappedOperations  []string `json:"mapped_operations"`
+	CoveragePercent    float64  `json:"coverage_percent"`
+	UsedOperations     []string `json:"used_operations"`
+	MappedOperations   []string `json:"mapped_operations"`
 	UnmappedOperations []string `json:"unmapped_operations"`
 }
 
@@ -96,10 +96,16 @@ func main() {
 	writeReport := flag.Bool("write-report", false, "Write report file")
 	verifyReport := flag.Bool("verify-report", false, "Verify report file matches generated output (recomputed from coverage profiles)")
 	verifyCommitted := flag.Bool("verify-committed", false, "Verify committed report file against thresholds without recomputing coverage")
-	minScoped := flag.Float64("min-scoped", 85.0, "Minimum required scoped coverage percentage")
+	minGlobalCombined := flag.Float64("min-global-combined", 85.0, "Minimum required global combined coverage percentage")
+	minScoped := flag.Float64("min-scoped", -1.0, "Deprecated alias for --min-global-combined")
 	minPatch := flag.Float64("min-patch", 85.0, "Minimum required patch coverage percentage")
 	minContract := flag.Float64("min-contract", 0.0, "Minimum required used generated operation contract coverage percentage")
 	flag.Parse()
+
+	resolvedMinGlobalCombined := *minGlobalCombined
+	if *minScoped >= 0 {
+		resolvedMinGlobalCombined = *minScoped
+	}
 
 	if *verifyCommitted {
 		reportData, err := readCommittedReport(*reportPath)
@@ -107,7 +113,7 @@ func main() {
 			fail("failed to read committed report: %v", err)
 		}
 		printCoverageSummary(reportData)
-		enforceThresholds(reportData, *minScoped, *minPatch, *minContract)
+		enforceThresholds(reportData, resolvedMinGlobalCombined, *minPatch, *minContract)
 		fmt.Printf("Verified committed report: %s\n", *reportPath)
 		return
 	}
@@ -154,21 +160,21 @@ func main() {
 	reportData := report{
 		Version: 2,
 		Coverage: coverageSummary{
-			UnitRawPercent:          percent(unitProfile.coveredStatements, unitProfile.totalStatements),
-			UnitScopedPercent:       percent(unitScopedCovered, unitScopedTotal),
-			LiveRawPercent:          percent(liveProfile.coveredStatements, liveProfile.totalStatements),
-			LiveScopedPercent:       percent(liveScopedCovered, liveScopedTotal),
-			CombinedRawPercent:      percent(combinedProfile.coveredStatements, combinedProfile.totalStatements),
-			CombinedScopedPercent:   percent(combinedScopedCovered, combinedScopedTotal),
-			PatchPercent:            patch.percent,
-			UnitStatements:          countSummary{Covered: unitProfile.coveredStatements, Total: unitProfile.totalStatements},
-			LiveStatements:          countSummary{Covered: liveProfile.coveredStatements, Total: liveProfile.totalStatements},
-			CombinedStatements:      countSummary{Covered: combinedProfile.coveredStatements, Total: combinedProfile.totalStatements},
-			UnitScopedStatements:    countSummary{Covered: unitScopedCovered, Total: unitScopedTotal},
-			LiveScopedStatements:    countSummary{Covered: liveScopedCovered, Total: liveScopedTotal},
+			UnitRawPercent:           percent(unitProfile.coveredStatements, unitProfile.totalStatements),
+			UnitScopedPercent:        percent(unitScopedCovered, unitScopedTotal),
+			LiveRawPercent:           percent(liveProfile.coveredStatements, liveProfile.totalStatements),
+			LiveScopedPercent:        percent(liveScopedCovered, liveScopedTotal),
+			CombinedRawPercent:       percent(combinedProfile.coveredStatements, combinedProfile.totalStatements),
+			CombinedScopedPercent:    percent(combinedScopedCovered, combinedScopedTotal),
+			PatchPercent:             patch.percent,
+			UnitStatements:           countSummary{Covered: unitProfile.coveredStatements, Total: unitProfile.totalStatements},
+			LiveStatements:           countSummary{Covered: liveProfile.coveredStatements, Total: liveProfile.totalStatements},
+			CombinedStatements:       countSummary{Covered: combinedProfile.coveredStatements, Total: combinedProfile.totalStatements},
+			UnitScopedStatements:     countSummary{Covered: unitScopedCovered, Total: unitScopedTotal},
+			LiveScopedStatements:     countSummary{Covered: liveScopedCovered, Total: liveScopedTotal},
 			CombinedScopedStatements: countSummary{Covered: combinedScopedCovered, Total: combinedScopedTotal},
-			PatchLines:              countSummary{Covered: patch.coveredLines, Total: patch.coverableLines},
-			Scope:                   scopeSummary{IncludePrefixes: includes, ExcludePrefixes: excludes},
+			PatchLines:               countSummary{Covered: patch.coveredLines, Total: patch.coverableLines},
+			Scope:                    scopeSummary{IncludePrefixes: includes, ExcludePrefixes: excludes},
 		},
 		GeneratedContracts: generatedContractSummary{
 			CoveragePercent:    percent(len(mapped), len(usedOperations)),
@@ -213,7 +219,7 @@ func main() {
 		fmt.Printf("Verified report: %s\n", *reportPath)
 	}
 
-	enforceThresholds(reportData, *minScoped, *minPatch, *minContract)
+	enforceThresholds(reportData, resolvedMinGlobalCombined, *minPatch, *minContract)
 }
 
 func printCoverageSummary(reportData report) {
@@ -223,10 +229,11 @@ func printCoverageSummary(reportData report) {
 	fmt.Printf("Combined scoped coverage: %.2f%% (%d/%d statements)\n", reportData.Coverage.CombinedScopedPercent, reportData.Coverage.CombinedScopedStatements.Covered, reportData.Coverage.CombinedScopedStatements.Total)
 }
 
-func enforceThresholds(reportData report, minScoped, minPatch, minContract float64) {
+func enforceThresholds(reportData report, minGlobalCombined, minPatch, minContract float64) {
 	var failed bool
-	if reportData.Coverage.CombinedScopedPercent < minScoped {
-		fmt.Printf("FAIL: combined scoped coverage %.2f%% is below required %.2f%%\n", reportData.Coverage.CombinedScopedPercent, minScoped)
+	globalCombinedPercent := reportData.Coverage.CombinedScopedPercent
+	if globalCombinedPercent < minGlobalCombined {
+		fmt.Printf("FAIL: global combined coverage %.2f%% is below required %.2f%%\n", globalCombinedPercent, minGlobalCombined)
 		failed = true
 	}
 	if reportData.Coverage.PatchPercent < minPatch {
@@ -312,10 +319,10 @@ func parseCoverageProfile(path string, modulePath string) (coverageProfile, erro
 }
 
 type segmentKey struct {
-	filePath   string
-	startLine  int
-	endLine    int
-	numStmt    int
+	filePath  string
+	startLine int
+	endLine   int
+	numStmt   int
 }
 
 func mergeCoverageProfiles(unitProfile coverageProfile, liveProfile coverageProfile) coverageProfile {
