@@ -202,8 +202,8 @@ func TestQualityServiceValidationGuards(t *testing.T) {
 	}
 
 	_, err = service.CreateRequiredBuildCheck(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, map[string]any{"id": strconv.Itoa(1)})
-	if err != nil && strings.Contains(err.Error(), "invalid required build check payload") {
-		// this branch is acceptable; payload serialization is permitted here
+	if err != nil && !strings.Contains(err.Error(), "invalid required build check payload") {
+		t.Fatalf("expected either success or invalid required build check payload error, got %v", err)
 	}
 }
 

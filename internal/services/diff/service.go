@@ -245,10 +245,10 @@ func extractNamesFromUnifiedDiff(diffText string) []string {
 		}
 
 		candidate := strings.TrimPrefix(parts[3], "b/")
-		if candidate == "/dev/null" || candidate == "" {
+		if candidate == "dev/null" || candidate == "/dev/null" || candidate == "" {
 			candidate = strings.TrimPrefix(parts[2], "a/")
 		}
-		if candidate == "" || candidate == "/dev/null" {
+		if candidate == "" || candidate == "dev/null" || candidate == "/dev/null" {
 			continue
 		}
 
