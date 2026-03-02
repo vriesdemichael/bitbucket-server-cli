@@ -15,6 +15,7 @@ import (
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	diffservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
+	pullrequestservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequest"
 	qualityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/quality"
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
@@ -41,7 +42,6 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newBuildCommand(options))
 	rootCmd.AddCommand(newInsightsCommand(options))
 	rootCmd.AddCommand(newPRCommand(options))
-	rootCmd.AddCommand(newIssueCommand(options))
 	rootCmd.AddCommand(newAdminCommand(options))
 
 	return rootCmd
@@ -1522,18 +1522,80 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 }
 
 func newPRCommand(options *rootOptions) *cobra.Command {
+	var repository string
+	var state string
+	var limit int
+	var start int
+	var sourceBranch string
+	var targetBranch string
+
 	prCmd := &cobra.Command{
 		Use:   "pr",
 		Short: "Pull request commands",
 	}
 
-	prCmd.AddCommand(&cobra.Command{
+	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List pull requests",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return apperrors.New(apperrors.KindNotImplemented, "pr list is not implemented yet", nil)
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			pullRequests, err := service.List(cmd.Context(), repo, pullrequestservice.ListOptions{
+				State:        state,
+				Limit:        limit,
+				Start:        start,
+				SourceBranch: sourceBranch,
+				TargetBranch: targetBranch,
+			})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{
+					"repository":    repo,
+					"filters":       map[string]any{"state": strings.ToLower(strings.TrimSpace(state)), "start": start, "limit": limit, "source_branch": sourceBranch, "target_branch": targetBranch},
+					"pull_requests": pullRequests,
+				})
+			}
+
+			if len(pullRequests) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No pull requests found")
+				return nil
+			}
+
+			for _, pullRequest := range pullRequests {
+				fmt.Fprintf(
+					cmd.OutOrStdout(),
+					"#%d\t%s\t%s -> %s\t%s\n",
+					pullRequest.ID,
+					pullRequest.State,
+					pullRequest.SourceBranch,
+					pullRequest.TargetBranch,
+					pullRequest.Title,
+				)
+			}
+
+			return nil
 		},
-	})
+	}
+
+	listCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	listCmd.Flags().StringVar(&state, "state", "open", "Pull request state filter: open, closed, all")
+	listCmd.Flags().IntVar(&limit, "limit", 25, "Page size for Bitbucket pull request list operations")
+	listCmd.Flags().IntVar(&start, "start", 0, "Start offset for Bitbucket pull request list operations")
+	listCmd.Flags().StringVar(&sourceBranch, "source-branch", "", "Optional source branch filter")
+	listCmd.Flags().StringVar(&targetBranch, "target-branch", "", "Optional target branch filter")
+	prCmd.AddCommand(listCmd)
 
 	return prCmd
 }
@@ -1582,6 +1644,15 @@ func resolveRepositorySettingsReference(selector string, cfg config.AppConfig) (
 	}
 
 	return reposettings.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, nil
+}
+
+func resolvePullRequestRepositoryReference(selector string, cfg config.AppConfig) (pullrequestservice.RepositoryRef, error) {
+	repo, err := resolveRepositorySelector(selector, cfg)
+	if err != nil {
+		return pullrequestservice.RepositoryRef{}, err
+	}
+
+	return pullrequestservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, nil
 }
 
 func resolveTagRepositoryReference(selector string, cfg config.AppConfig) (tagservice.RepositoryRef, error) {
@@ -1704,23 +1775,6 @@ func formatCommentSummary(comment openapigenerated.RestComment) string {
 	}
 
 	return fmt.Sprintf("[%s v%s] %s", commentIDString(comment), version, text)
-}
-
-func newIssueCommand(options *rootOptions) *cobra.Command {
-	issueCmd := &cobra.Command{
-		Use:   "issue",
-		Short: "Issue commands",
-	}
-
-	issueCmd.AddCommand(&cobra.Command{
-		Use:   "list",
-		Short: "List issues",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return apperrors.New(apperrors.KindNotImplemented, "issue list is not implemented yet", nil)
-		},
-	})
-
-	return issueCmd
 }
 
 func newAdminCommand(options *rootOptions) *cobra.Command {

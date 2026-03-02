@@ -12,8 +12,8 @@ import (
 	"testing"
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
-	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
 )
 
@@ -793,33 +793,54 @@ func TestAdminHealthPropagatesHardFailure(t *testing.T) {
 	}
 }
 
-func TestPRAndIssueListNotImplemented(t *testing.T) {
+func TestPRListAndIssueCommandUnavailable(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodGet || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/pull-requests" {
+			http.NotFound(writer, request)
+			return
+		}
 
-	tests := []struct {
-		name string
-		args []string
-	}{
-		{name: "pr", args: []string{"pr", "list"}},
-		{name: "issue", args: []string{"issue", "list"}},
+		if request.URL.Query().Get("state") != "OPEN" {
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte("unexpected state query"))
+			return
+		}
+
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`{"isLastPage":true,"nextPageStart":0,"values":[{"id":22,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/demo"},"toRef":{"displayId":"master"}}]}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	prCommand := NewRootCommand()
+	prOutput := &bytes.Buffer{}
+	prCommand.SetOut(prOutput)
+	prCommand.SetErr(prOutput)
+	prCommand.SetArgs([]string{"pr", "list", "--state", "open", "--limit", "10"})
+
+	if err := prCommand.Execute(); err != nil {
+		t.Fatalf("expected pr list to succeed, got: %v", err)
+	}
+	if !strings.Contains(prOutput.String(), "#22") || !strings.Contains(prOutput.String(), "feature/demo -> master") {
+		t.Fatalf("expected pull request in human output, got: %s", prOutput.String())
 	}
 
-	for _, testCase := range tests {
-		t.Run(testCase.name, func(t *testing.T) {
-			command := NewRootCommand()
-			command.SetOut(&bytes.Buffer{})
-			command.SetErr(&bytes.Buffer{})
-			command.SetArgs(testCase.args)
+	issueCommand := NewRootCommand()
+	issueOutput := &bytes.Buffer{}
+	issueCommand.SetOut(issueOutput)
+	issueCommand.SetErr(issueOutput)
+	issueCommand.SetArgs([]string{"issue", "list"})
 
-			err := command.Execute()
-			if err == nil {
-				t.Fatal("expected not implemented error")
-			}
-
-			if apperrors.ExitCode(err) != 11 {
-				t.Fatalf("expected not implemented exit code 11, got: %d", apperrors.ExitCode(err))
-			}
-		})
+	err := issueCommand.Execute()
+	if err == nil {
+		t.Fatal("expected issue command to be unavailable")
+	}
+	if !strings.Contains(err.Error(), "unknown command") {
+		t.Fatalf("expected unknown command error, got: %v", err)
 	}
 }
 
