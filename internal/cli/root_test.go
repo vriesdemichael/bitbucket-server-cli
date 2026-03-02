@@ -844,6 +844,67 @@ func TestPRListAndIssueCommandUnavailable(t *testing.T) {
 	}
 }
 
+func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/demo"},"toRef":{"displayId":"master"},"participants":[{"role":"REVIEWER","status":"UNAPPROVED","approved":false,"user":{"name":"reviewer1"}}]}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/merge":
+			if request.URL.Query().Get("version") != "1" {
+				writer.WriteHeader(http.StatusConflict)
+				_, _ = writer.Write([]byte("expected version query"))
+				return
+			}
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"MERGED","open":false,"closed":true}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/approve":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"participants":[{"role":"REVIEWER","status":"APPROVED","approved":true,"user":{"name":"reviewer1"}}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/tasks":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"isLastPage":true,"nextPageStart":0,"values":[{"id":700,"text":"Task A","state":"OPEN","resolved":false}]}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	testCases := []struct {
+		name          string
+		args          []string
+		expectSnippet string
+	}{
+		{name: "pr get json", args: []string{"--json", "pr", "get", "30"}, expectSnippet: `"reviewers"`},
+		{name: "pr merge human", args: []string{"pr", "merge", "30", "--version", "1"}, expectSnippet: "Merged pull request #30"},
+		{name: "pr review approve human", args: []string{"pr", "review", "approve", "30"}, expectSnippet: "Approved pull request #30"},
+		{name: "pr task list json", args: []string{"--json", "pr", "task", "list", "30", "--state", "open"}, expectSnippet: `"tasks"`},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			output := &bytes.Buffer{}
+			command.SetOut(output)
+			command.SetErr(output)
+			command.SetArgs(testCase.args)
+
+			if err := command.Execute(); err != nil {
+				t.Fatalf("expected command to succeed, got: %v (output: %s)", err, output.String())
+			}
+
+			if !strings.Contains(output.String(), testCase.expectSnippet) {
+				t.Fatalf("expected output to contain %q, got: %s", testCase.expectSnippet, output.String())
+			}
+		})
+	}
+}
+
 func TestResolveRepositorySelector(t *testing.T) {
 	t.Run("uses env fallback", func(t *testing.T) {
 		t.Setenv("BITBUCKET_REPO_SLUG", "demo")

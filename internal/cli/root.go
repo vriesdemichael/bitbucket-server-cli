@@ -1597,6 +1597,550 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 	listCmd.Flags().StringVar(&targetBranch, "target-branch", "", "Optional target branch filter")
 	prCmd.AddCommand(listCmd)
 
+	getCmd := &cobra.Command{
+		Use:   "get <id>",
+		Short: "Get pull request details",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			pullRequest, err := service.Get(cmd.Context(), repo, args[0])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": pullRequest})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "#%d\t%s\t%s -> %s\t%s\n", pullRequest.ID, pullRequest.State, pullRequest.SourceBranch, pullRequest.TargetBranch, pullRequest.Title)
+			if len(pullRequest.Reviewers) > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "Reviewers: %d\n", len(pullRequest.Reviewers))
+			}
+
+			return nil
+		},
+	}
+	getCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	prCmd.AddCommand(getCmd)
+
+	var createFromRef string
+	var createToRef string
+	var createTitle string
+	var createDescription string
+	createCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create a pull request",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			created, err := service.Create(cmd.Context(), repo, pullrequestservice.CreateInput{
+				FromRef:     createFromRef,
+				ToRef:       createToRef,
+				Title:       createTitle,
+				Description: createDescription,
+			})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": created})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Created pull request #%d\n", created.ID)
+			return nil
+		},
+	}
+	createCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	createCmd.Flags().StringVar(&createFromRef, "from-ref", "", "Source branch (name or refs/heads/name)")
+	createCmd.Flags().StringVar(&createToRef, "to-ref", "", "Target branch (name or refs/heads/name)")
+	createCmd.Flags().StringVar(&createTitle, "title", "", "Pull request title")
+	createCmd.Flags().StringVar(&createDescription, "description", "", "Pull request description")
+	_ = createCmd.MarkFlagRequired("from-ref")
+	_ = createCmd.MarkFlagRequired("to-ref")
+	_ = createCmd.MarkFlagRequired("title")
+	prCmd.AddCommand(createCmd)
+
+	var updateTitle string
+	var updateDescription string
+	var updateVersion int
+	updateCmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update pull request metadata",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			updated, err := service.Update(cmd.Context(), repo, args[0], pullrequestservice.UpdateInput{
+				Title:       updateTitle,
+				Description: updateDescription,
+				Version:     updateVersion,
+			})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": updated})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Updated pull request #%d\n", updated.ID)
+			return nil
+		},
+	}
+	updateCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	updateCmd.Flags().StringVar(&updateTitle, "title", "", "Updated pull request title")
+	updateCmd.Flags().StringVar(&updateDescription, "description", "", "Updated pull request description")
+	updateCmd.Flags().IntVar(&updateVersion, "version", 0, "Expected pull request version")
+	prCmd.AddCommand(updateCmd)
+
+	var transitionVersion int
+	mergeCmd := &cobra.Command{
+		Use:   "merge <id>",
+		Short: "Merge a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+
+			var version *int
+			if cmd.Flags().Changed("version") {
+				version = &transitionVersion
+			}
+
+			merged, err := service.Merge(cmd.Context(), repo, args[0], version)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": merged})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Merged pull request #%d\n", merged.ID)
+			return nil
+		},
+	}
+	mergeCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	mergeCmd.Flags().IntVar(&transitionVersion, "version", 0, "Expected pull request version")
+	prCmd.AddCommand(mergeCmd)
+
+	declineCmd := &cobra.Command{
+		Use:   "decline <id>",
+		Short: "Decline a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+
+			var version *int
+			if cmd.Flags().Changed("version") {
+				version = &transitionVersion
+			}
+
+			declined, err := service.Decline(cmd.Context(), repo, args[0], version)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": declined})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Declined pull request #%d\n", declined.ID)
+			return nil
+		},
+	}
+	declineCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	declineCmd.Flags().IntVar(&transitionVersion, "version", 0, "Expected pull request version")
+	prCmd.AddCommand(declineCmd)
+
+	reopenCmd := &cobra.Command{
+		Use:   "reopen <id>",
+		Short: "Reopen a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+
+			var version *int
+			if cmd.Flags().Changed("version") {
+				version = &transitionVersion
+			}
+
+			reopened, err := service.Reopen(cmd.Context(), repo, args[0], version)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": reopened})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Reopened pull request #%d\n", reopened.ID)
+			return nil
+		},
+	}
+	reopenCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	reopenCmd.Flags().IntVar(&transitionVersion, "version", 0, "Expected pull request version")
+	prCmd.AddCommand(reopenCmd)
+
+	reviewCmd := &cobra.Command{Use: "review", Short: "Pull request review commands"}
+
+	reviewApproveCmd := &cobra.Command{
+		Use:   "approve <id>",
+		Short: "Approve a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			pullRequest, err := service.Approve(cmd.Context(), repo, args[0])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": pullRequest})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Approved pull request #%d\n", pullRequest.ID)
+			return nil
+		},
+	}
+	reviewApproveCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	reviewCmd.AddCommand(reviewApproveCmd)
+
+	reviewUnapproveCmd := &cobra.Command{
+		Use:   "unapprove <id>",
+		Short: "Remove pull request approval",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			pullRequest, err := service.Unapprove(cmd.Context(), repo, args[0])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": pullRequest})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Removed approval for pull request #%d\n", pullRequest.ID)
+			return nil
+		},
+	}
+	reviewUnapproveCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	reviewCmd.AddCommand(reviewUnapproveCmd)
+
+	reviewerCmd := &cobra.Command{Use: "reviewer", Short: "Manage pull request reviewers"}
+	var reviewerUsername string
+	reviewerAddCmd := &cobra.Command{
+		Use:   "add <id>",
+		Short: "Add a reviewer",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			pullRequest, err := service.AddReviewer(cmd.Context(), repo, args[0], reviewerUsername)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": pullRequest})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Added reviewer %s to pull request #%d\n", reviewerUsername, pullRequest.ID)
+			return nil
+		},
+	}
+	reviewerAddCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	reviewerAddCmd.Flags().StringVar(&reviewerUsername, "user", "", "Reviewer username")
+	_ = reviewerAddCmd.MarkFlagRequired("user")
+	reviewerCmd.AddCommand(reviewerAddCmd)
+
+	reviewerRemoveCmd := &cobra.Command{
+		Use:   "remove <id>",
+		Short: "Remove a reviewer",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			pullRequest, err := service.RemoveReviewer(cmd.Context(), repo, args[0], reviewerUsername)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request": pullRequest})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Removed reviewer %s from pull request #%d\n", reviewerUsername, pullRequest.ID)
+			return nil
+		},
+	}
+	reviewerRemoveCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	reviewerRemoveCmd.Flags().StringVar(&reviewerUsername, "user", "", "Reviewer username")
+	_ = reviewerRemoveCmd.MarkFlagRequired("user")
+	reviewerCmd.AddCommand(reviewerRemoveCmd)
+
+	reviewCmd.AddCommand(reviewerCmd)
+	prCmd.AddCommand(reviewCmd)
+
+	taskCmd := &cobra.Command{Use: "task", Short: "Pull request task commands"}
+
+	var taskState string
+	var taskLimit int
+	var taskStart int
+	taskListCmd := &cobra.Command{
+		Use:   "list <id>",
+		Short: "List tasks for a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			tasks, err := service.ListTasks(cmd.Context(), repo, args[0], pullrequestservice.TaskListOptions{State: taskState, Limit: taskLimit, Start: taskStart})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request_id": args[0], "tasks": tasks})
+			}
+
+			if len(tasks) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No tasks found")
+				return nil
+			}
+
+			for _, task := range tasks {
+				fmt.Fprintf(cmd.OutOrStdout(), "%d\t%s\t%s\n", task.ID, task.State, task.Text)
+			}
+
+			return nil
+		},
+	}
+	taskListCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	taskListCmd.Flags().StringVar(&taskState, "state", "open", "Task state filter: open, resolved, all")
+	taskListCmd.Flags().IntVar(&taskLimit, "limit", 25, "Page size for task list operations")
+	taskListCmd.Flags().IntVar(&taskStart, "start", 0, "Start offset for task list operations")
+	taskCmd.AddCommand(taskListCmd)
+
+	var taskText string
+	taskCreateCmd := &cobra.Command{
+		Use:   "create <id>",
+		Short: "Create a task on a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			task, err := service.CreateTask(cmd.Context(), repo, args[0], taskText)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request_id": args[0], "task": task})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Created task %d\n", task.ID)
+			return nil
+		},
+	}
+	taskCreateCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	taskCreateCmd.Flags().StringVar(&taskText, "text", "", "Task text")
+	_ = taskCreateCmd.MarkFlagRequired("text")
+	taskCmd.AddCommand(taskCreateCmd)
+
+	var taskID string
+	var taskResolved bool
+	var taskVersion int
+	taskUpdateCmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update a task on a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			var resolved *bool
+			if cmd.Flags().Changed("resolved") {
+				resolved = &taskResolved
+			}
+			var version *int
+			if cmd.Flags().Changed("version") {
+				version = &taskVersion
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			updated, err := service.UpdateTask(cmd.Context(), repo, args[0], taskID, taskText, resolved, version)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request_id": args[0], "task": updated})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Updated task %d\n", updated.ID)
+			return nil
+		},
+	}
+	taskUpdateCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	taskUpdateCmd.Flags().StringVar(&taskID, "task", "", "Task ID")
+	taskUpdateCmd.Flags().StringVar(&taskText, "text", "", "Task text")
+	taskUpdateCmd.Flags().BoolVar(&taskResolved, "resolved", false, "Mark task as resolved/unresolved")
+	taskUpdateCmd.Flags().IntVar(&taskVersion, "version", 0, "Expected task version")
+	_ = taskUpdateCmd.MarkFlagRequired("task")
+	taskCmd.AddCommand(taskUpdateCmd)
+
+	taskDeleteCmd := &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete a task from a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			var version *int
+			if cmd.Flags().Changed("version") {
+				version = &taskVersion
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if err := service.DeleteTask(cmd.Context(), repo, args[0], taskID, version); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "pull_request_id": args[0], "task_id": taskID})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted task %s\n", taskID)
+			return nil
+		},
+	}
+	taskDeleteCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	taskDeleteCmd.Flags().StringVar(&taskID, "task", "", "Task ID")
+	taskDeleteCmd.Flags().IntVar(&taskVersion, "version", 0, "Expected task version")
+	_ = taskDeleteCmd.MarkFlagRequired("task")
+	taskCmd.AddCommand(taskDeleteCmd)
+
+	prCmd.AddCommand(taskCmd)
+
 	return prCmd
 }
 
