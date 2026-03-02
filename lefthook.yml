@@ -1,0 +1,5 @@
+pre-push:
+  parallel: false
+  commands:
+    coverage-report-verify:
+      run: task quality:coverage:report:verify

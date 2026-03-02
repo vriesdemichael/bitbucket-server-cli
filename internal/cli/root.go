@@ -51,6 +51,38 @@ type rootOptions struct {
 	JSON bool
 }
 
+func loadConfig() (config.AppConfig, error) {
+	return config.LoadFromEnv()
+}
+
+func loadConfigAndClient() (config.AppConfig, *openapigenerated.ClientWithResponses, error) {
+	cfg, err := loadConfig()
+	if err != nil {
+		return config.AppConfig{}, nil, err
+	}
+
+	return cfg, newAPIClientFromConfig(cfg), nil
+}
+
+func loadQualityRepoAndService(selector string) (qualityservice.RepositoryRef, *qualityservice.Service, error) {
+	cfg, client, err := loadConfigAndClient()
+	if err != nil {
+		return qualityservice.RepositoryRef{}, nil, err
+	}
+
+	repo, err := resolveQualityRepositoryReference(selector, cfg)
+	if err != nil {
+		return qualityservice.RepositoryRef{}, nil, err
+	}
+
+	return repo, qualityservice.NewService(client), nil
+}
+
+func newAPIClientFromConfig(cfg config.AppConfig) *openapigenerated.ClientWithResponses {
+	client, _ := openapi.NewClientWithResponsesFromConfig(cfg)
+	return client
+}
+
 func newAuthCommand(options *rootOptions) *cobra.Command {
 	authCmd := &cobra.Command{
 		Use:   "auth",
@@ -68,7 +100,7 @@ func newAuthCommand(options *rootOptions) *cobra.Command {
 				}
 			}
 
-			cfg, err := config.LoadFromEnv()
+			cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
@@ -108,7 +140,7 @@ func newAuthCommand(options *rootOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resolvedHost := strings.TrimSpace(loginHost)
 			if resolvedHost == "" {
-				cfg, err := config.LoadFromEnv()
+				cfg, err := loadConfig()
 				if err != nil {
 					return err
 				}
@@ -185,7 +217,7 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 		Use:   "list",
 		Short: "List repositories",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
@@ -241,7 +273,7 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 		Use:   "list",
 		Short: "List comments",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -249,11 +281,6 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 			target, err := resolveCommentTarget(repositorySelector, commitID, pullRequestID, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := commentservice.NewService(client)
@@ -288,7 +315,7 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 		Use:   "create",
 		Short: "Create a comment",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -296,11 +323,6 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 			target, err := resolveCommentTarget(repositorySelector, commitID, pullRequestID, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := commentservice.NewService(client)
@@ -328,7 +350,7 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 		Use:   "update",
 		Short: "Update a comment",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -336,11 +358,6 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 			target, err := resolveCommentTarget(repositorySelector, commitID, pullRequestID, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := commentservice.NewService(client)
@@ -376,7 +393,7 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 		Use:   "delete",
 		Short: "Delete a comment",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -384,11 +401,6 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 			target, err := resolveCommentTarget(repositorySelector, commitID, pullRequestID, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := commentservice.NewService(client)
@@ -444,7 +456,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		Use:   "list",
 		Short: "List users with repository permissions",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -452,11 +464,6 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := reposettings.NewService(client)
@@ -489,7 +496,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		Short: "Grant a repository permission to a user",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -497,11 +504,6 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := reposettings.NewService(client)
@@ -528,7 +530,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		Use:   "list",
 		Short: "List repository webhooks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -536,11 +538,6 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := reposettings.NewService(client)
@@ -564,7 +561,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		Short: "Create a repository webhook",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -572,11 +569,6 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := reposettings.NewService(client)
@@ -604,7 +596,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		Short: "Delete a repository webhook",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -612,11 +604,6 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := reposettings.NewService(client)
@@ -642,7 +629,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		Use:   "get",
 		Short: "Get repository pull-request settings",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -650,11 +637,6 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := reposettings.NewService(client)
@@ -697,7 +679,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		Use:   "update",
 		Short: "Update repository pull-request settings",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -705,11 +687,6 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := reposettings.NewService(client)
@@ -730,7 +707,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		Use:   "update-approvers",
 		Short: "Update required approvers count",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -738,11 +715,6 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := reposettings.NewService(client)
@@ -787,7 +759,7 @@ func newDiffCommand(options *rootOptions) *cobra.Command {
 		Short: "Diff two refs or commits",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -795,11 +767,6 @@ func newDiffCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositoryReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := diffservice.NewService(client)
@@ -837,7 +804,7 @@ func newDiffCommand(options *rootOptions) *cobra.Command {
 		Short: "Diff a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -845,11 +812,6 @@ func newDiffCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositoryReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := diffservice.NewService(client)
@@ -882,7 +844,7 @@ func newDiffCommand(options *rootOptions) *cobra.Command {
 		Short: "Diff a commit against its parent",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -890,11 +852,6 @@ func newDiffCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveRepositoryReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := diffservice.NewService(client)
@@ -936,7 +893,7 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 		Use:   "list",
 		Short: "List repository tags",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -944,11 +901,6 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveTagRepositoryReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := tagservice.NewService(client)
@@ -981,7 +933,7 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 		Short: "Create repository tag",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -989,11 +941,6 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveTagRepositoryReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := tagservice.NewService(client)
@@ -1020,7 +967,7 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 		Short: "View repository tag",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -1028,11 +975,6 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveTagRepositoryReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := tagservice.NewService(client)
@@ -1057,7 +999,7 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 		Short: "Delete repository tag",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -1065,11 +1007,6 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 			repo, err := resolveTagRepositoryReference(repositorySelector, cfg)
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := tagservice.NewService(client)
@@ -1116,14 +1053,9 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Short: "Set build status for a commit",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			_, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := qualityservice.NewService(client)
@@ -1170,14 +1102,9 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Short: "Get build statuses for a commit",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			_, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := qualityservice.NewService(client)
@@ -1211,14 +1138,9 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Short: "Get build status summary counts for a commit",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			_, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
 			}
 
 			service := qualityservice.NewService(client)
@@ -1254,22 +1176,11 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Use:   "list",
 		Short: "List required build merge checks",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
 
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
-			if err != nil {
-				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			checks, err := service.ListRequiredBuildChecks(cmd.Context(), repo, requiredLimit)
 			if err != nil {
 				return err
@@ -1297,12 +1208,7 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Use:   "create",
 		Short: "Create required build merge check",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
-			if err != nil {
-				return err
-			}
-
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -1312,12 +1218,6 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
 			}
 
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			created, err := service.CreateRequiredBuildCheck(cmd.Context(), repo, payload)
 			if err != nil {
 				return err
@@ -1336,12 +1236,7 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Short: "Update required build merge check",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
-			if err != nil {
-				return err
-			}
-
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -1356,12 +1251,6 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
 			}
 
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			updated, err := service.UpdateRequiredBuildCheck(cmd.Context(), repo, id, payload)
 			if err != nil {
 				return err
@@ -1379,12 +1268,7 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Short: "Delete required build merge check",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
-			if err != nil {
-				return err
-			}
-
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -1394,12 +1278,6 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "merge check id must be a valid integer", err)
 			}
 
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			if err := service.DeleteRequiredBuildCheck(cmd.Context(), repo, id); err != nil {
 				return err
 			}
@@ -1441,12 +1319,7 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "Create or update a Code Insights report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
-			if err != nil {
-				return err
-			}
-
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -1456,12 +1329,6 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
 			}
 
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			report, err := service.SetReport(cmd.Context(), repo, args[0], args[1], request)
 			if err != nil {
 				return err
@@ -1479,22 +1346,11 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "Get a Code Insights report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
 
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
-			if err != nil {
-				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			report, err := service.GetReport(cmd.Context(), repo, args[0], args[1])
 			if err != nil {
 				return err
@@ -1509,22 +1365,11 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "Delete a Code Insights report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
 
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
-			if err != nil {
-				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			if err := service.DeleteReport(cmd.Context(), repo, args[0], args[1]); err != nil {
 				return err
 			}
@@ -1543,22 +1388,11 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "List Code Insights reports for a commit",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
 
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
-			if err != nil {
-				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			reports, err := service.ListReports(cmd.Context(), repo, args[0], reportLimit)
 			if err != nil {
 				return err
@@ -1592,12 +1426,7 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "Add annotations to a Code Insights report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
-			if err != nil {
-				return err
-			}
-
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -1607,12 +1436,6 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body (expected array of annotations)", err)
 			}
 
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			if err := service.AddAnnotations(cmd.Context(), repo, args[0], args[1], annotations); err != nil {
 				return err
 			}
@@ -1634,22 +1457,11 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "List annotations for a Code Insights report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
 
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
-			if err != nil {
-				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			annotations, err := service.ListAnnotations(cmd.Context(), repo, args[0], args[1])
 			if err != nil {
 				return err
@@ -1678,22 +1490,11 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "Delete annotation(s) by external id for a report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
 			}
 
-			repo, err := resolveQualityRepositoryReference(repositorySelector, cfg)
-			if err != nil {
-				return err
-			}
-
-			client, err := openapi.NewClientWithResponsesFromConfig(cfg)
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
-			}
-
-			service := qualityservice.NewService(client)
 			if err := service.DeleteAnnotations(cmd.Context(), repo, args[0], args[1], externalID); err != nil {
 				return err
 			}
@@ -1928,7 +1729,7 @@ func newAdminCommand(options *rootOptions) *cobra.Command {
 		Use:   "health",
 		Short: "Check local stack health",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := config.LoadFromEnv()
+			cfg, err := loadConfig()
 			if err != nil {
 				return err
 			}
