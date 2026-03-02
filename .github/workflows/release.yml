@@ -10,10 +10,97 @@ on:
 
 permissions:
   contents: write
+  id-token: write
+  attestations: write
 
 jobs:
+  build-artifacts:
+    name: Build ${{ matrix.goos }}/${{ matrix.goarch }} artifact
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - goos: linux
+            goarch: amd64
+            archive: tar.gz
+            binary_ext: ""
+          - goos: linux
+            goarch: arm64
+            archive: tar.gz
+            binary_ext: ""
+          - goos: darwin
+            goarch: amd64
+            archive: tar.gz
+            binary_ext: ""
+          - goos: darwin
+            goarch: arm64
+            archive: tar.gz
+            binary_ext: ""
+          - goos: windows
+            goarch: amd64
+            archive: zip
+            binary_ext: .exe
+          - goos: windows
+            goarch: arm64
+            archive: zip
+            binary_ext: .exe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Validate version input
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
+            echo "Version must look like vMAJOR.MINOR.PATCH (optionally with prerelease/build suffix)."
+            exit 1
+          fi
+
+      - name: Build and package artifact
+        env:
+          VERSION: ${{ inputs.version }}
+          GOOS: ${{ matrix.goos }}
+          GOARCH: ${{ matrix.goarch }}
+          ARCHIVE: ${{ matrix.archive }}
+          BINARY_EXT: ${{ matrix.binary_ext }}
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+
+          VERSION_NO_V="${VERSION#v}"
+          BINARY_NAME="bbsc${BINARY_EXT}"
+          ARCHIVE_BASENAME="bbsc_${VERSION_NO_V}_${GOOS}_${GOARCH}"
+
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -o "$BINARY_NAME" ./cmd/bbsc
+
+          if [[ "$ARCHIVE" == "zip" ]]; then
+            ARCHIVE_NAME="${ARCHIVE_BASENAME}.zip"
+            zip -q "dist/${ARCHIVE_NAME}" "$BINARY_NAME"
+          else
+            ARCHIVE_NAME="${ARCHIVE_BASENAME}.tar.gz"
+            tar -czf "dist/${ARCHIVE_NAME}" "$BINARY_NAME"
+          fi
+
+      - name: Upload packaged artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.goos }}-${{ matrix.goarch }}
+          path: dist/*
+          if-no-files-found: error
+
   release:
     name: Publish Release
+    needs:
+      - build-artifacts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -26,6 +113,13 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: dist
+          merge-multiple: true
 
       - name: Validate version input
         env:
@@ -122,10 +216,20 @@ jobs:
           git tag -a "$VERSION" -m "Release $VERSION"
           git push origin "$VERSION"
 
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          find dist -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > dist/sha256sums.txt
+
+      - name: Generate GitHub provenance attestations
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: dist/*
+
       - name: Publish GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
-          gh release create "$VERSION" --title "$VERSION" --notes-file RELEASE_NOTES.md
+          gh release create "$VERSION" --title "$VERSION" --notes-file RELEASE_NOTES.md dist/*
