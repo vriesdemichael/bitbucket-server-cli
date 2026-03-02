@@ -36,7 +36,9 @@ Common commands:
 Coverage/reporting workflow:
 
 - combined metric source is unit + live coverage merged into one report
-- pre-commit hook gate: `task quality:coverage:origin-main` (runs live tests and enforces combined patch coverage >= 85% vs `origin/main`)
+- coverage gates: global combined coverage >= 85% (maintained source scope) and combined patch coverage >= 85%
+- patch baseline: compare against up-to-date `origin/main`
+- pre-commit hook gate: `task quality:coverage:origin-main` (runs live tests and enforces both thresholds)
 - local report update (commit this artifact): `task quality:coverage:report:update`
 - local pre-push verification (recompute + compare): `task quality:coverage:report:verify`
 - CI verification (committed artifact only): `task quality:coverage:report:verify:committed`
