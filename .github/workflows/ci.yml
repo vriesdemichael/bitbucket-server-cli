@@ -54,6 +54,9 @@ jobs:
       - name: Run unit tests
         run: task test:unit
 
+      - name: Verify committed combined coverage report
+        run: task quality:coverage:report:verify:committed
+
   ci-complete:
     name: CI Complete
     runs-on: ubuntu-latest

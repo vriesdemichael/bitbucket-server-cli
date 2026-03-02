@@ -6,9 +6,15 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
+
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
 )
 
 func TestAuthStatusSmoke(t *testing.T) {
@@ -716,5 +722,1343 @@ func TestRepoCommentDeleteAutoResolvesVersion(t *testing.T) {
 
 	if !strings.Contains(buffer.String(), "Deleted comment 300 (version=4)") {
 		t.Fatalf("expected delete output with resolved version, got: %s", buffer.String())
+	}
+}
+
+func TestRepoCommentDeleteWithoutResolvedVersionPrintsSimpleMessage(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc123/comments/301":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":301,"text":"to-delete"}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc123/comments/301":
+			if request.URL.Query().Get("version") != "" {
+				writer.WriteHeader(http.StatusBadRequest)
+				_, _ = writer.Write([]byte("version query should be absent when unresolved"))
+				return
+			}
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"repo", "comment", "delete", "--commit", "abc123", "--id", "301"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if !strings.Contains(buffer.String(), "Deleted comment 301") || strings.Contains(buffer.String(), "version=") {
+		t.Fatalf("expected simple delete message without version, got: %s", buffer.String())
+	}
+}
+
+func TestAdminHealthPropagatesHardFailure(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = writer.Write([]byte("unavailable"))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	command := NewRootCommand()
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(&bytes.Buffer{})
+	command.SetArgs([]string{"admin", "health"})
+
+	err := command.Execute()
+	if err == nil {
+		t.Fatal("expected transient failure error")
+	}
+	if apperrors.ExitCode(err) != 10 {
+		t.Fatalf("expected transient exit code 10, got %d (%v)", apperrors.ExitCode(err), err)
+	}
+}
+
+func TestPRAndIssueListNotImplemented(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "pr", args: []string{"pr", "list"}},
+		{name: "issue", args: []string{"issue", "list"}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			command.SetOut(&bytes.Buffer{})
+			command.SetErr(&bytes.Buffer{})
+			command.SetArgs(testCase.args)
+
+			err := command.Execute()
+			if err == nil {
+				t.Fatal("expected not implemented error")
+			}
+
+			if apperrors.ExitCode(err) != 11 {
+				t.Fatalf("expected not implemented exit code 11, got: %d", apperrors.ExitCode(err))
+			}
+		})
+	}
+}
+
+func TestResolveRepositorySelector(t *testing.T) {
+	t.Run("uses env fallback", func(t *testing.T) {
+		t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+		repo, err := resolveRepositorySelector("", config.AppConfig{ProjectKey: "TEST"})
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if repo.ProjectKey != "TEST" || repo.Slug != "demo" {
+			t.Fatalf("unexpected selector: %+v", repo)
+		}
+	})
+
+	t.Run("rejects missing values", func(t *testing.T) {
+		t.Setenv("BITBUCKET_REPO_SLUG", "")
+
+		_, err := resolveRepositorySelector("", config.AppConfig{})
+		if err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("rejects invalid format", func(t *testing.T) {
+		_, err := resolveRepositorySelector("badformat", config.AppConfig{})
+		if err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("accepts explicit selector", func(t *testing.T) {
+		repo, err := resolveRepositorySelector("PRJ/repo", config.AppConfig{})
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if repo.ProjectKey != "PRJ" || repo.Slug != "repo" {
+			t.Fatalf("unexpected selector: %+v", repo)
+		}
+	})
+}
+
+func TestLoadConfigAndClientAndClientFactoryBranches(t *testing.T) {
+	t.Run("load config failure", func(t *testing.T) {
+		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BITBUCKET_URL", "://broken")
+		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+		_, _, err := loadConfigAndClient()
+		if err == nil {
+			t.Fatal("expected config load failure")
+		}
+	})
+
+	t.Run("client factory success", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			writer.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		client := newAPIClientFromConfig(config.AppConfig{BitbucketURL: server.URL})
+		if client == nil {
+			t.Fatal("expected non-nil client")
+		}
+	})
+}
+
+func TestLoadQualityRepoAndServiceBranches(t *testing.T) {
+	t.Run("config load failure", func(t *testing.T) {
+		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BITBUCKET_URL", "://broken")
+		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+		_, _, err := loadQualityRepoAndService("")
+		if err == nil {
+			t.Fatal("expected config load failure")
+		}
+	})
+
+	t.Run("invalid selector failure", func(t *testing.T) {
+		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+		t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+		_, _, err := loadQualityRepoAndService("bad-format")
+		if err == nil {
+			t.Fatal("expected repository selector validation error")
+		}
+		if apperrors.ExitCode(err) != 2 {
+			t.Fatalf("expected validation exit code 2, got %d (%v)", apperrors.ExitCode(err), err)
+		}
+	})
+
+	t.Run("success", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			writer.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BITBUCKET_URL", server.URL)
+		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+		t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+		repo, service, err := loadQualityRepoAndService("")
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+		if repo.ProjectKey != "TEST" || repo.Slug != "demo" {
+			t.Fatalf("unexpected repository ref: %+v", repo)
+		}
+		if service == nil {
+			t.Fatal("expected non-nil service")
+		}
+	})
+}
+
+func TestResolveCommentTargetRequiresExactlyOneContext(t *testing.T) {
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	cfg := config.AppConfig{ProjectKey: "TEST"}
+
+	_, err := resolveCommentTarget("", "", "", cfg)
+	if err == nil {
+		t.Fatal("expected validation error for missing commit/pr")
+	}
+
+	_, err = resolveCommentTarget("", "abc123", "77", cfg)
+	if err == nil {
+		t.Fatal("expected validation error for both commit and pr")
+	}
+
+	target, err := resolveCommentTarget("", "abc123", "", cfg)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if target.CommitID != "abc123" || target.PullRequestID != "" {
+		t.Fatalf("unexpected target: %+v", target)
+	}
+
+	target, err = resolveCommentTarget("", "", " 77 ", cfg)
+	if err != nil {
+		t.Fatalf("expected no error for pull request target, got: %v", err)
+	}
+	if target.CommitID != "" || target.PullRequestID != "77" {
+		t.Fatalf("unexpected pull request target: %+v", target)
+	}
+}
+
+func TestResolveDiffOutputModeAndWriters(t *testing.T) {
+	_, err := resolveDiffOutputMode(true, true, false)
+	if err == nil {
+		t.Fatal("expected validation error for multiple output modes")
+	}
+
+	mode, err := resolveDiffOutputMode(false, false, true)
+	if err != nil || mode != diff.OutputKindNameOnly {
+		t.Fatalf("expected name-only mode, got mode=%q err=%v", mode, err)
+	}
+
+	result := diff.Result{
+		Names: []string{"a.txt", "b.go"},
+		Stats: []map[string]any{{"path": "a.txt", "lines_added": 1, "lines_removed": 2}},
+		Patch: "diff --git a/a.txt b/a.txt",
+	}
+
+	nameBuffer := &bytes.Buffer{}
+	if err := writeDiffResult(nameBuffer, false, diff.OutputKindNameOnly, result); err != nil {
+		t.Fatalf("expected no error writing names, got: %v", err)
+	}
+	if !strings.Contains(nameBuffer.String(), "a.txt") {
+		t.Fatalf("expected name output, got: %s", nameBuffer.String())
+	}
+
+	statBuffer := &bytes.Buffer{}
+	if err := writeDiffResult(statBuffer, true, diff.OutputKindStat, result); err != nil {
+		t.Fatalf("expected no error writing stats json, got: %v", err)
+	}
+	if !strings.Contains(statBuffer.String(), "lines_added") {
+		t.Fatalf("expected stats json output, got: %s", statBuffer.String())
+	}
+
+	patchBuffer := &bytes.Buffer{}
+	if err := writeDiffResult(patchBuffer, false, diff.OutputKindPatch, result); err != nil {
+		t.Fatalf("expected no error writing patch, got: %v", err)
+	}
+	if !strings.Contains(patchBuffer.String(), "diff --git") {
+		t.Fatalf("expected patch output, got: %s", patchBuffer.String())
+	}
+
+	rawMode, err := resolveDiffOutputMode(false, false, false)
+	if err != nil || rawMode != diff.OutputKindRaw {
+		t.Fatalf("expected raw mode, got mode=%q err=%v", rawMode, err)
+	}
+
+	statPlainBuffer := &bytes.Buffer{}
+	if err := writeDiffResult(statPlainBuffer, false, diff.OutputKindStat, result); err != nil {
+		t.Fatalf("expected no error writing stats plain mode, got: %v", err)
+	}
+	if !strings.Contains(statPlainBuffer.String(), "lines_removed") {
+		t.Fatalf("expected stats plain output, got: %s", statPlainBuffer.String())
+	}
+
+	rawJSONBuffer := &bytes.Buffer{}
+	if err := writeDiffResult(rawJSONBuffer, true, diff.OutputKindRaw, result); err != nil {
+		t.Fatalf("expected no error writing raw json, got: %v", err)
+	}
+	if !strings.Contains(rawJSONBuffer.String(), `"patch": "diff --git a/a.txt b/a.txt"`) {
+		t.Fatalf("expected raw json patch output, got: %s", rawJSONBuffer.String())
+	}
+}
+
+func TestCommentHelpersAndSafeHelpers(t *testing.T) {
+	comment := openapigenerated.RestComment{}
+	if commentIDString(comment) != "unknown" {
+		t.Fatalf("expected unknown id")
+	}
+	if formatCommentSummary(comment) != "[unknown v?] <empty>" {
+		t.Fatalf("unexpected summary for empty comment: %s", formatCommentSummary(comment))
+	}
+
+	id := int64(42)
+	version := int32(3)
+	text := " hello "
+	comment = openapigenerated.RestComment{Id: &id, Version: &version, Text: &text}
+	if commentIDString(comment) != "42" {
+		t.Fatalf("expected comment id 42")
+	}
+	if formatCommentSummary(comment) != "[42 v3] hello" {
+		t.Fatalf("unexpected comment summary: %s", formatCommentSummary(comment))
+	}
+
+	if safeString(nil) != "" {
+		t.Fatal("expected empty safe string")
+	}
+	if safeInt32(nil) != 0 {
+		t.Fatal("expected zero safe int32")
+	}
+	if safeInt64(nil) != 0 {
+		t.Fatal("expected zero safe int64")
+	}
+	if len(safeStringSlice(nil)) != 0 {
+		t.Fatal("expected empty safe string slice")
+	}
+
+	s := "x"
+	i32 := int32(9)
+	i64 := int64(10)
+	if safeString(&s) != "x" || safeInt32(&i32) != 9 || safeInt64(&i64) != 10 {
+		t.Fatal("expected pointer helper values")
+	}
+
+	tagType := openapigenerated.RestTagTypeTAG
+	buildState := openapigenerated.RestBuildStatusStateSUCCESSFUL
+	insight := openapigenerated.PASS
+	if safeStringFromTagType(&tagType) != "TAG" {
+		t.Fatal("unexpected tag type conversion")
+	}
+	if safeStringFromBuildState(&buildState) != "SUCCESSFUL" {
+		t.Fatal("unexpected build state conversion")
+	}
+	if safeStringFromInsightResult(&insight) != "PASS" {
+		t.Fatal("unexpected insight result conversion")
+	}
+
+	if safeStringFromTagType(nil) != "" {
+		t.Fatal("expected empty string for nil tag type")
+	}
+	if safeStringFromBuildState(nil) != "" {
+		t.Fatal("expected empty string for nil build state")
+	}
+	if safeStringFromInsightResult(nil) != "" {
+		t.Fatal("expected empty string for nil insight result")
+	}
+}
+
+func TestWriteJSONMarshalError(t *testing.T) {
+	err := writeJSON(&bytes.Buffer{}, map[string]any{"bad": func() {}})
+	if err == nil {
+		t.Fatal("expected marshal error")
+	}
+}
+
+func TestTagViewDeleteAndListCommandPaths(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/tags":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"displayId":"v2.0.0","type":"TAG","latestCommit":"abc"}],"isLastPage":true}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/tags/v2.0.0":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"displayId":"v2.0.0","type":"TAG","latestCommit":"abc"}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/git/latest/projects/TEST/repos/demo/tags/v2.0.0":
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	humanListCommand := NewRootCommand()
+	humanListBuffer := &bytes.Buffer{}
+	humanListCommand.SetOut(humanListBuffer)
+	humanListCommand.SetErr(humanListBuffer)
+	humanListCommand.SetArgs([]string{"tag", "list", "--limit", "10", "--order-by", "ALPHABETICAL"})
+	if err := humanListCommand.Execute(); err != nil {
+		t.Fatalf("tag list human failed: %v", err)
+	}
+	if !strings.Contains(humanListBuffer.String(), "v2.0.0") {
+		t.Fatalf("expected tag in human list output, got: %s", humanListBuffer.String())
+	}
+
+	jsonViewCommand := NewRootCommand()
+	jsonViewBuffer := &bytes.Buffer{}
+	jsonViewCommand.SetOut(jsonViewBuffer)
+	jsonViewCommand.SetErr(jsonViewBuffer)
+	jsonViewCommand.SetArgs([]string{"--json", "tag", "view", "v2.0.0"})
+	if err := jsonViewCommand.Execute(); err != nil {
+		t.Fatalf("tag view json failed: %v", err)
+	}
+	if !strings.Contains(jsonViewBuffer.String(), "v2.0.0") {
+		t.Fatalf("expected tag id in view output, got: %s", jsonViewBuffer.String())
+	}
+
+	jsonDeleteCommand := NewRootCommand()
+	jsonDeleteBuffer := &bytes.Buffer{}
+	jsonDeleteCommand.SetOut(jsonDeleteBuffer)
+	jsonDeleteCommand.SetErr(jsonDeleteBuffer)
+	jsonDeleteCommand.SetArgs([]string{"--json", "tag", "delete", "v2.0.0"})
+	if err := jsonDeleteCommand.Execute(); err != nil {
+		t.Fatalf("tag delete json failed: %v", err)
+	}
+	if !strings.Contains(jsonDeleteBuffer.String(), `"status": "ok"`) {
+		t.Fatalf("expected delete ok status, got: %s", jsonDeleteBuffer.String())
+	}
+}
+
+func TestBuildRequiredCommandPaths(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/required-builds/latest/projects/TEST/repos/demo/conditions":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"id":11,"buildParentKeys":["ci"]}],"isLastPage":true}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/required-builds/latest/projects/TEST/repos/demo/condition":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":12,"buildParentKeys":["ci"]}`))
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/required-builds/latest/projects/TEST/repos/demo/condition/12":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":12,"buildParentKeys":["ci"]}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/required-builds/latest/projects/TEST/repos/demo/condition/12":
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	humanListCommand := NewRootCommand()
+	humanListBuffer := &bytes.Buffer{}
+	humanListCommand.SetOut(humanListBuffer)
+	humanListCommand.SetErr(humanListBuffer)
+	humanListCommand.SetArgs([]string{"build", "required", "list"})
+	if err := humanListCommand.Execute(); err != nil {
+		t.Fatalf("build required list failed: %v", err)
+	}
+	if !strings.Contains(humanListBuffer.String(), "id=11") {
+		t.Fatalf("expected required id in list output, got: %s", humanListBuffer.String())
+	}
+
+	createCommand := NewRootCommand()
+	createBuffer := &bytes.Buffer{}
+	createCommand.SetOut(createBuffer)
+	createCommand.SetErr(createBuffer)
+	createCommand.SetArgs([]string{"--json", "build", "required", "create", "--body", `{"buildParentKeys":["ci"]}`})
+	if err := createCommand.Execute(); err != nil {
+		t.Fatalf("build required create failed: %v", err)
+	}
+	if !strings.Contains(createBuffer.String(), `"id": 12`) {
+		t.Fatalf("expected created id in output, got: %s", createBuffer.String())
+	}
+
+	updateCommand := NewRootCommand()
+	updateBuffer := &bytes.Buffer{}
+	updateCommand.SetOut(updateBuffer)
+	updateCommand.SetErr(updateBuffer)
+	updateCommand.SetArgs([]string{"--json", "build", "required", "update", "12", "--body", `{"buildParentKeys":["ci"]}`})
+	if err := updateCommand.Execute(); err != nil {
+		t.Fatalf("build required update failed: %v", err)
+	}
+	if !strings.Contains(updateBuffer.String(), `"id": 12`) {
+		t.Fatalf("expected updated id in output, got: %s", updateBuffer.String())
+	}
+
+	deleteCommand := NewRootCommand()
+	deleteBuffer := &bytes.Buffer{}
+	deleteCommand.SetOut(deleteBuffer)
+	deleteCommand.SetErr(deleteBuffer)
+	deleteCommand.SetArgs([]string{"build", "required", "delete", "12"})
+	if err := deleteCommand.Execute(); err != nil {
+		t.Fatalf("build required delete failed: %v", err)
+	}
+	if !strings.Contains(deleteBuffer.String(), "Deleted required build merge check 12") {
+		t.Fatalf("expected delete message, got: %s", deleteBuffer.String())
+	}
+}
+
+func TestInsightsReportAndAnnotationCommandPaths(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/lint":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"key":"lint","title":"Lint","result":"PASS"}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/lint":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"key":"lint","title":"Lint","result":"PASS"}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"key":"lint","title":"Lint","result":"PASS"}],"isLastPage":true}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/lint":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/lint/annotations":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/lint/annotations":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"annotations":[{"externalId":"ann1","severity":"LOW","message":"note"}]}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/lint/annotations":
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	setCommand := NewRootCommand()
+	setBuffer := &bytes.Buffer{}
+	setCommand.SetOut(setBuffer)
+	setCommand.SetErr(setBuffer)
+	setCommand.SetArgs([]string{"--json", "insights", "report", "set", "abc", "lint", "--body", `{"title":"Lint","result":"PASS"}`})
+	if err := setCommand.Execute(); err != nil {
+		t.Fatalf("insights report set failed: %v", err)
+	}
+
+	getCommand := NewRootCommand()
+	getBuffer := &bytes.Buffer{}
+	getCommand.SetOut(getBuffer)
+	getCommand.SetErr(getBuffer)
+	getCommand.SetArgs([]string{"--json", "insights", "report", "get", "abc", "lint"})
+	if err := getCommand.Execute(); err != nil {
+		t.Fatalf("insights report get failed: %v", err)
+	}
+	if !strings.Contains(getBuffer.String(), `"key": "lint"`) {
+		t.Fatalf("expected report key in get output, got: %s", getBuffer.String())
+	}
+
+	humanListCommand := NewRootCommand()
+	humanListBuffer := &bytes.Buffer{}
+	humanListCommand.SetOut(humanListBuffer)
+	humanListCommand.SetErr(humanListBuffer)
+	humanListCommand.SetArgs([]string{"insights", "report", "list", "abc"})
+	if err := humanListCommand.Execute(); err != nil {
+		t.Fatalf("insights report list failed: %v", err)
+	}
+	if !strings.Contains(humanListBuffer.String(), "lint") {
+		t.Fatalf("expected report in list output, got: %s", humanListBuffer.String())
+	}
+
+	addAnnCommand := NewRootCommand()
+	addAnnBuffer := &bytes.Buffer{}
+	addAnnCommand.SetOut(addAnnBuffer)
+	addAnnCommand.SetErr(addAnnBuffer)
+	addAnnCommand.SetArgs([]string{"--json", "insights", "annotation", "add", "abc", "lint", "--body", `[{"externalId":"ann1","message":"note","severity":"LOW"}]`})
+	if err := addAnnCommand.Execute(); err != nil {
+		t.Fatalf("insights annotation add failed: %v", err)
+	}
+
+	humanListAnnCommand := NewRootCommand()
+	humanListAnnBuffer := &bytes.Buffer{}
+	humanListAnnCommand.SetOut(humanListAnnBuffer)
+	humanListAnnCommand.SetErr(humanListAnnBuffer)
+	humanListAnnCommand.SetArgs([]string{"insights", "annotation", "list", "abc", "lint"})
+	if err := humanListAnnCommand.Execute(); err != nil {
+		t.Fatalf("insights annotation list failed: %v", err)
+	}
+	if !strings.Contains(humanListAnnBuffer.String(), "ann1") {
+		t.Fatalf("expected annotation id in output, got: %s", humanListAnnBuffer.String())
+	}
+
+	deleteAnnCommand := NewRootCommand()
+	deleteAnnBuffer := &bytes.Buffer{}
+	deleteAnnCommand.SetOut(deleteAnnBuffer)
+	deleteAnnCommand.SetErr(deleteAnnBuffer)
+	deleteAnnCommand.SetArgs([]string{"insights", "annotation", "delete", "abc", "lint", "--external-id", "ann1"})
+	if err := deleteAnnCommand.Execute(); err != nil {
+		t.Fatalf("insights annotation delete failed: %v", err)
+	}
+	if !strings.Contains(deleteAnnBuffer.String(), "Deleted annotations") {
+		t.Fatalf("expected annotation delete output, got: %s", deleteAnnBuffer.String())
+	}
+
+	deleteReportCommand := NewRootCommand()
+	deleteReportBuffer := &bytes.Buffer{}
+	deleteReportCommand.SetOut(deleteReportBuffer)
+	deleteReportCommand.SetErr(deleteReportBuffer)
+	deleteReportCommand.SetArgs([]string{"insights", "report", "delete", "abc", "lint"})
+	if err := deleteReportCommand.Execute(); err != nil {
+		t.Fatalf("insights report delete failed: %v", err)
+	}
+	if !strings.Contains(deleteReportBuffer.String(), "Deleted report") {
+		t.Fatalf("expected report delete output, got: %s", deleteReportBuffer.String())
+	}
+}
+
+func TestRepoListCommandPaths(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/api/1.0/repos" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"Demo Repo","public":false,"project":{"key":"TEST"}}],"isLastPage":true,"nextPageStart":0}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	jsonCommand := NewRootCommand()
+	jsonBuffer := &bytes.Buffer{}
+	jsonCommand.SetOut(jsonBuffer)
+	jsonCommand.SetErr(jsonBuffer)
+	jsonCommand.SetArgs([]string{"--json", "repo", "list", "--limit", "25"})
+	if err := jsonCommand.Execute(); err != nil {
+		t.Fatalf("repo list json failed: %v", err)
+	}
+	if !strings.Contains(jsonBuffer.String(), "demo") {
+		t.Fatalf("expected repo slug in json output, got: %s", jsonBuffer.String())
+	}
+
+	humanCommand := NewRootCommand()
+	humanBuffer := &bytes.Buffer{}
+	humanCommand.SetOut(humanBuffer)
+	humanCommand.SetErr(humanBuffer)
+	humanCommand.SetArgs([]string{"repo", "list", "--limit", "25"})
+	if err := humanCommand.Execute(); err != nil {
+		t.Fatalf("repo list human failed: %v", err)
+	}
+	if !strings.Contains(humanBuffer.String(), "TEST/demo") {
+		t.Fatalf("expected project/slug output, got: %s", humanBuffer.String())
+	}
+}
+
+func TestAuthLoginAndLogoutJSON(t *testing.T) {
+	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config.yaml"))
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "0")
+	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	loginCommand := NewRootCommand()
+	loginBuffer := &bytes.Buffer{}
+	loginCommand.SetOut(loginBuffer)
+	loginCommand.SetErr(loginBuffer)
+	loginCommand.SetArgs([]string{"--json", "auth", "login", "--host", "http://localhost:7990", "--token", "abc123", "--set-default"})
+	if err := loginCommand.Execute(); err != nil {
+		t.Fatalf("auth login json failed: %v", err)
+	}
+	if !strings.Contains(loginBuffer.String(), `"auth_mode": "token"`) {
+		t.Fatalf("expected token auth mode in login output, got: %s", loginBuffer.String())
+	}
+
+	logoutCommand := NewRootCommand()
+	logoutBuffer := &bytes.Buffer{}
+	logoutCommand.SetOut(logoutBuffer)
+	logoutCommand.SetErr(logoutBuffer)
+	logoutCommand.SetArgs([]string{"--json", "auth", "logout", "--host", "http://localhost:7990"})
+	if err := logoutCommand.Execute(); err != nil {
+		t.Fatalf("auth logout json failed: %v", err)
+	}
+	if !strings.Contains(logoutBuffer.String(), `"status": "ok"`) {
+		t.Fatalf("expected status ok in logout output, got: %s", logoutBuffer.String())
+	}
+}
+
+func TestAuthLoginUsesLoadedHostFallback(t *testing.T) {
+	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config-fallback.yaml"))
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "http://fallback.local:7990")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	loginCommand := NewRootCommand()
+	loginBuffer := &bytes.Buffer{}
+	loginCommand.SetOut(loginBuffer)
+	loginCommand.SetErr(loginBuffer)
+	loginCommand.SetArgs([]string{"--json", "auth", "login", "--token", "abc123", "--set-default"})
+	if err := loginCommand.Execute(); err != nil {
+		t.Fatalf("auth login json with host fallback failed: %v", err)
+	}
+	if !strings.Contains(loginBuffer.String(), `"host": "http://fallback.local:7990"`) {
+		t.Fatalf("expected fallback host in login output, got: %s", loginBuffer.String())
+	}
+}
+
+func TestDiffPRNameOnlyAndCommitJSON(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/rest/api/latest/projects/TEST/repos/demo/pull-requests/99.diff":
+			_, _ = writer.Write([]byte("diff --git a/a.txt b/a.txt\n"))
+		case "/rest/api/latest/projects/TEST/repos/demo/patch":
+			_, _ = writer.Write([]byte("diff --git a/seed.txt b/seed.txt\n"))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	prNameOnlyCmd := NewRootCommand()
+	prNameOnlyBuffer := &bytes.Buffer{}
+	prNameOnlyCmd.SetOut(prNameOnlyBuffer)
+	prNameOnlyCmd.SetErr(prNameOnlyBuffer)
+	prNameOnlyCmd.SetArgs([]string{"diff", "pr", "99", "--name-only"})
+	if err := prNameOnlyCmd.Execute(); err != nil {
+		t.Fatalf("diff pr name-only failed: %v", err)
+	}
+	if !strings.Contains(prNameOnlyBuffer.String(), "a.txt") {
+		t.Fatalf("expected filename in diff pr name-only output, got: %s", prNameOnlyBuffer.String())
+	}
+
+	commitJSONCmd := NewRootCommand()
+	commitJSONBuffer := &bytes.Buffer{}
+	commitJSONCmd.SetOut(commitJSONBuffer)
+	commitJSONCmd.SetErr(commitJSONBuffer)
+	commitJSONCmd.SetArgs([]string{"--json", "diff", "commit", "abc123"})
+	if err := commitJSONCmd.Execute(); err != nil {
+		t.Fatalf("diff commit json failed: %v", err)
+	}
+	if !strings.Contains(commitJSONBuffer.String(), "diff --git") {
+		t.Fatalf("expected patch payload in diff commit json output, got: %s", commitJSONBuffer.String())
+	}
+}
+
+func TestBuildStatusHumanCommandPaths(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/build-status/latest/commits/abc123":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/build-status/latest/commits/abc123":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/build-status/latest/commits/stats/abc123":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"successful":1,"failed":2,"inProgress":3,"unknown":4,"cancelled":5}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	setCmd := NewRootCommand()
+	setBuffer := &bytes.Buffer{}
+	setCmd.SetOut(setBuffer)
+	setCmd.SetErr(setBuffer)
+	setCmd.SetArgs([]string{"build", "status", "set", "abc123", "--key", "ci/main", "--state", "SUCCESSFUL", "--url", "https://ci.example/1"})
+	if err := setCmd.Execute(); err != nil {
+		t.Fatalf("build status set human failed: %v", err)
+	}
+	if !strings.Contains(setBuffer.String(), "Build status ci/main set on abc123") {
+		t.Fatalf("expected human set output, got: %s", setBuffer.String())
+	}
+
+	getCmd := NewRootCommand()
+	getBuffer := &bytes.Buffer{}
+	getCmd.SetOut(getBuffer)
+	getCmd.SetErr(getBuffer)
+	getCmd.SetArgs([]string{"build", "status", "get", "abc123"})
+	if err := getCmd.Execute(); err != nil {
+		t.Fatalf("build status get human failed: %v", err)
+	}
+	if !strings.Contains(getBuffer.String(), "No build statuses found") {
+		t.Fatalf("expected empty statuses message, got: %s", getBuffer.String())
+	}
+
+	statsCmd := NewRootCommand()
+	statsBuffer := &bytes.Buffer{}
+	statsCmd.SetOut(statsBuffer)
+	statsCmd.SetErr(statsBuffer)
+	statsCmd.SetArgs([]string{"build", "status", "stats", "abc123", "--include-unique"})
+	if err := statsCmd.Execute(); err != nil {
+		t.Fatalf("build status stats human failed: %v", err)
+	}
+	if !strings.Contains(statsBuffer.String(), "Successful: 1") || !strings.Contains(statsBuffer.String(), "Cancelled: 5") {
+		t.Fatalf("expected stats lines in output, got: %s", statsBuffer.String())
+	}
+}
+
+func TestRepoCommentCommandPathsCommitAndPR(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc/comments":
+			_, _ = writer.Write([]byte(`{"values":[{"id":101,"text":"commit note","version":1}],"isLastPage":true}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc/comments":
+			writer.WriteHeader(http.StatusCreated)
+			_, _ = writer.Write([]byte(`{"id":101,"text":"commit note","version":1}`))
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc/comments/101":
+			_, _ = writer.Write([]byte(`{"id":101,"text":"commit updated","version":2}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc/comments/101":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/77/comments":
+			_, _ = writer.Write([]byte(`{"values":[{"id":201,"text":"pr note","version":3}],"isLastPage":true}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/77/comments":
+			writer.WriteHeader(http.StatusCreated)
+			_, _ = writer.Write([]byte(`{"id":201,"text":"pr note","version":3}`))
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/77/comments/201":
+			_, _ = writer.Write([]byte(`{"id":201,"text":"pr updated","version":4}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/77/comments/201":
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	listCommitJSON := NewRootCommand()
+	listCommitJSONBuffer := &bytes.Buffer{}
+	listCommitJSON.SetOut(listCommitJSONBuffer)
+	listCommitJSON.SetErr(listCommitJSONBuffer)
+	listCommitJSON.SetArgs([]string{"--json", "repo", "comment", "list", "--commit", "abc", "--path", "seed.txt", "--limit", "10"})
+	if err := listCommitJSON.Execute(); err != nil {
+		t.Fatalf("repo comment list commit json failed: %v", err)
+	}
+	if !strings.Contains(listCommitJSONBuffer.String(), "commit note") {
+		t.Fatalf("expected commit comment in json output, got: %s", listCommitJSONBuffer.String())
+	}
+
+	createCommitHuman := NewRootCommand()
+	createCommitHumanBuffer := &bytes.Buffer{}
+	createCommitHuman.SetOut(createCommitHumanBuffer)
+	createCommitHuman.SetErr(createCommitHumanBuffer)
+	createCommitHuman.SetArgs([]string{"repo", "comment", "create", "--commit", "abc", "--text", "commit note"})
+	if err := createCommitHuman.Execute(); err != nil {
+		t.Fatalf("repo comment create commit human failed: %v", err)
+	}
+	if !strings.Contains(createCommitHumanBuffer.String(), "Created comment 101") {
+		t.Fatalf("expected create output, got: %s", createCommitHumanBuffer.String())
+	}
+
+	updateCommitJSON := NewRootCommand()
+	updateCommitJSONBuffer := &bytes.Buffer{}
+	updateCommitJSON.SetOut(updateCommitJSONBuffer)
+	updateCommitJSON.SetErr(updateCommitJSONBuffer)
+	updateCommitJSON.SetArgs([]string{"--json", "repo", "comment", "update", "--commit", "abc", "--id", "101", "--text", "commit updated", "--version", "1"})
+	if err := updateCommitJSON.Execute(); err != nil {
+		t.Fatalf("repo comment update commit json failed: %v", err)
+	}
+	if !strings.Contains(updateCommitJSONBuffer.String(), "commit updated") {
+		t.Fatalf("expected updated text in output, got: %s", updateCommitJSONBuffer.String())
+	}
+
+	deleteCommitHuman := NewRootCommand()
+	deleteCommitHumanBuffer := &bytes.Buffer{}
+	deleteCommitHuman.SetOut(deleteCommitHumanBuffer)
+	deleteCommitHuman.SetErr(deleteCommitHumanBuffer)
+	deleteCommitHuman.SetArgs([]string{"repo", "comment", "delete", "--commit", "abc", "--id", "101", "--version", "2"})
+	if err := deleteCommitHuman.Execute(); err != nil {
+		t.Fatalf("repo comment delete commit human failed: %v", err)
+	}
+	if !strings.Contains(deleteCommitHumanBuffer.String(), "Deleted comment 101 (version=2)") {
+		t.Fatalf("expected delete output, got: %s", deleteCommitHumanBuffer.String())
+	}
+
+	listPRHuman := NewRootCommand()
+	listPRHumanBuffer := &bytes.Buffer{}
+	listPRHuman.SetOut(listPRHumanBuffer)
+	listPRHuman.SetErr(listPRHumanBuffer)
+	listPRHuman.SetArgs([]string{"repo", "comment", "list", "--pr", "77", "--path", "seed.txt", "--limit", "10"})
+	if err := listPRHuman.Execute(); err != nil {
+		t.Fatalf("repo comment list pr human failed: %v", err)
+	}
+	if !strings.Contains(listPRHumanBuffer.String(), "pr note") {
+		t.Fatalf("expected pr note in human output, got: %s", listPRHumanBuffer.String())
+	}
+
+	createPRJSON := NewRootCommand()
+	createPRJSONBuffer := &bytes.Buffer{}
+	createPRJSON.SetOut(createPRJSONBuffer)
+	createPRJSON.SetErr(createPRJSONBuffer)
+	createPRJSON.SetArgs([]string{"--json", "repo", "comment", "create", "--pr", "77", "--text", "pr note"})
+	if err := createPRJSON.Execute(); err != nil {
+		t.Fatalf("repo comment create pr json failed: %v", err)
+	}
+	if !strings.Contains(createPRJSONBuffer.String(), "pr note") {
+		t.Fatalf("expected pr note in json output, got: %s", createPRJSONBuffer.String())
+	}
+
+	updatePRHuman := NewRootCommand()
+	updatePRHumanBuffer := &bytes.Buffer{}
+	updatePRHuman.SetOut(updatePRHumanBuffer)
+	updatePRHuman.SetErr(updatePRHumanBuffer)
+	updatePRHuman.SetArgs([]string{"repo", "comment", "update", "--pr", "77", "--id", "201", "--text", "pr updated", "--version", "3"})
+	if err := updatePRHuman.Execute(); err != nil {
+		t.Fatalf("repo comment update pr human failed: %v", err)
+	}
+	if !strings.Contains(updatePRHumanBuffer.String(), "Updated comment 201") {
+		t.Fatalf("expected updated human output, got: %s", updatePRHumanBuffer.String())
+	}
+
+	deletePRJSON := NewRootCommand()
+	deletePRJSONBuffer := &bytes.Buffer{}
+	deletePRJSON.SetOut(deletePRJSONBuffer)
+	deletePRJSON.SetErr(deletePRJSONBuffer)
+	deletePRJSON.SetArgs([]string{"--json", "repo", "comment", "delete", "--pr", "77", "--id", "201", "--version", "4"})
+	if err := deletePRJSON.Execute(); err != nil {
+		t.Fatalf("repo comment delete pr json failed: %v", err)
+	}
+	if !strings.Contains(deletePRJSONBuffer.String(), `"deleted"`) {
+		t.Fatalf("expected deleted payload in json output, got: %s", deletePRJSONBuffer.String())
+	}
+}
+
+func TestAuthStatusHostOverrideAndHumanLoginLogout(t *testing.T) {
+	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config.yaml"))
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "0")
+	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	statusCommand := NewRootCommand()
+	statusBuffer := &bytes.Buffer{}
+	statusCommand.SetOut(statusBuffer)
+	statusCommand.SetErr(statusBuffer)
+	statusCommand.SetArgs([]string{"auth", "status", "--host", "http://example.local:7990"})
+	if err := statusCommand.Execute(); err != nil {
+		t.Fatalf("auth status with host override failed: %v", err)
+	}
+	if !strings.Contains(statusBuffer.String(), "http://example.local:7990") {
+		t.Fatalf("expected overridden host in status output, got: %s", statusBuffer.String())
+	}
+
+	loginCommand := NewRootCommand()
+	loginBuffer := &bytes.Buffer{}
+	loginCommand.SetOut(loginBuffer)
+	loginCommand.SetErr(loginBuffer)
+	loginCommand.SetArgs([]string{"auth", "login", "--host", "http://example.local:7990", "--token", "abc123", "--set-default"})
+	if err := loginCommand.Execute(); err != nil {
+		t.Fatalf("auth login human failed: %v", err)
+	}
+	if !strings.Contains(loginBuffer.String(), "Stored credentials for") {
+		t.Fatalf("expected human login output, got: %s", loginBuffer.String())
+	}
+
+	logoutCommand := NewRootCommand()
+	logoutBuffer := &bytes.Buffer{}
+	logoutCommand.SetOut(logoutBuffer)
+	logoutCommand.SetErr(logoutBuffer)
+	logoutCommand.SetArgs([]string{"auth", "logout", "--host", "http://example.local:7990"})
+	if err := logoutCommand.Execute(); err != nil {
+		t.Fatalf("auth logout human failed: %v", err)
+	}
+	if !strings.Contains(logoutBuffer.String(), "Stored credentials removed") {
+		t.Fatalf("expected human logout output, got: %s", logoutBuffer.String())
+	}
+}
+
+func TestResolveRepositoryReferenceWrappers(t *testing.T) {
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	cfg := config.AppConfig{ProjectKey: "TEST"}
+
+	diffRepo, err := resolveRepositoryReference("", cfg)
+	if err != nil || diffRepo.ProjectKey != "TEST" || diffRepo.Slug != "demo" {
+		t.Fatalf("unexpected diff repository reference: %+v err=%v", diffRepo, err)
+	}
+
+	settingsRepo, err := resolveRepositorySettingsReference("", cfg)
+	if err != nil || settingsRepo.ProjectKey != "TEST" || settingsRepo.Slug != "demo" {
+		t.Fatalf("unexpected settings repository reference: %+v err=%v", settingsRepo, err)
+	}
+
+	tagRepo, err := resolveTagRepositoryReference("", cfg)
+	if err != nil || tagRepo.ProjectKey != "TEST" || tagRepo.Slug != "demo" {
+		t.Fatalf("unexpected tag repository reference: %+v err=%v", tagRepo, err)
+	}
+
+	qualityRepo, err := resolveQualityRepositoryReference("", cfg)
+	if err != nil || qualityRepo.ProjectKey != "TEST" || qualityRepo.Slug != "demo" {
+		t.Fatalf("unexpected quality repository reference: %+v err=%v", qualityRepo, err)
+	}
+
+	_, err = resolveRepositoryReference("bad-format", config.AppConfig{})
+	if err == nil {
+		t.Fatal("expected validation error for invalid diff repository selector")
+	}
+
+	_, err = resolveRepositorySettingsReference("bad-format", config.AppConfig{})
+	if err == nil {
+		t.Fatal("expected validation error for invalid settings repository selector")
+	}
+
+	_, err = resolveTagRepositoryReference("bad-format", config.AppConfig{})
+	if err == nil {
+		t.Fatal("expected validation error for invalid tag repository selector")
+	}
+
+	_, err = resolveQualityRepositoryReference("bad-format", config.AppConfig{})
+	if err == nil {
+		t.Fatal("expected validation error for invalid quality repository selector")
+	}
+}
+
+func TestAdminHealthHumanLimitedOutput(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusUnauthorized)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"admin", "health"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if !strings.Contains(buffer.String(), "auth=limited") {
+		t.Fatalf("expected auth limited output, got: %s", buffer.String())
+	}
+}
+
+func TestTagBuildAndInsightsEmptyHumanOutputs(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/tags":
+			_, _ = writer.Write([]byte(`{"values":[],"isLastPage":true}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/build-status/latest/commits/abc123":
+			_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[{"key":"ci/main","state":"SUCCESSFUL","url":"https://ci.example"}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports":
+			_, _ = writer.Write([]byte(`{"values":[],"isLastPage":true}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/lint/annotations":
+			_, _ = writer.Write([]byte(`{"annotations":[]}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tagListCommand := NewRootCommand()
+	tagListBuffer := &bytes.Buffer{}
+	tagListCommand.SetOut(tagListBuffer)
+	tagListCommand.SetErr(tagListBuffer)
+	tagListCommand.SetArgs([]string{"tag", "list"})
+	if err := tagListCommand.Execute(); err != nil {
+		t.Fatalf("tag list empty failed: %v", err)
+	}
+	if !strings.Contains(tagListBuffer.String(), "No tags found") {
+		t.Fatalf("expected no tags output, got: %s", tagListBuffer.String())
+	}
+
+	buildGetCommand := NewRootCommand()
+	buildGetBuffer := &bytes.Buffer{}
+	buildGetCommand.SetOut(buildGetBuffer)
+	buildGetCommand.SetErr(buildGetBuffer)
+	buildGetCommand.SetArgs([]string{"build", "status", "get", "abc123"})
+	if err := buildGetCommand.Execute(); err != nil {
+		t.Fatalf("build status get non-empty failed: %v", err)
+	}
+	if !strings.Contains(buildGetBuffer.String(), "ci/main") || !strings.Contains(buildGetBuffer.String(), "SUCCESSFUL") {
+		t.Fatalf("expected populated build statuses output, got: %s", buildGetBuffer.String())
+	}
+
+	reportListCommand := NewRootCommand()
+	reportListBuffer := &bytes.Buffer{}
+	reportListCommand.SetOut(reportListBuffer)
+	reportListCommand.SetErr(reportListBuffer)
+	reportListCommand.SetArgs([]string{"insights", "report", "list", "abc"})
+	if err := reportListCommand.Execute(); err != nil {
+		t.Fatalf("insights report list empty failed: %v", err)
+	}
+	if !strings.Contains(reportListBuffer.String(), "No reports found") {
+		t.Fatalf("expected no reports output, got: %s", reportListBuffer.String())
+	}
+
+	annotationListCommand := NewRootCommand()
+	annotationListBuffer := &bytes.Buffer{}
+	annotationListCommand.SetOut(annotationListBuffer)
+	annotationListCommand.SetErr(annotationListBuffer)
+	annotationListCommand.SetArgs([]string{"insights", "annotation", "list", "abc", "lint"})
+	if err := annotationListCommand.Execute(); err != nil {
+		t.Fatalf("insights annotation list empty failed: %v", err)
+	}
+	if !strings.Contains(annotationListBuffer.String(), "No annotations found") {
+		t.Fatalf("expected no annotations output, got: %s", annotationListBuffer.String())
+	}
+}
+
+func TestBuildAndInsightsValidationErrorPaths(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "build required create invalid json", args: []string{"build", "required", "create", "--body", "{"}},
+		{name: "build required update invalid id", args: []string{"build", "required", "update", "bad", "--body", `{"buildParentKeys":["ci"]}`}},
+		{name: "build required update invalid json", args: []string{"build", "required", "update", "12", "--body", "{"}},
+		{name: "build required delete invalid id", args: []string{"build", "required", "delete", "bad"}},
+		{name: "insights report set invalid json", args: []string{"insights", "report", "set", "abc", "lint", "--body", "{"}},
+		{name: "insights annotation add invalid json", args: []string{"insights", "annotation", "add", "abc", "lint", "--body", "{"}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			command.SetOut(&bytes.Buffer{})
+			command.SetErr(&bytes.Buffer{})
+			command.SetArgs(testCase.args)
+
+			err := command.Execute()
+			if err == nil {
+				t.Fatalf("expected validation error for args: %v", testCase.args)
+			}
+			if apperrors.ExitCode(err) != 2 {
+				t.Fatalf("expected validation exit code 2, got %d (%v)", apperrors.ExitCode(err), err)
+			}
+		})
+	}
+}
+
+func TestRepoSettingsJSONCommandPaths(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/permissions/users":
+			_, _ = writer.Write([]byte(`{"values":[{"permission":"REPO_READ","user":{"name":"alice","displayName":"Alice"}}],"isLastPage":true}`))
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/permissions/users":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/webhooks":
+			_, _ = writer.Write([]byte(`{"values":[{"id":42,"name":"ci-hook"}],"size":1}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/webhooks":
+			_, _ = writer.Write([]byte(`{"id":42,"name":"ci-hook"}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/webhooks/42":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/settings/pull-requests":
+			_, _ = writer.Write([]byte(`{"requiredAllTasksComplete":true,"requiredApprovers":{"enabled":true,"count":"2"}}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/settings/pull-requests":
+			_, _ = writer.Write([]byte(`{"requiredAllTasksComplete":true,"requiredApprovers":2}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name          string
+		args          []string
+		expectSnippet string
+	}{
+		{name: "permissions users list json", args: []string{"--json", "repo", "settings", "security", "permissions", "users", "list"}, expectSnippet: `"users"`},
+		{name: "permissions users grant json", args: []string{"--json", "repo", "settings", "security", "permissions", "users", "grant", "alice", "repo_read"}, expectSnippet: `"status": "ok"`},
+		{name: "webhooks list json", args: []string{"--json", "repo", "settings", "workflow", "webhooks", "list"}, expectSnippet: `"webhooks"`},
+		{name: "webhooks create json", args: []string{"--json", "repo", "settings", "workflow", "webhooks", "create", "ci-hook", "http://example.local/hook"}, expectSnippet: `"webhook"`},
+		{name: "webhooks delete json", args: []string{"--json", "repo", "settings", "workflow", "webhooks", "delete", "42"}, expectSnippet: `"webhook_id": "42"`},
+		{name: "pull requests get json", args: []string{"--json", "repo", "settings", "pull-requests", "get"}, expectSnippet: `"pull_request_settings"`},
+		{name: "pull requests update json", args: []string{"--json", "repo", "settings", "pull-requests", "update", "--required-all-tasks-complete=true"}, expectSnippet: `"status": "ok"`},
+		{name: "pull requests update approvers json", args: []string{"--json", "repo", "settings", "pull-requests", "update-approvers", "--count", "2"}, expectSnippet: `"status": "ok"`},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			buffer := &bytes.Buffer{}
+			command.SetOut(buffer)
+			command.SetErr(buffer)
+			command.SetArgs(testCase.args)
+
+			if err := command.Execute(); err != nil {
+				t.Fatalf("command failed: %v", err)
+			}
+			if !strings.Contains(buffer.String(), testCase.expectSnippet) {
+				t.Fatalf("expected output to contain %q, got: %s", testCase.expectSnippet, buffer.String())
+			}
+		})
+	}
+}
+
+func TestTagBuildInsightsCommandsPropagateServiceErrors(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusNotFound)
+		_, _ = writer.Write([]byte("missing"))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "tag list", args: []string{"tag", "list"}},
+		{name: "tag create", args: []string{"tag", "create", "v1.0.0", "--start-point", "abc123"}},
+		{name: "tag view", args: []string{"tag", "view", "v1.0.0"}},
+		{name: "tag delete", args: []string{"tag", "delete", "v1.0.0"}},
+		{name: "build status get", args: []string{"build", "status", "get", "abc123"}},
+		{name: "build status stats", args: []string{"build", "status", "stats", "abc123"}},
+		{name: "build required list", args: []string{"build", "required", "list"}},
+		{name: "build required create", args: []string{"build", "required", "create", "--body", `{"buildParentKeys":["ci"]}`}},
+		{name: "build required update", args: []string{"build", "required", "update", "12", "--body", `{"buildParentKeys":["ci"]}`}},
+		{name: "build required delete", args: []string{"build", "required", "delete", "12"}},
+		{name: "insights report list", args: []string{"insights", "report", "list", "abc"}},
+		{name: "insights report set", args: []string{"insights", "report", "set", "abc", "lint", "--body", `{"title":"Lint","result":"PASS"}`}},
+		{name: "insights report get", args: []string{"insights", "report", "get", "abc", "lint"}},
+		{name: "insights report delete", args: []string{"insights", "report", "delete", "abc", "lint"}},
+		{name: "insights annotation add", args: []string{"insights", "annotation", "add", "abc", "lint", "--body", `[{"externalId":"ann1","message":"note","severity":"LOW"}]`}},
+		{name: "insights annotation list", args: []string{"insights", "annotation", "list", "abc", "lint"}},
+		{name: "insights annotation delete", args: []string{"insights", "annotation", "delete", "abc", "lint", "--external-id", "ann1"}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			command.SetOut(&bytes.Buffer{})
+			command.SetErr(&bytes.Buffer{})
+			command.SetArgs(testCase.args)
+
+			err := command.Execute()
+			if err == nil {
+				t.Fatalf("expected not found error for args: %v", testCase.args)
+			}
+			if apperrors.ExitCode(err) != 4 {
+				t.Fatalf("expected exit code 4 for args %v, got %d (%v)", testCase.args, apperrors.ExitCode(err), err)
+			}
+		})
+	}
+}
+
+func TestRepoSettingsCommandsPropagateServiceErrors(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusUnauthorized)
+		_, _ = writer.Write([]byte("unauthorized"))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "permissions users list", args: []string{"repo", "settings", "security", "permissions", "users", "list"}},
+		{name: "permissions users grant", args: []string{"repo", "settings", "security", "permissions", "users", "grant", "alice", "repo_read"}},
+		{name: "webhooks list", args: []string{"repo", "settings", "workflow", "webhooks", "list"}},
+		{name: "webhooks create", args: []string{"repo", "settings", "workflow", "webhooks", "create", "ci-hook", "http://example.local/hook"}},
+		{name: "webhooks delete", args: []string{"repo", "settings", "workflow", "webhooks", "delete", "42"}},
+		{name: "pull-requests get", args: []string{"repo", "settings", "pull-requests", "get"}},
+		{name: "pull-requests update", args: []string{"repo", "settings", "pull-requests", "update", "--required-all-tasks-complete=true"}},
+		{name: "pull-requests update approvers", args: []string{"repo", "settings", "pull-requests", "update-approvers", "--count", "2"}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			command.SetOut(&bytes.Buffer{})
+			command.SetErr(&bytes.Buffer{})
+			command.SetArgs(testCase.args)
+
+			err := command.Execute()
+			if err == nil {
+				t.Fatalf("expected authorization/authentication error for args: %v", testCase.args)
+			}
+			if apperrors.ExitCode(err) != 3 {
+				t.Fatalf("expected exit code 3 for args %v, got %d (%v)", testCase.args, apperrors.ExitCode(err), err)
+			}
+		})
 	}
 }

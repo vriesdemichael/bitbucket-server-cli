@@ -1,0 +1,140 @@
+{
+  "version": 2,
+  "coverage": {
+    "unit_raw_percent": 4.579761119659999,
+    "unit_scoped_percent": 88.2768361581921,
+    "live_raw_percent": 8.703547087209591,
+    "live_scoped_percent": 66.23188405797102,
+    "combined_raw_percent": 9.828777997606311,
+    "combined_scoped_percent": 89.26553672316385,
+    "patch_percent": 100,
+    "unit_statements": {
+      "covered": 1875,
+      "total": 40941
+    },
+    "live_statements": {
+      "covered": 3499,
+      "total": 40202
+    },
+    "combined_statements": {
+      "covered": 4024,
+      "total": 40941
+    },
+    "unit_scoped_statements": {
+      "covered": 1875,
+      "total": 2124
+    },
+    "live_scoped_statements": {
+      "covered": 1371,
+      "total": 2070
+    },
+    "combined_scoped_statements": {
+      "covered": 1896,
+      "total": 2124
+    },
+    "patch_lines": {
+      "covered": 60,
+      "total": 60
+    },
+    "scope": {
+      "include_prefixes": [
+        "internal/",
+        "cmd/"
+      ],
+      "exclude_prefixes": [
+        "internal/openapi/generated/",
+        "internal/models/generated/"
+      ]
+    }
+  },
+  "generated_contracts": {
+    "coverage_percent": 100,
+    "used_operations": [
+      "AddAnnotationsWithResponse",
+      "AddBuildStatusWithResponse",
+      "CreateComment2WithResponse",
+      "CreateCommentWithResponse",
+      "CreateRequiredBuildsMergeCheckWithBodyWithResponse",
+      "CreateTagForRepositoryWithResponse",
+      "CreateWebhook1WithResponse",
+      "DeleteACodeInsightsReportWithResponse",
+      "DeleteAnnotationsWithResponse",
+      "DeleteComment2WithResponse",
+      "DeleteCommentWithResponse",
+      "DeleteRequiredBuildsMergeCheckWithResponse",
+      "DeleteTagWithResponse",
+      "DeleteWebhook1WithResponse",
+      "FindWebhooks1WithResponse",
+      "GetACodeInsightsReportWithResponse",
+      "GetAnnotationsWithResponse",
+      "GetBuildStatusStatsWithResponse",
+      "GetBuildStatusWithResponse",
+      "GetComment2WithResponse",
+      "GetCommentWithResponse",
+      "GetComments2WithResponse",
+      "GetCommentsWithResponse",
+      "GetDiffStatsSummary1WithResponse",
+      "GetDiffStatsSummary2WithResponse",
+      "GetPageOfRequiredBuildsMergeChecksWithResponse",
+      "GetPullRequestSettings1",
+      "GetReportsWithResponse",
+      "GetTagWithResponse",
+      "GetTagsWithResponse",
+      "GetUsersWithAnyPermission2WithResponse",
+      "SetACodeInsightsReportWithResponse",
+      "SetPermissionForUserWithResponse",
+      "StreamPatch1WithResponse",
+      "StreamPatchWithResponse",
+      "StreamRawDiff1WithResponse",
+      "StreamRawDiff2WithResponse",
+      "UpdateComment2WithResponse",
+      "UpdateCommentWithResponse",
+      "UpdatePullRequestSettings1WithBody",
+      "UpdateRequiredBuildsMergeCheckWithBodyWithResponse"
+    ],
+    "mapped_operations": [
+      "AddAnnotationsWithResponse",
+      "AddBuildStatusWithResponse",
+      "CreateComment2WithResponse",
+      "CreateCommentWithResponse",
+      "CreateRequiredBuildsMergeCheckWithBodyWithResponse",
+      "CreateTagForRepositoryWithResponse",
+      "CreateWebhook1WithResponse",
+      "DeleteACodeInsightsReportWithResponse",
+      "DeleteAnnotationsWithResponse",
+      "DeleteComment2WithResponse",
+      "DeleteCommentWithResponse",
+      "DeleteRequiredBuildsMergeCheckWithResponse",
+      "DeleteTagWithResponse",
+      "DeleteWebhook1WithResponse",
+      "FindWebhooks1WithResponse",
+      "GetACodeInsightsReportWithResponse",
+      "GetAnnotationsWithResponse",
+      "GetBuildStatusStatsWithResponse",
+      "GetBuildStatusWithResponse",
+      "GetComment2WithResponse",
+      "GetCommentWithResponse",
+      "GetComments2WithResponse",
+      "GetCommentsWithResponse",
+      "GetDiffStatsSummary1WithResponse",
+      "GetDiffStatsSummary2WithResponse",
+      "GetPageOfRequiredBuildsMergeChecksWithResponse",
+      "GetPullRequestSettings1",
+      "GetReportsWithResponse",
+      "GetTagWithResponse",
+      "GetTagsWithResponse",
+      "GetUsersWithAnyPermission2WithResponse",
+      "SetACodeInsightsReportWithResponse",
+      "SetPermissionForUserWithResponse",
+      "StreamPatch1WithResponse",
+      "StreamPatchWithResponse",
+      "StreamRawDiff1WithResponse",
+      "StreamRawDiff2WithResponse",
+      "UpdateComment2WithResponse",
+      "UpdateCommentWithResponse",
+      "UpdatePullRequestSettings1WithBody",
+      "UpdateRequiredBuildsMergeCheckWithBodyWithResponse"
+    ],
+    "unmapped_operations": []
+  }
+}

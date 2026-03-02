@@ -23,9 +23,24 @@ Common commands:
 - `task models:verify`
 - `task client:generate`
 - `task client:verify`
+- `task test:unit:coverage`
+- `task test:live:coverage`
+- `task quality:coverage`
+- `task quality:coverage:report:update`
+- `task quality:coverage:report:verify`
+- `task quality:coverage:report:verify:committed`
 - `task stack:up`
 - `task stack:status`
 - `go test -tags=live ./tests/integration/live -run TestOpenAPIParity`
+
+Coverage/reporting workflow:
+
+- combined metric source is unit + live coverage merged into one report
+- local report update (commit this artifact): `task quality:coverage:report:update`
+- local pre-push verification (recompute + compare): `task quality:coverage:report:verify`
+- CI verification (committed artifact only): `task quality:coverage:report:verify:committed`
+- committed report file: `docs/quality/coverage-report.json`
+- generated operation contract manifest: `docs/quality/generated-operation-contracts.json`
 
 ## GitHub Actions
 
@@ -33,6 +48,7 @@ Common commands:
 	- Runs on pull requests to `main` and pushes to `main`
 	- Executes `task quality:validate-decisions`
 	- Executes `task test:unit`
+	- Executes `task quality:coverage:report:verify:committed`
 	- Publishes a final aggregate check named `CI Complete` (recommended PR required check)
 	- Does not run `test:live` because live integration tests require Bitbucket/Postgres infrastructure
 - Release workflow: `.github/workflows/release.yml`

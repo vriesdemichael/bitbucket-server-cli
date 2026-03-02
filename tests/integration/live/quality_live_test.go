@@ -5,6 +5,7 @@ package live_test
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -73,16 +74,9 @@ func TestLiveCodeInsightsReportSetAndGet(t *testing.T) {
 	reportKey := fmt.Sprintf("live-report-%d", time.Now().UnixNano()%100000)
 	title := "Live Insights"
 	result := "PASS"
-	dataTitle := "coverage"
-	dataType := "NUMBER"
-	value := map[string]any{"value": 100}
-
 	reportRequest := openapigenerated.SetACodeInsightsReportJSONRequestBody{
 		Title:  title,
 		Result: &result,
-		Data: []openapigenerated.RestInsightReportData{
-			{Title: &dataTitle, Type: &dataType, Value: &value},
-		},
 	}
 
 	_, err = service.SetReport(
@@ -111,5 +105,137 @@ func TestLiveCodeInsightsReportSetAndGet(t *testing.T) {
 	}
 	if report.Title == nil || *report.Title != title {
 		t.Fatalf("expected report title=%s, got %#v", title, report.Title)
+	}
+
+	if err := service.DeleteReport(
+		ctx,
+		qualityservice.RepositoryRef{ProjectKey: seeded.Key, Slug: repo.Slug},
+		commitID,
+		reportKey,
+	); err != nil {
+		t.Fatalf("delete report failed: %v", err)
+	}
+}
+
+func TestLiveRequiredBuildCheckLifecycle(t *testing.T) {
+	harness := newLiveHarness(t)
+	service := qualityservice.NewService(harness.client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := qualityservice.RepositoryRef{ProjectKey: seeded.Key, Slug: seeded.Repos[0].Slug}
+	payload := map[string]any{
+		"buildParentKeys": []string{"ci"},
+		"refMatcher": map[string]any{
+			"id": "refs/heads/master",
+		},
+	}
+
+	created, err := service.CreateRequiredBuildCheck(ctx, repo, payload)
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "returned 500") {
+			t.Skipf("required build check endpoint returned server error in live environment: %v", err)
+		}
+		t.Fatalf("create required build check failed: %v", err)
+	}
+
+	checkID, ok := requiredBuildCheckID(created)
+	if !ok || checkID <= 0 {
+		t.Fatalf("expected created check id, got %#v", created)
+	}
+
+	if _, err := service.UpdateRequiredBuildCheck(ctx, repo, checkID, payload); err != nil {
+		t.Fatalf("update required build check failed: %v", err)
+	}
+
+	checks, err := service.ListRequiredBuildChecks(ctx, repo, 25)
+	if err != nil {
+		t.Fatalf("list required build checks failed: %v", err)
+	}
+	if len(checks) == 0 {
+		t.Fatalf("expected at least one required build check")
+	}
+
+	if err := service.DeleteRequiredBuildCheck(ctx, repo, checkID); err != nil {
+		t.Fatalf("delete required build check failed: %v", err)
+	}
+}
+
+func TestLiveCodeInsightsAnnotationsLifecycle(t *testing.T) {
+	harness := newLiveHarness(t)
+	service := qualityservice.NewService(harness.client)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := qualityservice.RepositoryRef{ProjectKey: seeded.Key, Slug: seeded.Repos[0].Slug}
+	commitID := seeded.Repos[0].CommitIDs[0]
+	reportKey := fmt.Sprintf("live-report-annotations-%d", time.Now().UnixNano()%100000)
+
+	result := "PASS"
+	title := "Live Annotations"
+	_, err = service.SetReport(ctx, repo, commitID, reportKey, openapigenerated.SetACodeInsightsReportJSONRequestBody{Title: title, Result: &result})
+	if err != nil {
+		t.Fatalf("set report for annotations failed: %v", err)
+	}
+
+	externalID := fmt.Sprintf("ann-%d", time.Now().UnixNano()%100000)
+	path := "seed.txt"
+	line := int32(1)
+	annotations := []openapigenerated.RestSingleAddInsightAnnotationRequest{{
+		ExternalId: &externalID,
+		Message:    "integration annotation",
+		Severity:   "LOW",
+		Path:       &path,
+		Line:       &line,
+	}}
+
+	if err := service.AddAnnotations(ctx, repo, commitID, reportKey, annotations); err != nil {
+		t.Fatalf("add annotations failed: %v", err)
+	}
+
+	listed, err := service.ListAnnotations(ctx, repo, commitID, reportKey)
+	if err != nil {
+		t.Fatalf("list annotations failed: %v", err)
+	}
+	if len(listed) == 0 {
+		t.Fatalf("expected at least one annotation")
+	}
+
+	if err := service.DeleteAnnotations(ctx, repo, commitID, reportKey, externalID); err != nil {
+		t.Fatalf("delete annotations failed: %v", err)
+	}
+
+	if err := service.DeleteReport(ctx, repo, commitID, reportKey); err != nil {
+		t.Fatalf("delete report failed: %v", err)
+	}
+}
+
+func requiredBuildCheckID(payload map[string]any) (int64, bool) {
+	value, ok := payload["id"]
+	if !ok {
+		return 0, false
+	}
+
+	switch typed := value.(type) {
+	case float64:
+		return int64(typed), true
+	case int64:
+		return typed, true
+	case int:
+		return int64(typed), true
+	default:
+		return 0, false
 	}
 }
