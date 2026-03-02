@@ -3,6 +3,7 @@ package pullrequest
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -146,7 +147,7 @@ func (service *Service) List(ctx context.Context, repository RepositoryRef, opti
 }
 
 func (service *Service) Get(ctx context.Context, repository RepositoryRef, pullRequestID string) (PullRequest, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return PullRequest{}, err
 	}
 
@@ -164,7 +165,7 @@ func (service *Service) Get(ctx context.Context, repository RepositoryRef, pullR
 }
 
 func (service *Service) Create(ctx context.Context, repository RepositoryRef, input CreateInput) (PullRequest, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return PullRequest{}, err
 	}
 
@@ -182,7 +183,7 @@ func (service *Service) Create(ctx context.Context, repository RepositoryRef, in
 }
 
 func (service *Service) Update(ctx context.Context, repository RepositoryRef, pullRequestID string, input UpdateInput) (PullRequest, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return PullRequest{}, err
 	}
 
@@ -217,7 +218,7 @@ func (service *Service) Reopen(ctx context.Context, repository RepositoryRef, pu
 }
 
 func (service *Service) Approve(ctx context.Context, repository RepositoryRef, pullRequestID string) (PullRequest, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return PullRequest{}, err
 	}
 
@@ -235,7 +236,7 @@ func (service *Service) Approve(ctx context.Context, repository RepositoryRef, p
 }
 
 func (service *Service) Unapprove(ctx context.Context, repository RepositoryRef, pullRequestID string) (PullRequest, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return PullRequest{}, err
 	}
 
@@ -261,7 +262,7 @@ func (service *Service) RemoveReviewer(ctx context.Context, repository Repositor
 }
 
 func (service *Service) ListTasks(ctx context.Context, repository RepositoryRef, pullRequestID string, options TaskListOptions) ([]Task, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return nil, err
 	}
 
@@ -315,7 +316,7 @@ func (service *Service) ListTasks(ctx context.Context, repository RepositoryRef,
 }
 
 func (service *Service) CreateTask(ctx context.Context, repository RepositoryRef, pullRequestID string, text string) (Task, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return Task{}, err
 	}
 
@@ -338,7 +339,7 @@ func (service *Service) CreateTask(ctx context.Context, repository RepositoryRef
 }
 
 func (service *Service) UpdateTask(ctx context.Context, repository RepositoryRef, pullRequestID string, taskID string, text string, resolved *bool, version *int) (Task, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return Task{}, err
 	}
 
@@ -376,7 +377,7 @@ func (service *Service) UpdateTask(ctx context.Context, repository RepositoryRef
 }
 
 func (service *Service) DeleteTask(ctx context.Context, repository RepositoryRef, pullRequestID string, taskID string, version *int) error {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return err
 	}
 
@@ -569,7 +570,7 @@ func resolveUserName(user *pullRequestUserIdentity) string {
 	return strings.TrimSpace(user.Name)
 }
 
-func validateRepository(repository RepositoryRef) error {
+func validateRepositoryRef(repository RepositoryRef) error {
 	if strings.TrimSpace(repository.ProjectKey) == "" || strings.TrimSpace(repository.Slug) == "" {
 		return apperrors.New(apperrors.KindValidation, "repository must be specified as project/repo", nil)
 	}
@@ -667,7 +668,7 @@ func normalizeBranchRef(branch string) string {
 }
 
 func (service *Service) transition(ctx context.Context, repository RepositoryRef, pullRequestID string, action string, version *int) (PullRequest, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return PullRequest{}, err
 	}
 
@@ -690,7 +691,7 @@ func (service *Service) transition(ctx context.Context, repository RepositoryRef
 }
 
 func (service *Service) updateReviewer(ctx context.Context, repository RepositoryRef, pullRequestID string, username string, add bool) (PullRequest, error) {
-	if err := validateRepository(repository); err != nil {
+	if err := validateRepositoryRef(repository); err != nil {
 		return PullRequest{}, err
 	}
 
@@ -704,7 +705,7 @@ func (service *Service) updateReviewer(ctx context.Context, repository Repositor
 		return PullRequest{}, apperrors.New(apperrors.KindValidation, "reviewer username is required", nil)
 	}
 
-	path := fmt.Sprintf("%s/%s/participants/%s", pullRequestPath(repository), resolvedID, trimmedUsername)
+	path := fmt.Sprintf("%s/%s/participants/%s", pullRequestPath(repository), resolvedID, url.PathEscape(trimmedUsername))
 
 	var response pullRequestValue
 	if add {
