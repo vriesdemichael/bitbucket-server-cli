@@ -116,7 +116,7 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, qu
 		}
 
 		if response.StatusCode >= 200 && response.StatusCode < 300 {
-			if out == nil || len(strings.TrimSpace(string(body))) == 0 {
+			if out == nil || len(bytes.TrimSpace(body)) == 0 {
 				return nil
 			}
 

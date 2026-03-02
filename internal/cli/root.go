@@ -1720,6 +1720,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 	updateCmd.Flags().StringVar(&updateTitle, "title", "", "Updated pull request title")
 	updateCmd.Flags().StringVar(&updateDescription, "description", "", "Updated pull request description")
 	updateCmd.Flags().IntVar(&updateVersion, "version", 0, "Expected pull request version")
+	_ = updateCmd.MarkFlagRequired("version")
 	prCmd.AddCommand(updateCmd)
 
 	var transitionVersion int

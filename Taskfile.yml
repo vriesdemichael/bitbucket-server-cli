@@ -72,7 +72,7 @@ tasks:
       - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   quality:coverage:origin-main:
-    desc: Run combined (unit + live) patch coverage gate against origin/main (requires live infra)
+    desc: Run combined (unit + live) global + patch coverage gates against origin/main (requires live infra)
     cmds:
       - git fetch origin main
       - task: test:unit:coverage
