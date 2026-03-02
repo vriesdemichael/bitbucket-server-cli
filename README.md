@@ -55,7 +55,38 @@ Coverage/reporting workflow:
 - Release workflow: `.github/workflows/release.yml`
 	- Manual trigger only via `workflow_dispatch`
 	- Requires a version input (for example `v0.1.0`)
-	- Generates release notes from Conventional Commit history, tags the commit, and publishes a GitHub release
+	- Builds and packages release binaries for Linux/macOS/Windows on amd64 + arm64
+	- Generates a `sha256sums.txt` manifest for all packaged artifacts
+	- Publishes GitHub-native build provenance attestations for release artifacts
+	- Generates release notes from Conventional Commit history, tags the commit, and publishes a GitHub release with attached artifacts
+
+## Binary installation (GitHub releases)
+
+Download artifacts from the release page for a specific version:
+
+- `bbsc_<version>_linux_amd64.tar.gz`
+- `bbsc_<version>_linux_arm64.tar.gz`
+- `bbsc_<version>_darwin_amd64.tar.gz`
+- `bbsc_<version>_darwin_arm64.tar.gz`
+- `bbsc_<version>_windows_amd64.zip`
+- `bbsc_<version>_windows_arm64.zip`
+- `sha256sums.txt`
+
+Example (Linux amd64, version `v0.1.0`):
+
+- `VERSION=v0.1.0`
+- `curl -LO "https://github.com/vriesdemichael/bitbucket-server-cli/releases/download/${VERSION}/bbsc_${VERSION#v}_linux_amd64.tar.gz"`
+- `curl -LO "https://github.com/vriesdemichael/bitbucket-server-cli/releases/download/${VERSION}/sha256sums.txt"`
+- `sha256sum -c sha256sums.txt --ignore-missing`
+- `tar -xzf "bbsc_${VERSION#v}_linux_amd64.tar.gz"`
+- `chmod +x bbsc`
+- `./bbsc --help`
+
+Optional provenance verification (GitHub CLI):
+
+- `gh attestation verify bbsc_${VERSION#v}_linux_amd64.tar.gz --repo vriesdemichael/bitbucket-server-cli`
+
+Source-based fallback remains available via `go run ./cmd/bbsc --help`.
 
 Runtime environment variables:
 
