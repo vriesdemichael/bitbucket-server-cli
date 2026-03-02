@@ -1,6 +1,7 @@
 package httpclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -44,6 +45,22 @@ func NewFromConfig(cfg config.AppConfig) *Client {
 }
 
 func (client *Client) GetJSON(ctx context.Context, path string, query map[string]string, out any) error {
+	return client.doJSON(ctx, http.MethodGet, path, query, nil, out)
+}
+
+func (client *Client) PostJSON(ctx context.Context, path string, query map[string]string, in any, out any) error {
+	return client.doJSON(ctx, http.MethodPost, path, query, in, out)
+}
+
+func (client *Client) PutJSON(ctx context.Context, path string, query map[string]string, in any, out any) error {
+	return client.doJSON(ctx, http.MethodPut, path, query, in, out)
+}
+
+func (client *Client) DeleteJSON(ctx context.Context, path string, query map[string]string, in any, out any) error {
+	return client.doJSON(ctx, http.MethodDelete, path, query, in, out)
+}
+
+func (client *Client) doJSON(ctx context.Context, method string, path string, query map[string]string, in any, out any) error {
 	requestURL, err := url.Parse(client.baseURL + path)
 	if err != nil {
 		return apperrors.New(apperrors.KindValidation, "invalid request URL", err)
@@ -55,14 +72,31 @@ func (client *Client) GetJSON(ctx context.Context, path string, query map[string
 	}
 	requestURL.RawQuery = values.Encode()
 
+	var payload []byte
+	if in != nil {
+		encoded, err := json.Marshal(in)
+		if err != nil {
+			return apperrors.New(apperrors.KindValidation, "failed to encode request body", err)
+		}
+		payload = encoded
+	}
+
 	var lastErr error
 	for attempt := 0; attempt <= client.retries; attempt++ {
-		request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
+		var bodyReader io.Reader
+		if payload != nil {
+			bodyReader = bytes.NewReader(payload)
+		}
+
+		request, err := http.NewRequestWithContext(ctx, method, requestURL.String(), bodyReader)
 		if err != nil {
 			return apperrors.New(apperrors.KindInternal, "failed to build request", err)
 		}
 
 		request.Header.Set("Accept", "application/json")
+		if payload != nil {
+			request.Header.Set("Content-Type", "application/json")
+		}
 		client.applyAuth(request)
 
 		response, err := client.http.Do(request)
@@ -82,6 +116,10 @@ func (client *Client) GetJSON(ctx context.Context, path string, query map[string
 		}
 
 		if response.StatusCode >= 200 && response.StatusCode < 300 {
+			if out == nil || len(strings.TrimSpace(string(body))) == 0 {
+				return nil
+			}
+
 			if err := json.Unmarshal(body, out); err != nil {
 				return apperrors.New(apperrors.KindPermanent, "failed to decode API response", err)
 			}

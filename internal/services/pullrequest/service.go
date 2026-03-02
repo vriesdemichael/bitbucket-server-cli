@@ -24,16 +24,59 @@ type ListOptions struct {
 }
 
 type PullRequest struct {
-	ID           int64  `json:"id"`
-	Title        string `json:"title"`
-	State        string `json:"state"`
-	Open         bool   `json:"open"`
-	Closed       bool   `json:"closed"`
-	Author       string `json:"author,omitempty"`
-	SourceBranch string `json:"source_branch,omitempty"`
-	TargetBranch string `json:"target_branch,omitempty"`
-	CreatedDate  int64  `json:"created_date,omitempty"`
-	UpdatedDate  int64  `json:"updated_date,omitempty"`
+	ID           int64      `json:"id"`
+	Title        string     `json:"title"`
+	Description  string     `json:"description,omitempty"`
+	State        string     `json:"state"`
+	Open         bool       `json:"open"`
+	Closed       bool       `json:"closed"`
+	Version      int        `json:"version,omitempty"`
+	Author       string     `json:"author,omitempty"`
+	SourceBranch string     `json:"source_branch,omitempty"`
+	TargetBranch string     `json:"target_branch,omitempty"`
+	CreatedDate  int64      `json:"created_date,omitempty"`
+	UpdatedDate  int64      `json:"updated_date,omitempty"`
+	Reviewers    []Reviewer `json:"reviewers,omitempty"`
+}
+
+type Reviewer struct {
+	Name        string `json:"name,omitempty"`
+	DisplayName string `json:"display_name,omitempty"`
+	Email       string `json:"email,omitempty"`
+	Role        string `json:"role,omitempty"`
+	Status      string `json:"status,omitempty"`
+	Approved    bool   `json:"approved"`
+}
+
+type CreateInput struct {
+	FromRef     string `json:"from_ref"`
+	ToRef       string `json:"to_ref"`
+	Title       string `json:"title"`
+	Description string `json:"description,omitempty"`
+}
+
+type UpdateInput struct {
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	Version     int    `json:"version"`
+}
+
+type TaskListOptions struct {
+	State string `json:"state"`
+	Limit int    `json:"limit"`
+	Start int    `json:"start"`
+}
+
+type Task struct {
+	ID          int64  `json:"id"`
+	Text        string `json:"text"`
+	State       string `json:"state,omitempty"`
+	Resolved    bool   `json:"resolved"`
+	Version     int    `json:"version,omitempty"`
+	CreatedDate int64  `json:"created_date,omitempty"`
+	UpdatedDate int64  `json:"updated_date,omitempty"`
+	Author      string `json:"author,omitempty"`
+	Assignee    string `json:"assignee,omitempty"`
 }
 
 type Service struct {
@@ -61,7 +104,7 @@ func (service *Service) List(ctx context.Context, repository RepositoryRef, opti
 		return nil, apperrors.New(apperrors.KindValidation, "start must be greater than or equal to 0", nil)
 	}
 
-	path := fmt.Sprintf("/rest/api/latest/projects/%s/repos/%s/pull-requests", repository.ProjectKey, repository.Slug)
+	path := pullRequestPath(repository)
 	results := make([]PullRequest, 0)
 	start := options.Start
 
@@ -102,6 +145,259 @@ func (service *Service) List(ctx context.Context, repository RepositoryRef, opti
 	return results, nil
 }
 
+func (service *Service) Get(ctx context.Context, repository RepositoryRef, pullRequestID string) (PullRequest, error) {
+	if err := validateRepository(repository); err != nil {
+		return PullRequest{}, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return PullRequest{}, err
+	}
+
+	var response pullRequestValue
+	if err := service.client.GetJSON(ctx, fmt.Sprintf("%s/%s", pullRequestPath(repository), resolvedID), nil, &response); err != nil {
+		return PullRequest{}, err
+	}
+
+	return mapPullRequest(response), nil
+}
+
+func (service *Service) Create(ctx context.Context, repository RepositoryRef, input CreateInput) (PullRequest, error) {
+	if err := validateRepository(repository); err != nil {
+		return PullRequest{}, err
+	}
+
+	payload, err := buildCreatePayload(input)
+	if err != nil {
+		return PullRequest{}, err
+	}
+
+	var response pullRequestValue
+	if err := service.client.PostJSON(ctx, pullRequestPath(repository), nil, payload, &response); err != nil {
+		return PullRequest{}, err
+	}
+
+	return mapPullRequest(response), nil
+}
+
+func (service *Service) Update(ctx context.Context, repository RepositoryRef, pullRequestID string, input UpdateInput) (PullRequest, error) {
+	if err := validateRepository(repository); err != nil {
+		return PullRequest{}, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return PullRequest{}, err
+	}
+
+	payload, err := buildUpdatePayload(input)
+	if err != nil {
+		return PullRequest{}, err
+	}
+
+	var response pullRequestValue
+	if err := service.client.PutJSON(ctx, fmt.Sprintf("%s/%s", pullRequestPath(repository), resolvedID), nil, payload, &response); err != nil {
+		return PullRequest{}, err
+	}
+
+	return mapPullRequest(response), nil
+}
+
+func (service *Service) Merge(ctx context.Context, repository RepositoryRef, pullRequestID string, version *int) (PullRequest, error) {
+	return service.transition(ctx, repository, pullRequestID, "merge", version)
+}
+
+func (service *Service) Decline(ctx context.Context, repository RepositoryRef, pullRequestID string, version *int) (PullRequest, error) {
+	return service.transition(ctx, repository, pullRequestID, "decline", version)
+}
+
+func (service *Service) Reopen(ctx context.Context, repository RepositoryRef, pullRequestID string, version *int) (PullRequest, error) {
+	return service.transition(ctx, repository, pullRequestID, "reopen", version)
+}
+
+func (service *Service) Approve(ctx context.Context, repository RepositoryRef, pullRequestID string) (PullRequest, error) {
+	if err := validateRepository(repository); err != nil {
+		return PullRequest{}, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return PullRequest{}, err
+	}
+
+	var response pullRequestValue
+	if err := service.client.PostJSON(ctx, fmt.Sprintf("%s/%s/approve", pullRequestPath(repository), resolvedID), nil, map[string]any{}, &response); err != nil {
+		return PullRequest{}, err
+	}
+
+	return mapPullRequest(response), nil
+}
+
+func (service *Service) Unapprove(ctx context.Context, repository RepositoryRef, pullRequestID string) (PullRequest, error) {
+	if err := validateRepository(repository); err != nil {
+		return PullRequest{}, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return PullRequest{}, err
+	}
+
+	var response pullRequestValue
+	if err := service.client.DeleteJSON(ctx, fmt.Sprintf("%s/%s/approve", pullRequestPath(repository), resolvedID), nil, nil, &response); err != nil {
+		return PullRequest{}, err
+	}
+
+	return mapPullRequest(response), nil
+}
+
+func (service *Service) AddReviewer(ctx context.Context, repository RepositoryRef, pullRequestID string, username string) (PullRequest, error) {
+	return service.updateReviewer(ctx, repository, pullRequestID, username, true)
+}
+
+func (service *Service) RemoveReviewer(ctx context.Context, repository RepositoryRef, pullRequestID string, username string) (PullRequest, error) {
+	return service.updateReviewer(ctx, repository, pullRequestID, username, false)
+}
+
+func (service *Service) ListTasks(ctx context.Context, repository RepositoryRef, pullRequestID string, options TaskListOptions) ([]Task, error) {
+	if err := validateRepository(repository); err != nil {
+		return nil, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return nil, err
+	}
+
+	normalizedState, err := normalizeTaskState(options.State)
+	if err != nil {
+		return nil, err
+	}
+
+	if options.Limit <= 0 {
+		options.Limit = 25
+	}
+	if options.Start < 0 {
+		return nil, apperrors.New(apperrors.KindValidation, "start must be greater than or equal to 0", nil)
+	}
+
+	path := fmt.Sprintf("%s/%s/tasks", pullRequestPath(repository), resolvedID)
+	results := make([]Task, 0)
+	start := options.Start
+
+	for {
+		query := map[string]string{
+			"limit": strconv.Itoa(options.Limit),
+			"start": strconv.Itoa(start),
+		}
+
+		var response pagedTaskResponse
+		if err := service.client.GetJSON(ctx, path, query, &response); err != nil {
+			return nil, err
+		}
+
+		for _, value := range response.Values {
+			mapped := mapTask(value)
+			if taskMatchesState(mapped, normalizedState) {
+				results = append(results, mapped)
+			}
+		}
+
+		if response.IsLastPage || response.NextPageStart == start {
+			break
+		}
+
+		start = response.NextPageStart
+	}
+
+	return results, nil
+}
+
+func (service *Service) CreateTask(ctx context.Context, repository RepositoryRef, pullRequestID string, text string) (Task, error) {
+	if err := validateRepository(repository); err != nil {
+		return Task{}, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return Task{}, err
+	}
+
+	trimmedText := strings.TrimSpace(text)
+	if trimmedText == "" {
+		return Task{}, apperrors.New(apperrors.KindValidation, "task text is required", nil)
+	}
+
+	var response taskValue
+	if err := service.client.PostJSON(ctx, fmt.Sprintf("%s/%s/tasks", pullRequestPath(repository), resolvedID), nil, map[string]any{"text": trimmedText}, &response); err != nil {
+		return Task{}, err
+	}
+
+	return mapTask(response), nil
+}
+
+func (service *Service) UpdateTask(ctx context.Context, repository RepositoryRef, pullRequestID string, taskID string, text string, resolved *bool, version *int) (Task, error) {
+	if err := validateRepository(repository); err != nil {
+		return Task{}, err
+	}
+
+	resolvedPRID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return Task{}, err
+	}
+
+	resolvedTaskID, err := normalizeTaskID(taskID)
+	if err != nil {
+		return Task{}, err
+	}
+
+	payload := map[string]any{}
+	if strings.TrimSpace(text) != "" {
+		payload["text"] = strings.TrimSpace(text)
+	}
+	if resolved != nil {
+		payload["state"] = resolveTaskStateValue(*resolved)
+	}
+	if version != nil {
+		payload["version"] = *version
+	}
+
+	if len(payload) == 0 {
+		return Task{}, apperrors.New(apperrors.KindValidation, "at least one of text, resolved, or version is required", nil)
+	}
+
+	var response taskValue
+	if err := service.client.PutJSON(ctx, fmt.Sprintf("%s/%s/tasks/%s", pullRequestPath(repository), resolvedPRID, resolvedTaskID), nil, payload, &response); err != nil {
+		return Task{}, err
+	}
+
+	return mapTask(response), nil
+}
+
+func (service *Service) DeleteTask(ctx context.Context, repository RepositoryRef, pullRequestID string, taskID string, version *int) error {
+	if err := validateRepository(repository); err != nil {
+		return err
+	}
+
+	resolvedPRID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return err
+	}
+
+	resolvedTaskID, err := normalizeTaskID(taskID)
+	if err != nil {
+		return err
+	}
+
+	query := map[string]string{}
+	if version != nil {
+		query["version"] = strconv.Itoa(*version)
+	}
+
+	return service.client.DeleteJSON(ctx, fmt.Sprintf("%s/%s/tasks/%s", pullRequestPath(repository), resolvedPRID, resolvedTaskID), query, nil, nil)
+}
+
 func normalizeState(state string) (string, error) {
 	resolved := strings.ToLower(strings.TrimSpace(state))
 	if resolved == "" {
@@ -113,6 +409,20 @@ func normalizeState(state string) (string, error) {
 		return resolved, nil
 	default:
 		return "", apperrors.New(apperrors.KindValidation, "--state must be one of: open, closed, all", nil)
+	}
+}
+
+func normalizeTaskState(state string) (string, error) {
+	resolved := strings.ToLower(strings.TrimSpace(state))
+	if resolved == "" {
+		return "open", nil
+	}
+
+	switch resolved {
+	case "open", "resolved", "all":
+		return resolved, nil
+	default:
+		return "", apperrors.New(apperrors.KindValidation, "--state must be one of: open, resolved, all", nil)
 	}
 }
 
@@ -166,15 +476,267 @@ func mapPullRequest(raw pullRequestValue) PullRequest {
 	return PullRequest{
 		ID:           raw.ID,
 		Title:        raw.Title,
+		Description:  strings.TrimSpace(raw.Description),
 		State:        strings.TrimSpace(raw.State),
 		Open:         raw.Open,
 		Closed:       raw.Closed,
+		Version:      raw.Version,
 		Author:       author,
 		SourceBranch: branchDisplayName(raw.FromRef),
 		TargetBranch: branchDisplayName(raw.ToRef),
 		CreatedDate:  raw.CreatedDate,
 		UpdatedDate:  raw.UpdatedDate,
+		Reviewers:    mapReviewers(raw.Participants),
 	}
+}
+
+func mapReviewers(participants []pullRequestParticipant) []Reviewer {
+	if len(participants) == 0 {
+		return nil
+	}
+
+	reviewers := make([]Reviewer, 0, len(participants))
+	for _, participant := range participants {
+		if participant.User == nil {
+			continue
+		}
+
+		reviewer := Reviewer{
+			Name:        strings.TrimSpace(participant.User.Name),
+			DisplayName: strings.TrimSpace(participant.User.DisplayName),
+			Email:       strings.TrimSpace(participant.User.EmailAddress),
+			Role:        strings.TrimSpace(participant.Role),
+			Status:      strings.TrimSpace(participant.Status),
+			Approved:    participant.Approved,
+		}
+
+		if strings.ToLower(reviewer.Role) == "author" {
+			continue
+		}
+
+		reviewers = append(reviewers, reviewer)
+	}
+
+	if len(reviewers) == 0 {
+		return nil
+	}
+
+	return reviewers
+}
+
+func mapTask(raw taskValue) Task {
+	author := ""
+	if raw.Author != nil {
+		author = resolveUserName(raw.Author)
+	}
+
+	assignee := ""
+	if raw.Assignee != nil {
+		assignee = resolveUserName(raw.Assignee)
+	}
+
+	state := strings.TrimSpace(raw.State)
+	if state == "" {
+		if raw.Resolved {
+			state = "RESOLVED"
+		} else {
+			state = "OPEN"
+		}
+	}
+
+	return Task{
+		ID:          raw.ID,
+		Text:        strings.TrimSpace(raw.Text),
+		State:       state,
+		Resolved:    raw.Resolved,
+		Version:     raw.Version,
+		CreatedDate: raw.CreatedDate,
+		UpdatedDate: raw.UpdatedDate,
+		Author:      author,
+		Assignee:    assignee,
+	}
+}
+
+func resolveUserName(user *pullRequestUserIdentity) string {
+	if user == nil {
+		return ""
+	}
+
+	if displayName := strings.TrimSpace(user.DisplayName); displayName != "" {
+		return displayName
+	}
+
+	return strings.TrimSpace(user.Name)
+}
+
+func validateRepository(repository RepositoryRef) error {
+	if strings.TrimSpace(repository.ProjectKey) == "" || strings.TrimSpace(repository.Slug) == "" {
+		return apperrors.New(apperrors.KindValidation, "repository must be specified as project/repo", nil)
+	}
+
+	return nil
+}
+
+func normalizePullRequestID(pullRequestID string) (string, error) {
+	resolved := strings.TrimSpace(pullRequestID)
+	if resolved == "" {
+		return "", apperrors.New(apperrors.KindValidation, "pull request id is required", nil)
+	}
+
+	if _, err := strconv.ParseInt(resolved, 10, 64); err != nil {
+		return "", apperrors.New(apperrors.KindValidation, "pull request id must be a valid integer", nil)
+	}
+
+	return resolved, nil
+}
+
+func normalizeTaskID(taskID string) (string, error) {
+	resolved := strings.TrimSpace(taskID)
+	if resolved == "" {
+		return "", apperrors.New(apperrors.KindValidation, "task id is required", nil)
+	}
+
+	if _, err := strconv.ParseInt(resolved, 10, 64); err != nil {
+		return "", apperrors.New(apperrors.KindValidation, "task id must be a valid integer", nil)
+	}
+
+	return resolved, nil
+}
+
+func pullRequestPath(repository RepositoryRef) string {
+	return fmt.Sprintf("/rest/api/latest/projects/%s/repos/%s/pull-requests", repository.ProjectKey, repository.Slug)
+}
+
+func buildCreatePayload(input CreateInput) (map[string]any, error) {
+	fromRef := strings.TrimSpace(input.FromRef)
+	toRef := strings.TrimSpace(input.ToRef)
+	title := strings.TrimSpace(input.Title)
+
+	if fromRef == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "from ref is required", nil)
+	}
+	if toRef == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "to ref is required", nil)
+	}
+	if title == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "title is required", nil)
+	}
+
+	payload := map[string]any{
+		"title":   title,
+		"fromRef": map[string]any{"id": normalizeBranchRef(fromRef)},
+		"toRef":   map[string]any{"id": normalizeBranchRef(toRef)},
+	}
+
+	if description := strings.TrimSpace(input.Description); description != "" {
+		payload["description"] = description
+	}
+
+	return payload, nil
+}
+
+func buildUpdatePayload(input UpdateInput) (map[string]any, error) {
+	payload := map[string]any{}
+
+	if input.Version < 0 {
+		return nil, apperrors.New(apperrors.KindValidation, "version must be greater than or equal to 0", nil)
+	}
+	payload["version"] = input.Version
+
+	if title := strings.TrimSpace(input.Title); title != "" {
+		payload["title"] = title
+	}
+	if description := strings.TrimSpace(input.Description); description != "" {
+		payload["description"] = description
+	}
+
+	if len(payload) == 1 {
+		return nil, apperrors.New(apperrors.KindValidation, "at least one of title or description is required", nil)
+	}
+
+	return payload, nil
+}
+
+func normalizeBranchRef(branch string) string {
+	trimmed := strings.TrimSpace(branch)
+	if strings.HasPrefix(trimmed, "refs/") {
+		return trimmed
+	}
+
+	return "refs/heads/" + trimmed
+}
+
+func (service *Service) transition(ctx context.Context, repository RepositoryRef, pullRequestID string, action string, version *int) (PullRequest, error) {
+	if err := validateRepository(repository); err != nil {
+		return PullRequest{}, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return PullRequest{}, err
+	}
+
+	query := map[string]string{}
+	if version != nil {
+		query["version"] = strconv.Itoa(*version)
+	}
+
+	var response pullRequestValue
+	if err := service.client.PostJSON(ctx, fmt.Sprintf("%s/%s/%s", pullRequestPath(repository), resolvedID, action), query, map[string]any{}, &response); err != nil {
+		return PullRequest{}, err
+	}
+
+	return mapPullRequest(response), nil
+}
+
+func (service *Service) updateReviewer(ctx context.Context, repository RepositoryRef, pullRequestID string, username string, add bool) (PullRequest, error) {
+	if err := validateRepository(repository); err != nil {
+		return PullRequest{}, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return PullRequest{}, err
+	}
+
+	trimmedUsername := strings.TrimSpace(username)
+	if trimmedUsername == "" {
+		return PullRequest{}, apperrors.New(apperrors.KindValidation, "reviewer username is required", nil)
+	}
+
+	path := fmt.Sprintf("%s/%s/participants/%s", pullRequestPath(repository), resolvedID, trimmedUsername)
+
+	var response pullRequestValue
+	if add {
+		if err := service.client.PutJSON(ctx, path, nil, map[string]any{}, &response); err != nil {
+			return PullRequest{}, err
+		}
+	} else {
+		if err := service.client.DeleteJSON(ctx, path, nil, nil, &response); err != nil {
+			return PullRequest{}, err
+		}
+	}
+
+	return mapPullRequest(response), nil
+}
+
+func taskMatchesState(task Task, state string) bool {
+	switch state {
+	case "open":
+		return !task.Resolved
+	case "resolved":
+		return task.Resolved
+	default:
+		return true
+	}
+}
+
+func resolveTaskStateValue(resolved bool) string {
+	if resolved {
+		return "RESOLVED"
+	}
+
+	return "OPEN"
 }
 
 func branchDisplayName(reference *pullRequestRef) string {
@@ -197,26 +759,57 @@ type pagedPullRequestResponse struct {
 }
 
 type pullRequestValue struct {
-	ID          int64            `json:"id"`
-	Title       string           `json:"title"`
-	State       string           `json:"state"`
-	Open        bool             `json:"open"`
-	Closed      bool             `json:"closed"`
-	CreatedDate int64            `json:"createdDate"`
-	UpdatedDate int64            `json:"updatedDate"`
-	Author      *pullRequestUser `json:"author"`
-	FromRef     *pullRequestRef  `json:"fromRef"`
-	ToRef       *pullRequestRef  `json:"toRef"`
+	ID           int64                    `json:"id"`
+	Title        string                   `json:"title"`
+	Description  string                   `json:"description"`
+	State        string                   `json:"state"`
+	Open         bool                     `json:"open"`
+	Closed       bool                     `json:"closed"`
+	Version      int                      `json:"version"`
+	CreatedDate  int64                    `json:"createdDate"`
+	UpdatedDate  int64                    `json:"updatedDate"`
+	Author       *pullRequestUser         `json:"author"`
+	Participants []pullRequestParticipant `json:"participants"`
+	FromRef      *pullRequestRef          `json:"fromRef"`
+	ToRef        *pullRequestRef          `json:"toRef"`
+}
+
+type pullRequestParticipant struct {
+	User     *pullRequestUserIdentity `json:"user"`
+	Role     string                   `json:"role"`
+	Status   string                   `json:"status"`
+	Approved bool                     `json:"approved"`
 }
 
 type pullRequestUser struct {
-	User *struct {
-		Name        string `json:"name"`
-		DisplayName string `json:"displayName"`
-	} `json:"user"`
+	User *pullRequestUserIdentity `json:"user"`
+}
+
+type pullRequestUserIdentity struct {
+	Name         string `json:"name"`
+	DisplayName  string `json:"displayName"`
+	EmailAddress string `json:"emailAddress"`
 }
 
 type pullRequestRef struct {
 	ID        string `json:"id"`
 	DisplayID string `json:"displayId"`
+}
+
+type pagedTaskResponse struct {
+	Values        []taskValue `json:"values"`
+	IsLastPage    bool        `json:"isLastPage"`
+	NextPageStart int         `json:"nextPageStart"`
+}
+
+type taskValue struct {
+	ID          int64                    `json:"id"`
+	Text        string                   `json:"text"`
+	State       string                   `json:"state"`
+	Resolved    bool                     `json:"resolved"`
+	Version     int                      `json:"version"`
+	CreatedDate int64                    `json:"createdDate"`
+	UpdatedDate int64                    `json:"updatedDate"`
+	Author      *pullRequestUserIdentity `json:"author"`
+	Assignee    *pullRequestUserIdentity `json:"assignee"`
 }
