@@ -277,7 +277,7 @@ func TestDiffHelpers(t *testing.T) {
 	if len(names) != 3 {
 		t.Fatalf("expected 3 names, got %d: %#v", len(names), names)
 	}
-	if names[0] != "a.txt" || names[1] != "new.txt" || names[2] != "dev/null" {
+	if names[0] != "a.txt" || names[1] != "new.txt" || names[2] != "old.txt" {
 		t.Fatalf("unexpected names extraction: %#v", names)
 	}
 }

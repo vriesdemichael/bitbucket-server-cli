@@ -881,7 +881,10 @@ func TestLoadConfigAndClientAndClientFactoryBranches(t *testing.T) {
 		}))
 		defer server.Close()
 
-		client := newAPIClientFromConfig(config.AppConfig{BitbucketURL: server.URL})
+		client, err := newAPIClientFromConfig(config.AppConfig{BitbucketURL: server.URL})
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
 		if client == nil {
 			t.Fatal("expected non-nil client")
 		}

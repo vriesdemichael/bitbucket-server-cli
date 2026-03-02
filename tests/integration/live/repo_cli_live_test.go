@@ -286,11 +286,8 @@ func jsonObjectHasCommentsArray(t *testing.T, output string) bool {
 	t.Helper()
 
 	payload := decodeJSONMap(t, output)
-	if _, ok := payload["comments"].([]any); ok {
-		return true
-	}
-	_, exists := payload["comments"]
-	return exists
+	_, ok := payload["comments"].([]any)
+	return ok
 }
 
 func commentIDFromCreateOutput(output string) (string, bool) {

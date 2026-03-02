@@ -61,7 +61,12 @@ func loadConfigAndClient() (config.AppConfig, *openapigenerated.ClientWithRespon
 		return config.AppConfig{}, nil, err
 	}
 
-	return cfg, newAPIClientFromConfig(cfg), nil
+	client, err := newAPIClientFromConfig(cfg)
+	if err != nil {
+		return config.AppConfig{}, nil, apperrors.New(apperrors.KindInternal, "failed to initialize API client", err)
+	}
+
+	return cfg, client, nil
 }
 
 func loadQualityRepoAndService(selector string) (qualityservice.RepositoryRef, *qualityservice.Service, error) {
@@ -78,9 +83,8 @@ func loadQualityRepoAndService(selector string) (qualityservice.RepositoryRef, *
 	return repo, qualityservice.NewService(client), nil
 }
 
-func newAPIClientFromConfig(cfg config.AppConfig) *openapigenerated.ClientWithResponses {
-	client, _ := openapi.NewClientWithResponsesFromConfig(cfg)
-	return client
+func newAPIClientFromConfig(cfg config.AppConfig) (*openapigenerated.ClientWithResponses, error) {
+	return openapi.NewClientWithResponsesFromConfig(cfg)
 }
 
 func newAuthCommand(options *rootOptions) *cobra.Command {
