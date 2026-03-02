@@ -1,3 +1,9 @@
+pre-commit:
+  parallel: false
+  commands:
+    combined-patch-coverage-gate:
+      run: task quality:coverage:origin-main
+
 pre-push:
   parallel: false
   commands:

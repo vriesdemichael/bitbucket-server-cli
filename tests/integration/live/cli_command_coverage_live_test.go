@@ -429,23 +429,59 @@ func TestLiveCLIAuthStoredConfigFlow(t *testing.T) {
 	}
 }
 
-func TestLiveCLIPRAndIssueNotImplemented(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+func TestLiveCLIPRListAndIssueCommandUnavailable(t *testing.T) {
+	harness := newLiveHarness(t)
 
-	prOutput, prErr := executeLiveCLI(t, "pr", "list")
-	if prErr == nil {
-		t.Fatalf("expected pr list to be not implemented")
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
 	}
-	if !strings.Contains(prOutput, "not implemented") && !strings.Contains(prErr.Error(), "not implemented") {
-		t.Fatalf("expected not implemented message for pr list, output=%s err=%v", prOutput, prErr)
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	branch := fmt.Sprintf("lt-pr-list-%d", time.Now().UnixNano()%100000)
+	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, "pr-list-feature.txt"); err != nil {
+		t.Fatalf("push commit on branch failed: %v", err)
+	}
+
+	if _, err := harness.createPullRequest(ctx, seeded.Key, repo.Slug, branch, "master"); err != nil {
+		t.Fatalf("create pull request failed: %v", err)
+	}
+
+	prOutput, prErr := executeLiveCLI(
+		t,
+		"--json", "pr", "list",
+		"--repo", seeded.Key+"/"+repo.Slug,
+		"--state", "all",
+		"--source-branch", branch,
+		"--target-branch", "master",
+		"--limit", "25",
+	)
+	if prErr != nil {
+		t.Fatalf("pr list failed: %v\noutput: %s", prErr, prOutput)
+	}
+
+	prPayload := decodeJSONMap(t, prOutput)
+	pullRequests, ok := prPayload["pull_requests"].([]any)
+	if !ok || len(pullRequests) == 0 {
+		t.Fatalf("expected non-empty pull_requests array, got: %s", prOutput)
+	}
+
+	_, validationErr := executeLiveCLI(t, "pr", "list", "--state", "invalid")
+	if validationErr == nil {
+		t.Fatalf("expected validation error for invalid --state")
 	}
 
 	issueOutput, issueErr := executeLiveCLI(t, "issue", "list")
 	if issueErr == nil {
-		t.Fatalf("expected issue list to be not implemented")
+		t.Fatalf("expected issue command to be unavailable")
 	}
-	if !strings.Contains(issueOutput, "not implemented") && !strings.Contains(issueErr.Error(), "not implemented") {
-		t.Fatalf("expected not implemented message for issue list, output=%s err=%v", issueOutput, issueErr)
+	if !strings.Contains(issueOutput, "unknown command") && !strings.Contains(issueErr.Error(), "unknown command") {
+		t.Fatalf("expected unknown command message for issue command, output=%s err=%v", issueOutput, issueErr)
 	}
 }
 
