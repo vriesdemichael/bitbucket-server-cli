@@ -9,9 +9,7 @@ on:
         type: string
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
+  contents: read
 
 jobs:
   build-artifacts:
@@ -102,6 +100,10 @@ jobs:
     needs:
       - build-artifacts
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -219,12 +221,17 @@ jobs:
       - name: Generate checksums
         run: |
           set -euo pipefail
-          find dist -maxdepth 1 -type f -print0 | sort -z | xargs -0 sha256sum > dist/sha256sums.txt
+          (
+            cd dist
+            find . -maxdepth 1 -type f ! -name 'sha256sums.txt' -print0 | sort -z | xargs -0 sha256sum > sha256sums.txt
+          )
 
       - name: Generate GitHub provenance attestations
         uses: actions/attest-build-provenance@v2
         with:
-          subject-path: dist/*
+          subject-path: |
+            dist/*.tar.gz
+            dist/*.zip
 
       - name: Publish GitHub release
         env:
