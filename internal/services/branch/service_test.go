@@ -87,6 +87,8 @@ func TestBranchServiceRestrictionsLifecycle(t *testing.T) {
 			_, _ = w.Write([]byte(`{"id":12,"type":"read-only","matcher":{"id":"refs/heads/main","displayId":"main","type":{"id":"BRANCH"}}}`))
 		case r.Method == http.MethodPost && r.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions":
 			_, _ = w.Write([]byte(`{"id":12,"type":"read-only","matcher":{"id":"refs/heads/main","displayId":"main","type":{"id":"BRANCH"}}}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions/12":
+			_, _ = w.Write([]byte(`{"id":12,"type":"read-only","matcher":{"id":"refs/heads/main","displayId":"main","type":{"id":"BRANCH"}}}`))
 		case r.Method == http.MethodDelete && r.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions/12":
 			w.WriteHeader(http.StatusNoContent)
 		default:

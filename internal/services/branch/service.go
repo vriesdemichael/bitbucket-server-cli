@@ -1,10 +1,13 @@
 package branch
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -374,7 +377,8 @@ func (service *Service) upsertRestriction(ctx context.Context, repo RepositoryRe
 	}
 
 	bodyEntry := openapigenerated.RestRestrictionRequest{Type: &trimmedType}
-	if trimmedUpdateID := strings.TrimSpace(id); trimmedUpdateID != "" {
+	trimmedUpdateID := strings.TrimSpace(id)
+	if trimmedUpdateID != "" {
 		parsedID, parseErr := parseRestrictionID(trimmedUpdateID)
 		if parseErr != nil {
 			return openapigenerated.RestRefRestriction{}, parseErr
@@ -416,6 +420,10 @@ func (service *Service) upsertRestriction(ctx context.Context, repo RepositoryRe
 		bodyEntry.AccessKeyIds = &ids
 	}
 
+	if trimmedUpdateID != "" {
+		return service.updateRestriction(ctx, repo, trimmedUpdateID, bodyEntry)
+	}
+
 	requestBody := openapigenerated.CreateRestrictions1ApplicationVndAtlBitbucketBulkPlusJSONRequestBody{bodyEntry}
 	response, err := service.client.CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse(ctx, repo.ProjectKey, repo.Slug, requestBody)
 	if err != nil {
@@ -430,6 +438,63 @@ func (service *Service) upsertRestriction(ctx context.Context, repo RepositoryRe
 	}
 
 	return openapigenerated.RestRefRestriction{}, nil
+}
+
+func (service *Service) updateRestriction(ctx context.Context, repo RepositoryRef, id string, payload openapigenerated.RestRestrictionRequest) (openapigenerated.RestRefRestriction, error) {
+	client, ok := service.client.ClientInterface.(*openapigenerated.Client)
+	if !ok {
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindInternal, "failed to initialize update restriction request client", nil)
+	}
+
+	body, marshalErr := json.Marshal(payload)
+	if marshalErr != nil {
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindInternal, "failed to encode update restriction request", marshalErr)
+	}
+
+	baseURL := strings.TrimSuffix(client.Server, "/")
+	path := fmt.Sprintf(
+		"/branch-permissions/latest/projects/%s/repos/%s/restrictions/%s",
+		url.PathEscape(repo.ProjectKey),
+		url.PathEscape(repo.Slug),
+		url.PathEscape(id),
+	)
+	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPut, baseURL+path, bytes.NewReader(body))
+	if requestErr != nil {
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindInternal, "failed to create update restriction request", requestErr)
+	}
+	request.Header.Set("Content-Type", "application/json")
+
+	for _, editor := range client.RequestEditors {
+		if editorErr := editor(ctx, request); editorErr != nil {
+			return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to apply update restriction request editor", editorErr)
+		}
+	}
+
+	response, doErr := client.Client.Do(request)
+	if doErr != nil {
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to upsert branch restriction", doErr)
+	}
+	defer response.Body.Close()
+
+	responseBody, readErr := io.ReadAll(response.Body)
+	if readErr != nil {
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to read update restriction response", readErr)
+	}
+
+	if err := mapStatusError(response.StatusCode, responseBody); err != nil {
+		return openapigenerated.RestRefRestriction{}, err
+	}
+
+	if len(responseBody) == 0 || !json.Valid(responseBody) {
+		return openapigenerated.RestRefRestriction{}, nil
+	}
+
+	decoded := openapigenerated.RestRefRestriction{}
+	if err := json.Unmarshal(responseBody, &decoded); err != nil {
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to decode update restriction response", err)
+	}
+
+	return decoded, nil
 }
 
 func (service *Service) DeleteRestriction(ctx context.Context, repo RepositoryRef, id string) error {

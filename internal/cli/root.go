@@ -1437,9 +1437,9 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return err
 			}
 
-			accessKeyIDs := make([]int32, 0, len(createAccessKeyIDs))
-			for _, id := range createAccessKeyIDs {
-				accessKeyIDs = append(accessKeyIDs, int32(id))
+			accessKeyIDs, err := normalizeAccessKeyIDs(createAccessKeyIDs)
+			if err != nil {
+				return err
 			}
 
 			service := branchservice.NewService(client)
@@ -1497,9 +1497,9 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return err
 			}
 
-			accessKeyIDs := make([]int32, 0, len(updateAccessKeyIDs))
-			for _, id := range updateAccessKeyIDs {
-				accessKeyIDs = append(accessKeyIDs, int32(id))
+			accessKeyIDs, err := normalizeAccessKeyIDs(updateAccessKeyIDs)
+			if err != nil {
+				return err
 			}
 
 			service := branchservice.NewService(client)
@@ -2957,6 +2957,20 @@ func safeUsers(values *[]openapigenerated.RestApplicationUser) []openapigenerate
 	}
 
 	return *values
+}
+
+func normalizeAccessKeyIDs(values []int) ([]int32, error) {
+	const maxInt32Value = int(^uint32(0) >> 1)
+
+	normalized := make([]int32, 0, len(values))
+	for _, value := range values {
+		if value < 0 || value > maxInt32Value {
+			return nil, apperrors.New(apperrors.KindValidation, "access-key-id must be between 0 and 2147483647", nil)
+		}
+		normalized = append(normalized, int32(value))
+	}
+
+	return normalized, nil
 }
 
 func safeStringFromTagType(tagType *openapigenerated.RestTagType) string {

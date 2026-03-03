@@ -63,7 +63,9 @@ func TestBranchValidationErrors(t *testing.T) {
 	}{
 		{name: "branch create missing start-point", args: []string{"branch", "create", "feature/demo"}, expectAppErr: false},
 		{name: "branch restriction create missing matcher-id", args: []string{"branch", "restriction", "create", "--type", "read-only"}, expectAppErr: false},
+		{name: "branch restriction create access key overflow", args: []string{"branch", "restriction", "create", "--type", "read-only", "--matcher-id", "refs/heads/main", "--access-key-id", "2147483648"}, expectAppErr: true},
 		{name: "branch restriction list invalid matcher-type", args: []string{"branch", "restriction", "list", "--matcher-type", "invalid"}, expectAppErr: true},
+		{name: "branch restriction update access key overflow", args: []string{"branch", "restriction", "update", "12", "--type", "read-only", "--matcher-id", "refs/heads/main", "--access-key-id", "2147483648"}, expectAppErr: true},
 		{name: "branch restriction update invalid id", args: []string{"branch", "restriction", "update", "bad", "--type", "read-only", "--matcher-id", "refs/heads/main"}, expectAppErr: true},
 		{name: "branch default set blank", args: []string{"branch", "default", "set", " "}, expectAppErr: true},
 		{name: "branch model update blank", args: []string{"branch", "model", "update", " "}, expectAppErr: true},
