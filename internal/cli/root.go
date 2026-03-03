@@ -45,6 +45,9 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newInsightsCommand(options))
 	rootCmd.AddCommand(newPRCommand(options))
 	rootCmd.AddCommand(newAdminCommand(options))
+	rootCmd.AddCommand(newCommitCommand(options))
+	rootCmd.AddCommand(newRefCommand(options))
+	rootCmd.AddCommand(newProjectCommand(options))
 
 	return rootCmd
 }
@@ -255,6 +258,8 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 
 	repoCmd.AddCommand(newRepoSettingsCommand(options))
 	repoCmd.AddCommand(newRepoCommentCommand(options))
+	repoCmd.AddCommand(newRepoBrowseCommand(options))
+	repoCmd.AddCommand(newRepoAdminCommand(options))
 
 	return repoCmd
 }
