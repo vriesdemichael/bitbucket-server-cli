@@ -1,0 +1,266 @@
+package commit
+
+import (
+	"context"
+	"fmt"
+	"net/http"
+	"strings"
+
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
+)
+
+type RepositoryRef struct {
+	ProjectKey string
+	Slug       string
+}
+
+type ListOptions struct {
+	Limit int
+	Path  string
+}
+
+type CompareOptions struct {
+	From  string
+	To    string
+	Limit int
+}
+
+type Service struct {
+	client *openapigenerated.ClientWithResponses
+}
+
+func NewService(client *openapigenerated.ClientWithResponses) *Service {
+	return &Service{client: client}
+}
+
+func (service *Service) List(ctx context.Context, repo RepositoryRef, options ListOptions) ([]openapigenerated.RestCommit, error) {
+	if err := validateRepositoryRef(repo); err != nil {
+		return nil, err
+	}
+
+	if options.Limit <= 0 {
+		options.Limit = 25
+	}
+
+	start := float32(0)
+	pageLimit := float32(options.Limit)
+	results := make([]openapigenerated.RestCommit, 0)
+
+	for {
+		params := &openapigenerated.GetCommitsParams{Start: &start, Limit: &pageLimit}
+		if strings.TrimSpace(options.Path) != "" {
+			path := strings.TrimSpace(options.Path)
+			params.Path = &path
+		}
+
+		response, err := service.client.GetCommitsWithResponse(ctx, repo.ProjectKey, repo.Slug, params)
+		if err != nil {
+			return nil, apperrors.New(apperrors.KindTransient, "failed to list repository commits", err)
+		}
+		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+			return nil, err
+		}
+		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
+			break
+		}
+
+		results = append(results, (*response.ApplicationjsonCharsetUTF8200.Values)...)
+
+		if response.ApplicationjsonCharsetUTF8200.IsLastPage != nil && *response.ApplicationjsonCharsetUTF8200.IsLastPage {
+			break
+		}
+		if response.ApplicationjsonCharsetUTF8200.NextPageStart == nil {
+			break
+		}
+
+		start = float32(*response.ApplicationjsonCharsetUTF8200.NextPageStart)
+	}
+
+	return results, nil
+}
+
+func (service *Service) Get(ctx context.Context, repo RepositoryRef, commitID string) (openapigenerated.RestCommit, error) {
+	if err := validateRepositoryRef(repo); err != nil {
+		return openapigenerated.RestCommit{}, err
+	}
+
+	trimmedID := strings.TrimSpace(commitID)
+	if trimmedID == "" {
+		return openapigenerated.RestCommit{}, apperrors.New(apperrors.KindValidation, "commit id is required", nil)
+	}
+
+	response, err := service.client.GetCommitWithResponse(ctx, repo.ProjectKey, repo.Slug, trimmedID, nil)
+	if err != nil {
+		return openapigenerated.RestCommit{}, apperrors.New(apperrors.KindTransient, "failed to get repository commit", err)
+	}
+	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		return openapigenerated.RestCommit{}, err
+	}
+
+	if response.ApplicationjsonCharsetUTF8200 != nil {
+		return *response.ApplicationjsonCharsetUTF8200, nil
+	}
+
+	return openapigenerated.RestCommit{}, nil
+}
+
+func (service *Service) Compare(ctx context.Context, repo RepositoryRef, options CompareOptions) ([]openapigenerated.RestCommit, error) {
+	if err := validateRepositoryRef(repo); err != nil {
+		return nil, err
+	}
+
+	from := strings.TrimSpace(options.From)
+	to := strings.TrimSpace(options.To)
+
+	if from == "" || to == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "compare from and to refs are required", nil)
+	}
+
+	if options.Limit <= 0 {
+		options.Limit = 25
+	}
+
+	start := float32(0)
+	pageLimit := float32(options.Limit)
+	results := make([]openapigenerated.RestCommit, 0)
+
+	for {
+		params := &openapigenerated.StreamCommitsParams{
+			From:  &from,
+			To:    &to,
+			Start: &start,
+			Limit: &pageLimit,
+		}
+
+		response, err := service.client.StreamCommitsWithResponse(ctx, repo.ProjectKey, repo.Slug, params)
+		if err != nil {
+			return nil, apperrors.New(apperrors.KindTransient, "failed to compare commits", err)
+		}
+		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+			return nil, err
+		}
+
+		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
+			break
+		}
+
+		results = append(results, (*response.ApplicationjsonCharsetUTF8200.Values)...)
+
+		if response.ApplicationjsonCharsetUTF8200.IsLastPage != nil && *response.ApplicationjsonCharsetUTF8200.IsLastPage {
+			break
+		}
+		if response.ApplicationjsonCharsetUTF8200.NextPageStart == nil {
+			break
+		}
+
+		start = float32(*response.ApplicationjsonCharsetUTF8200.NextPageStart)
+	}
+
+	return results, nil
+}
+
+func (service *Service) ListTagsAndBranches(ctx context.Context, repo RepositoryRef, query string) ([]openapigenerated.RestMinimalRef, error) {
+	if err := validateRepositoryRef(repo); err != nil {
+		return nil, err
+	}
+
+	trimmedQuery := strings.TrimSpace(query)
+	filter := &trimmedQuery
+	if trimmedQuery == "" {
+		filter = nil
+	}
+
+	refs := make([]openapigenerated.RestMinimalRef, 0)
+	limit := float32(50)
+
+	branchParams := &openapigenerated.GetBranchesParams{Limit: &limit, FilterText: filter}
+	branchResp, err := service.client.GetBranchesWithResponse(ctx, repo.ProjectKey, repo.Slug, branchParams)
+	if err != nil {
+		return nil, apperrors.New(apperrors.KindTransient, "failed to query branches for refs", err)
+	}
+	if err := mapStatusError(branchResp.StatusCode(), branchResp.Body); err != nil {
+		return nil, err
+	}
+	if branchResp.ApplicationjsonCharsetUTF8200 != nil && branchResp.ApplicationjsonCharsetUTF8200.Values != nil {
+		for _, branch := range *branchResp.ApplicationjsonCharsetUTF8200.Values {
+			var refType *openapigenerated.RestMinimalRefType
+			if branch.Type != nil {
+				if typeStr, ok := (*branch.Type).(string); ok {
+					t := openapigenerated.RestMinimalRefType(typeStr)
+					refType = &t
+				}
+			}
+			refs = append(refs, openapigenerated.RestMinimalRef{
+				Id:        branch.Id,
+				DisplayId: branch.DisplayId,
+				Type:      refType,
+			})
+		}
+	}
+
+	tagParams := &openapigenerated.GetTagsParams{Limit: &limit, FilterText: filter}
+	tagResp, err := service.client.GetTagsWithResponse(ctx, repo.ProjectKey, repo.Slug, tagParams)
+	if err != nil {
+		return nil, apperrors.New(apperrors.KindTransient, "failed to query tags for refs", err)
+	}
+	if err := mapStatusError(tagResp.StatusCode(), tagResp.Body); err != nil {
+		return nil, err
+	}
+	if tagResp.ApplicationjsonCharsetUTF8200 != nil && tagResp.ApplicationjsonCharsetUTF8200.Values != nil {
+		for _, tag := range *tagResp.ApplicationjsonCharsetUTF8200.Values {
+			var refType *openapigenerated.RestMinimalRefType
+			if tag.Type != nil {
+				t := openapigenerated.RestMinimalRefType(string(*tag.Type))
+				refType = &t
+			}
+			refs = append(refs, openapigenerated.RestMinimalRef{
+				Id:        tag.Id,
+				DisplayId: tag.DisplayId,
+				Type:      refType,
+			})
+		}
+	}
+
+	return refs, nil
+}
+
+func validateRepositoryRef(repo RepositoryRef) error {
+	if strings.TrimSpace(repo.ProjectKey) == "" || strings.TrimSpace(repo.Slug) == "" {
+		return apperrors.New(apperrors.KindValidation, "repository must be specified as project/repo", nil)
+	}
+	return nil
+}
+
+func mapStatusError(status int, body []byte) error {
+	if status >= 200 && status < 300 {
+		return nil
+	}
+
+	message := strings.TrimSpace(string(body))
+	if message == "" {
+		message = http.StatusText(status)
+	}
+
+	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
+
+	switch status {
+	case http.StatusBadRequest:
+		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
+	case http.StatusUnauthorized:
+		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
+	case http.StatusForbidden:
+		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
+	case http.StatusNotFound:
+		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
+	case http.StatusConflict:
+		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
+	case http.StatusTooManyRequests:
+		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
+	default:
+		if status >= 500 {
+			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
+		}
+		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
+	}
+}

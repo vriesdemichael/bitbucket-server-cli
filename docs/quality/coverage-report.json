@@ -1,40 +1,40 @@
 {
   "version": 2,
   "coverage": {
-    "unit_raw_percent": 6.939510207948462,
-    "unit_scoped_percent": 86.1764705882353,
-    "live_raw_percent": 9.077101113843483,
-    "live_scoped_percent": 48.924088463837414,
-    "combined_raw_percent": 12.034010705319503,
-    "combined_scoped_percent": 86.8529411764706,
-    "patch_percent": 91.30434782608695,
+    "unit_raw_percent": 8.504807468995308,
+    "unit_scoped_percent": 86.4494806421152,
+    "live_raw_percent": 1.746466890390887,
+    "live_scoped_percent": 17.67097082735533,
+    "combined_raw_percent": 8.504807468995308,
+    "combined_scoped_percent": 86.4494806421152,
+    "patch_percent": 86.05877920120572,
     "unit_statements": {
-      "covered": 2930,
-      "total": 42222
+      "covered": 3662,
+      "total": 43058
     },
     "live_statements": {
-      "covered": 3765,
-      "total": 41478
+      "covered": 739,
+      "total": 42314
     },
     "combined_statements": {
-      "covered": 5081,
-      "total": 42222
+      "covered": 3662,
+      "total": 43058
     },
     "unit_scoped_statements": {
-      "covered": 2930,
-      "total": 3400
+      "covered": 3662,
+      "total": 4236
     },
     "live_scoped_statements": {
-      "covered": 1637,
-      "total": 3346
+      "covered": 739,
+      "total": 4182
     },
     "combined_scoped_statements": {
-      "covered": 2953,
-      "total": 3400
+      "covered": 3662,
+      "total": 4236
     },
     "patch_lines": {
-      "covered": 861,
-      "total": 943
+      "covered": 1142,
+      "total": 1327
     },
     "scope": {
       "include_prefixes": [
@@ -48,13 +48,15 @@
     }
   },
   "generated_contracts": {
-    "coverage_percent": 80.3921568627451,
+    "coverage_percent": 61.19402985074627,
     "used_operations": [
       "AddAnnotationsWithResponse",
       "AddBuildStatusWithResponse",
       "CreateBranchWithResponse",
       "CreateComment2WithResponse",
       "CreateCommentWithResponse",
+      "CreateProjectWithResponse",
+      "CreateRepositoryWithResponse",
       "CreateRequiredBuildsMergeCheckWithBodyWithResponse",
       "CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse",
       "CreateTagForRepositoryWithResponse",
@@ -64,12 +66,15 @@
       "DeleteBranchWithResponse",
       "DeleteComment2WithResponse",
       "DeleteCommentWithResponse",
+      "DeleteProjectWithResponse",
+      "DeleteRepositoryWithResponse",
       "DeleteRequiredBuildsMergeCheckWithResponse",
       "DeleteRestriction1WithResponse",
       "DeleteTagWithResponse",
       "DeleteWebhook1WithResponse",
       "FindByCommitWithResponse",
       "FindWebhooks1WithResponse",
+      "ForkRepositoryWithResponse",
       "GetACodeInsightsReportWithResponse",
       "GetAnnotationsWithResponse",
       "GetBranchesWithResponse",
@@ -79,10 +84,15 @@
       "GetCommentWithResponse",
       "GetComments2WithResponse",
       "GetCommentsWithResponse",
+      "GetCommitWithResponse",
+      "GetCommitsWithResponse",
+      "GetContent1WithResponse",
       "GetDefaultBranch2WithResponse",
       "GetDiffStatsSummary1WithResponse",
       "GetDiffStatsSummary2WithResponse",
       "GetPageOfRequiredBuildsMergeChecksWithResponse",
+      "GetProjectWithResponse",
+      "GetProjectsWithResponse",
       "GetPullRequestSettings1",
       "GetReportsWithResponse",
       "GetRestriction1WithResponse",
@@ -93,13 +103,19 @@
       "SetACodeInsightsReportWithResponse",
       "SetDefaultBranch2WithResponse",
       "SetPermissionForUserWithResponse",
+      "StreamCommitsWithResponse",
+      "StreamFiles1WithResponse",
+      "StreamFilesWithResponse",
       "StreamPatch1WithResponse",
       "StreamPatchWithResponse",
       "StreamRawDiff1WithResponse",
       "StreamRawDiff2WithResponse",
+      "StreamRawWithResponse",
       "UpdateComment2WithResponse",
       "UpdateCommentWithResponse",
+      "UpdateProjectWithResponse",
       "UpdatePullRequestSettings1WithBody",
+      "UpdateRepositoryWithResponse",
       "UpdateRequiredBuildsMergeCheckWithBodyWithResponse"
     ],
     "mapped_operations": [
@@ -147,15 +163,31 @@
     ],
     "unmapped_operations": [
       "CreateBranchWithResponse",
+      "CreateProjectWithResponse",
+      "CreateRepositoryWithResponse",
       "CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse",
       "DeleteBranchWithResponse",
+      "DeleteProjectWithResponse",
+      "DeleteRepositoryWithResponse",
       "DeleteRestriction1WithResponse",
       "FindByCommitWithResponse",
+      "ForkRepositoryWithResponse",
       "GetBranchesWithResponse",
+      "GetCommitWithResponse",
+      "GetCommitsWithResponse",
+      "GetContent1WithResponse",
       "GetDefaultBranch2WithResponse",
+      "GetProjectWithResponse",
+      "GetProjectsWithResponse",
       "GetRestriction1WithResponse",
       "GetRestrictions1WithResponse",
-      "SetDefaultBranch2WithResponse"
+      "SetDefaultBranch2WithResponse",
+      "StreamCommitsWithResponse",
+      "StreamFiles1WithResponse",
+      "StreamFilesWithResponse",
+      "StreamRawWithResponse",
+      "UpdateProjectWithResponse",
+      "UpdateRepositoryWithResponse"
     ]
   }
 }
