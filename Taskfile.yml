@@ -104,6 +104,17 @@ tasks:
     desc: Run Go unit tests
     cmd: go test ./cmd/... ./internal/... ./tools/...
 
+  test:go:safe:
+    desc: Run broad non-live Go tests without scanning docker bind-mount data directories
+    cmds:
+      - go test ./cmd/... ./internal/... ./tools/...
+      - |
+        if [ -n "$(go list ./tests/... 2>/dev/null)" ]; then
+          go test ./tests/...
+        else
+          echo "No Go packages under ./tests; skipping"
+        fi
+
   test:unit:coverage:
     desc: Run Go unit tests with coverage profile output
     cmds:

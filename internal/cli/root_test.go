@@ -1248,6 +1248,88 @@ func TestTagViewDeleteAndListCommandPaths(t *testing.T) {
 	}
 }
 
+func TestBranchCommandPaths(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/branches":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"displayId":"main","id":"refs/heads/main","latestCommit":"abc","default":true}],"isLastPage":true}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/branch-utils/latest/projects/TEST/repos/demo/branches":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"displayId":"feature/demo","id":"refs/heads/feature/demo"}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/branch-utils/latest/projects/TEST/repos/demo/branches":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/default-branch":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"displayId":"main","id":"refs/heads/main"}`))
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/default-branch":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && strings.HasPrefix(request.URL.Path, "/rest/branch-utils/latest/projects/TEST/repos/demo/branches/info/"):
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"displayId":"main","id":"refs/heads/main"}],"isLastPage":true}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"id":12,"type":"read-only"}],"isLastPage":true}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":12,"type":"read-only"}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions/12":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":12,"type":"read-only"}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions/12":
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name string
+		args []string
+		want string
+	}{
+		{name: "branch list", args: []string{"branch", "list"}, want: "main"},
+		{name: "branch create", args: []string{"branch", "create", "feature/demo", "--start-point", "abc"}, want: "Created branch"},
+		{name: "branch delete", args: []string{"branch", "delete", "feature/demo"}, want: "Deleted branch"},
+		{name: "branch default get", args: []string{"branch", "default", "get"}, want: "refs/heads/main"},
+		{name: "branch model inspect", args: []string{"branch", "model", "inspect", "abc"}, want: "refs/heads/main"},
+		{name: "branch restriction list", args: []string{"branch", "restriction", "list"}, want: "read-only"},
+	}
+
+	for _, testCase := range tests {
+		command := NewRootCommand()
+		buffer := &bytes.Buffer{}
+		command.SetOut(buffer)
+		command.SetErr(buffer)
+		command.SetArgs(testCase.args)
+
+		if err := command.Execute(); err != nil {
+			t.Fatalf("%s failed: %v", testCase.name, err)
+		}
+		if !strings.Contains(buffer.String(), testCase.want) {
+			t.Fatalf("%s expected %q in output, got: %s", testCase.name, testCase.want, buffer.String())
+		}
+	}
+
+	jsonCommand := NewRootCommand()
+	jsonBuffer := &bytes.Buffer{}
+	jsonCommand.SetOut(jsonBuffer)
+	jsonCommand.SetErr(jsonBuffer)
+	jsonCommand.SetArgs([]string{"--json", "branch", "restriction", "create", "--type", "read-only", "--matcher-id", "refs/heads/main"})
+	if err := jsonCommand.Execute(); err != nil {
+		t.Fatalf("branch restriction create json failed: %v", err)
+	}
+	if !strings.Contains(jsonBuffer.String(), `"id": 12`) {
+		t.Fatalf("expected restriction id in json output, got: %s", jsonBuffer.String())
+	}
+}
+
 func TestBuildRequiredCommandPaths(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -1826,6 +1908,11 @@ func TestResolveRepositoryReferenceWrappers(t *testing.T) {
 		t.Fatalf("unexpected tag repository reference: %+v err=%v", tagRepo, err)
 	}
 
+	branchRepo, err := resolveBranchRepositoryReference("", cfg)
+	if err != nil || branchRepo.ProjectKey != "TEST" || branchRepo.Slug != "demo" {
+		t.Fatalf("unexpected branch repository reference: %+v err=%v", branchRepo, err)
+	}
+
 	qualityRepo, err := resolveQualityRepositoryReference("", cfg)
 	if err != nil || qualityRepo.ProjectKey != "TEST" || qualityRepo.Slug != "demo" {
 		t.Fatalf("unexpected quality repository reference: %+v err=%v", qualityRepo, err)
@@ -1844,6 +1931,11 @@ func TestResolveRepositoryReferenceWrappers(t *testing.T) {
 	_, err = resolveTagRepositoryReference("bad-format", config.AppConfig{})
 	if err == nil {
 		t.Fatal("expected validation error for invalid tag repository selector")
+	}
+
+	_, err = resolveBranchRepositoryReference("bad-format", config.AppConfig{})
+	if err == nil {
+		t.Fatal("expected validation error for invalid branch repository selector")
 	}
 
 	_, err = resolveQualityRepositoryReference("bad-format", config.AppConfig{})
