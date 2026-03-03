@@ -109,8 +109,9 @@ tasks:
     cmds:
       - go test ./cmd/... ./internal/... ./tools/...
       - |
-        if [ -n "$(go list ./tests/... 2>/dev/null)" ]; then
-          go test ./tests/...
+        test_packages="$(go list ./tests/... 2>/dev/null || true)"
+        if [ -n "$test_packages" ]; then
+          go test $test_packages
         else
           echo "No Go packages under ./tests; skipping"
         fi
