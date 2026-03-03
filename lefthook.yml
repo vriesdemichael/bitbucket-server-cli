@@ -1,6 +1,8 @@
 pre-commit:
   parallel: false
   commands:
+    safe-go-tests:
+      run: task test:go:safe
     combined-patch-coverage-gate:
       run: task quality:coverage:origin-main
 

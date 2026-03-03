@@ -51,8 +51,8 @@ jobs:
       - name: Setup Task
         uses: arduino/setup-task@v2
 
-      - name: Run unit tests
-        run: task test:unit
+      - name: Run Go tests (safe broad scope)
+        run: task test:go:safe
 
       - name: Verify committed combined coverage report
         run: task quality:coverage:report:verify:committed
