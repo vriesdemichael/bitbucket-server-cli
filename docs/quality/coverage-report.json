@@ -1,40 +1,40 @@
 {
   "version": 2,
   "coverage": {
-    "unit_raw_percent": 4.776061211560018,
-    "unit_scoped_percent": 88.24853669518235,
-    "live_raw_percent": 8.858780614903596,
-    "live_scoped_percent": 66.54360867558837,
-    "combined_raw_percent": 10.017544714654711,
-    "combined_scoped_percent": 89.28410625844214,
-    "patch_percent": 100,
+    "unit_raw_percent": 6.874970366507041,
+    "unit_scoped_percent": 86.30952380952381,
+    "live_raw_percent": 9.085863217336744,
+    "live_scoped_percent": 49.516031457955236,
+    "combined_raw_percent": 11.974301834905884,
+    "combined_scoped_percent": 86.99404761904762,
+    "patch_percent": 92.85714285714286,
     "unit_statements": {
-      "covered": 1960,
-      "total": 41038
+      "covered": 2900,
+      "total": 42182
     },
     "live_statements": {
-      "covered": 3570,
-      "total": 40299
+      "covered": 3765,
+      "total": 41438
     },
     "combined_statements": {
-      "covered": 4111,
-      "total": 41038
+      "covered": 5051,
+      "total": 42182
     },
     "unit_scoped_statements": {
-      "covered": 1960,
-      "total": 2221
+      "covered": 2900,
+      "total": 3360
     },
     "live_scoped_statements": {
-      "covered": 1442,
-      "total": 2167
+      "covered": 1637,
+      "total": 3306
     },
     "combined_scoped_statements": {
-      "covered": 1983,
-      "total": 2221
+      "covered": 2923,
+      "total": 3360
     },
     "patch_lines": {
-      "covered": 0,
-      "total": 0
+      "covered": 819,
+      "total": 882
     },
     "scope": {
       "include_prefixes": [
@@ -48,40 +48,50 @@
     }
   },
   "generated_contracts": {
-    "coverage_percent": 100,
+    "coverage_percent": 80.3921568627451,
     "used_operations": [
       "AddAnnotationsWithResponse",
       "AddBuildStatusWithResponse",
+      "CreateBranchWithResponse",
       "CreateComment2WithResponse",
       "CreateCommentWithResponse",
       "CreateRequiredBuildsMergeCheckWithBodyWithResponse",
+      "CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse",
       "CreateTagForRepositoryWithResponse",
       "CreateWebhook1WithResponse",
       "DeleteACodeInsightsReportWithResponse",
       "DeleteAnnotationsWithResponse",
+      "DeleteBranchWithResponse",
       "DeleteComment2WithResponse",
       "DeleteCommentWithResponse",
       "DeleteRequiredBuildsMergeCheckWithResponse",
+      "DeleteRestriction1WithResponse",
       "DeleteTagWithResponse",
       "DeleteWebhook1WithResponse",
+      "FindByCommitWithResponse",
       "FindWebhooks1WithResponse",
       "GetACodeInsightsReportWithResponse",
       "GetAnnotationsWithResponse",
+      "GetBranchesWithResponse",
       "GetBuildStatusStatsWithResponse",
       "GetBuildStatusWithResponse",
       "GetComment2WithResponse",
       "GetCommentWithResponse",
       "GetComments2WithResponse",
       "GetCommentsWithResponse",
+      "GetDefaultBranch2WithResponse",
       "GetDiffStatsSummary1WithResponse",
       "GetDiffStatsSummary2WithResponse",
       "GetPageOfRequiredBuildsMergeChecksWithResponse",
       "GetPullRequestSettings1",
       "GetReportsWithResponse",
+      "GetRestriction1WithResponse",
+      "GetRestrictions1WithResponse",
       "GetTagWithResponse",
       "GetTagsWithResponse",
       "GetUsersWithAnyPermission2WithResponse",
       "SetACodeInsightsReportWithResponse",
+      "SetDefaultBranch2WithResponse",
       "SetPermissionForUserWithResponse",
       "StreamPatch1WithResponse",
       "StreamPatchWithResponse",
@@ -135,6 +145,17 @@
       "UpdatePullRequestSettings1WithBody",
       "UpdateRequiredBuildsMergeCheckWithBodyWithResponse"
     ],
-    "unmapped_operations": []
+    "unmapped_operations": [
+      "CreateBranchWithResponse",
+      "CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse",
+      "DeleteBranchWithResponse",
+      "DeleteRestriction1WithResponse",
+      "FindByCommitWithResponse",
+      "GetBranchesWithResponse",
+      "GetDefaultBranch2WithResponse",
+      "GetRestriction1WithResponse",
+      "GetRestrictions1WithResponse",
+      "SetDefaultBranch2WithResponse"
+    ]
   }
 }
