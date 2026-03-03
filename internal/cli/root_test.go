@@ -50,6 +50,126 @@ func TestAuthStatusSmoke(t *testing.T) {
 		t.Fatalf("expected auth source in output, got: %s", buffer.String())
 	}
 }
+func TestBranchValidationErrors(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name         string
+		args         []string
+		expectAppErr bool
+	}{
+		{name: "branch create missing start-point", args: []string{"branch", "create", "feature/demo"}, expectAppErr: false},
+		{name: "branch restriction create missing matcher-id", args: []string{"branch", "restriction", "create", "--type", "read-only"}, expectAppErr: false},
+		{name: "branch restriction list invalid matcher-type", args: []string{"branch", "restriction", "list", "--matcher-type", "invalid"}, expectAppErr: true},
+		{name: "branch restriction update invalid id", args: []string{"branch", "restriction", "update", "bad", "--type", "read-only", "--matcher-id", "refs/heads/main"}, expectAppErr: true},
+		{name: "branch default set blank", args: []string{"branch", "default", "set", " "}, expectAppErr: true},
+		{name: "branch model update blank", args: []string{"branch", "model", "update", " "}, expectAppErr: true},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			command.SetOut(&bytes.Buffer{})
+			command.SetErr(&bytes.Buffer{})
+			command.SetArgs(testCase.args)
+
+			err := command.Execute()
+			if err == nil {
+				t.Fatalf("expected validation error for args: %v", testCase.args)
+			}
+			if testCase.expectAppErr && apperrors.ExitCode(err) != 2 {
+				t.Fatalf("expected validation exit code 2, got %d (%v)", apperrors.ExitCode(err), err)
+			}
+		})
+	}
+}
+
+func TestBranchCommandsFailOnInvalidRepositorySelector(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "http://example.local")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "list invalid repo selector", args: []string{"branch", "list", "--repo", "bad"}},
+		{name: "create invalid repo selector", args: []string{"branch", "create", "feature/demo", "--start-point", "abc", "--repo", "bad"}},
+		{name: "delete invalid repo selector", args: []string{"branch", "delete", "feature/demo", "--repo", "bad"}},
+		{name: "default get invalid repo selector", args: []string{"branch", "default", "get", "--repo", "bad"}},
+		{name: "default set invalid repo selector", args: []string{"branch", "default", "set", "main", "--repo", "bad"}},
+		{name: "model inspect invalid repo selector", args: []string{"branch", "model", "inspect", "abc", "--repo", "bad"}},
+		{name: "model update invalid repo selector", args: []string{"branch", "model", "update", "main", "--repo", "bad"}},
+		{name: "restriction list invalid repo selector", args: []string{"branch", "restriction", "list", "--repo", "bad"}},
+		{name: "restriction get invalid repo selector", args: []string{"branch", "restriction", "get", "12", "--repo", "bad"}},
+		{name: "restriction create invalid repo selector", args: []string{"branch", "restriction", "create", "--type", "read-only", "--matcher-id", "refs/heads/main", "--repo", "bad"}},
+		{name: "restriction update invalid repo selector", args: []string{"branch", "restriction", "update", "12", "--type", "read-only", "--matcher-id", "refs/heads/main", "--repo", "bad"}},
+		{name: "restriction delete invalid repo selector", args: []string{"branch", "restriction", "delete", "12", "--repo", "bad"}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			command.SetOut(&bytes.Buffer{})
+			command.SetErr(&bytes.Buffer{})
+			command.SetArgs(testCase.args)
+
+			err := command.Execute()
+			if err == nil {
+				t.Fatalf("expected repository validation error for args: %v", testCase.args)
+			}
+			if apperrors.ExitCode(err) != 2 {
+				t.Fatalf("expected validation exit code 2 for args %v, got %d (%v)", testCase.args, apperrors.ExitCode(err), err)
+			}
+		})
+	}
+}
+
+func TestBranchCommandsFailOnInvalidConfig(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "://bad-url")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "list invalid config", args: []string{"branch", "list"}},
+		{name: "create invalid config", args: []string{"branch", "create", "feature/demo", "--start-point", "abc"}},
+		{name: "delete invalid config", args: []string{"branch", "delete", "feature/demo"}},
+		{name: "default get invalid config", args: []string{"branch", "default", "get"}},
+		{name: "default set invalid config", args: []string{"branch", "default", "set", "main"}},
+		{name: "model inspect invalid config", args: []string{"branch", "model", "inspect", "abc"}},
+		{name: "model update invalid config", args: []string{"branch", "model", "update", "main"}},
+		{name: "restriction list invalid config", args: []string{"branch", "restriction", "list"}},
+		{name: "restriction get invalid config", args: []string{"branch", "restriction", "get", "12"}},
+		{name: "restriction create invalid config", args: []string{"branch", "restriction", "create", "--type", "read-only", "--matcher-id", "refs/heads/main"}},
+		{name: "restriction update invalid config", args: []string{"branch", "restriction", "update", "12", "--type", "read-only", "--matcher-id", "refs/heads/main"}},
+		{name: "restriction delete invalid config", args: []string{"branch", "restriction", "delete", "12"}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			command.SetOut(&bytes.Buffer{})
+			command.SetErr(&bytes.Buffer{})
+			command.SetArgs(testCase.args)
+
+			err := command.Execute()
+			if err == nil {
+				t.Fatalf("expected config validation error for args: %v", testCase.args)
+			}
+			if apperrors.ExitCode(err) != 2 {
+				t.Fatalf("expected validation exit code 2 for args %v, got %d (%v)", testCase.args, apperrors.ExitCode(err), err)
+			}
+		})
+	}
+}
 
 func TestTagCreateJSON(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
@@ -905,6 +1025,92 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 	}
 }
 
+func TestPRExtendedLifecycleReviewerAndTaskCommands(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/decline":
+			if request.URL.Query().Get("version") != "1" {
+				writer.WriteHeader(http.StatusConflict)
+				_, _ = writer.Write([]byte("expected version query"))
+				return
+			}
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"DECLINED","open":false,"closed":true}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/reopen":
+			if request.URL.Query().Get("version") != "1" {
+				writer.WriteHeader(http.StatusConflict)
+				_, _ = writer.Write([]byte("expected version query"))
+				return
+			}
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/approve":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false}`))
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/participants/reviewer2":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/participants/reviewer2":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/tasks":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":701,"text":"Task B","state":"OPEN","resolved":false}`))
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/tasks/700":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":700,"text":"Task A+","state":"RESOLVED","resolved":true}`))
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/tasks/700":
+			if request.URL.Query().Get("version") != "2" {
+				writer.WriteHeader(http.StatusConflict)
+				_, _ = writer.Write([]byte("expected version query"))
+				return
+			}
+			writer.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	testCases := []struct {
+		name          string
+		args          []string
+		expectSnippet string
+	}{
+		{name: "pr decline", args: []string{"pr", "decline", "30", "--version", "1"}, expectSnippet: "Declined pull request #30"},
+		{name: "pr reopen", args: []string{"pr", "reopen", "30", "--version", "1"}, expectSnippet: "Reopened pull request #30"},
+		{name: "pr review unapprove", args: []string{"pr", "review", "unapprove", "30"}, expectSnippet: "Removed approval for pull request #30"},
+		{name: "pr reviewer add", args: []string{"pr", "review", "reviewer", "add", "30", "--user", "reviewer2"}, expectSnippet: "Added reviewer reviewer2"},
+		{name: "pr reviewer remove", args: []string{"pr", "review", "reviewer", "remove", "30", "--user", "reviewer2"}, expectSnippet: "Removed reviewer reviewer2"},
+		{name: "pr task create", args: []string{"pr", "task", "create", "30", "--text", "Task B"}, expectSnippet: "Created task 701"},
+		{name: "pr task update", args: []string{"pr", "task", "update", "30", "--task", "700", "--text", "Task A+", "--resolved=true", "--version", "2"}, expectSnippet: "Updated task 700"},
+		{name: "pr task delete json", args: []string{"--json", "pr", "task", "delete", "30", "--task", "700", "--version", "2"}, expectSnippet: `"status": "ok"`},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			output := &bytes.Buffer{}
+			command.SetOut(output)
+			command.SetErr(output)
+			command.SetArgs(testCase.args)
+
+			if err := command.Execute(); err != nil {
+				t.Fatalf("expected command to succeed, got: %v (output: %s)", err, output.String())
+			}
+
+			if !strings.Contains(output.String(), testCase.expectSnippet) {
+				t.Fatalf("expected output to contain %q, got: %s", testCase.expectSnippet, output.String())
+			}
+		})
+	}
+}
+
 func TestResolveRepositorySelector(t *testing.T) {
 	t.Run("uses env fallback", func(t *testing.T) {
 		t.Setenv("BITBUCKET_REPO_SLUG", "demo")
@@ -1270,8 +1476,11 @@ func TestBranchCommandPaths(t *testing.T) {
 			_, _ = writer.Write([]byte(`{"values":[{"displayId":"main","id":"refs/heads/main"}],"isLastPage":true}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
-			_, _ = writer.Write([]byte(`{"values":[{"id":12,"type":"read-only"}],"isLastPage":true}`))
+			_, _ = writer.Write([]byte(`{"values":[{"id":12,"type":"read-only","matcher":{"id":"refs/heads/main"},"users":[{"name":"alice"}],"groups":["devs"]}],"isLastPage":true}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":12,"type":"read-only"}`))
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions/12":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"id":12,"type":"read-only"}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions/12":
@@ -1295,11 +1504,18 @@ func TestBranchCommandPaths(t *testing.T) {
 		want string
 	}{
 		{name: "branch list", args: []string{"branch", "list"}, want: "main"},
+		{name: "branch list with details", args: []string{"branch", "list", "--details"}, want: "main"},
 		{name: "branch create", args: []string{"branch", "create", "feature/demo", "--start-point", "abc"}, want: "Created branch"},
 		{name: "branch delete", args: []string{"branch", "delete", "feature/demo"}, want: "Deleted branch"},
 		{name: "branch default get", args: []string{"branch", "default", "get"}, want: "refs/heads/main"},
+		{name: "branch default set", args: []string{"branch", "default", "set", "develop"}, want: "Default branch set to develop"},
 		{name: "branch model inspect", args: []string{"branch", "model", "inspect", "abc"}, want: "refs/heads/main"},
+		{name: "branch model update", args: []string{"branch", "model", "update", "develop"}, want: "Branch model default updated to develop"},
 		{name: "branch restriction list", args: []string{"branch", "restriction", "list"}, want: "read-only"},
+		{name: "branch restriction list filtered", args: []string{"branch", "restriction", "list", "--type", "read-only", "--matcher-type", "BRANCH", "--matcher-id", "refs/heads/main"}, want: "users=1"},
+		{name: "branch restriction get", args: []string{"branch", "restriction", "get", "12"}, want: "id=12"},
+		{name: "branch restriction update", args: []string{"branch", "restriction", "update", "12", "--type", "read-only", "--matcher-id", "refs/heads/main"}, want: "Updated restriction 12"},
+		{name: "branch restriction delete", args: []string{"branch", "restriction", "delete", "12"}, want: "Deleted restriction 12"},
 	}
 
 	for _, testCase := range tests {
@@ -1327,6 +1543,163 @@ func TestBranchCommandPaths(t *testing.T) {
 	}
 	if !strings.Contains(jsonBuffer.String(), `"id": 12`) {
 		t.Fatalf("expected restriction id in json output, got: %s", jsonBuffer.String())
+	}
+
+	jsonDeleteDryRunCommand := NewRootCommand()
+	jsonDeleteDryRunBuffer := &bytes.Buffer{}
+	jsonDeleteDryRunCommand.SetOut(jsonDeleteDryRunBuffer)
+	jsonDeleteDryRunCommand.SetErr(jsonDeleteDryRunBuffer)
+	jsonDeleteDryRunCommand.SetArgs([]string{"--json", "branch", "delete", "feature/demo", "--dry-run"})
+	if err := jsonDeleteDryRunCommand.Execute(); err != nil {
+		t.Fatalf("branch delete dry-run json failed: %v", err)
+	}
+	if !strings.Contains(jsonDeleteDryRunBuffer.String(), `"dry_run": true`) {
+		t.Fatalf("expected dry_run flag in output, got: %s", jsonDeleteDryRunBuffer.String())
+	}
+
+	jsonDefaultSetCommand := NewRootCommand()
+	jsonDefaultSetBuffer := &bytes.Buffer{}
+	jsonDefaultSetCommand.SetOut(jsonDefaultSetBuffer)
+	jsonDefaultSetCommand.SetErr(jsonDefaultSetBuffer)
+	jsonDefaultSetCommand.SetArgs([]string{"--json", "branch", "default", "set", "develop"})
+	if err := jsonDefaultSetCommand.Execute(); err != nil {
+		t.Fatalf("branch default set json failed: %v", err)
+	}
+	if !strings.Contains(jsonDefaultSetBuffer.String(), `"status": "ok"`) {
+		t.Fatalf("expected status ok in output, got: %s", jsonDefaultSetBuffer.String())
+	}
+
+	jsonModelUpdateCommand := NewRootCommand()
+	jsonModelUpdateBuffer := &bytes.Buffer{}
+	jsonModelUpdateCommand.SetOut(jsonModelUpdateBuffer)
+	jsonModelUpdateCommand.SetErr(jsonModelUpdateBuffer)
+	jsonModelUpdateCommand.SetArgs([]string{"--json", "branch", "model", "update", "develop"})
+	if err := jsonModelUpdateCommand.Execute(); err != nil {
+		t.Fatalf("branch model update json failed: %v", err)
+	}
+	if !strings.Contains(jsonModelUpdateBuffer.String(), `"status": "ok"`) {
+		t.Fatalf("expected status ok in model update output, got: %s", jsonModelUpdateBuffer.String())
+	}
+
+	jsonRestrictionGetCommand := NewRootCommand()
+	jsonRestrictionGetBuffer := &bytes.Buffer{}
+	jsonRestrictionGetCommand.SetOut(jsonRestrictionGetBuffer)
+	jsonRestrictionGetCommand.SetErr(jsonRestrictionGetBuffer)
+	jsonRestrictionGetCommand.SetArgs([]string{"--json", "branch", "restriction", "get", "12"})
+	if err := jsonRestrictionGetCommand.Execute(); err != nil {
+		t.Fatalf("branch restriction get json failed: %v", err)
+	}
+	if !strings.Contains(jsonRestrictionGetBuffer.String(), `"restriction"`) {
+		t.Fatalf("expected restriction payload in output, got: %s", jsonRestrictionGetBuffer.String())
+	}
+
+	jsonRestrictionUpdateCommand := NewRootCommand()
+	jsonRestrictionUpdateBuffer := &bytes.Buffer{}
+	jsonRestrictionUpdateCommand.SetOut(jsonRestrictionUpdateBuffer)
+	jsonRestrictionUpdateCommand.SetErr(jsonRestrictionUpdateBuffer)
+	jsonRestrictionUpdateCommand.SetArgs([]string{"--json", "branch", "restriction", "update", "12", "--type", "read-only", "--matcher-id", "refs/heads/main"})
+	if err := jsonRestrictionUpdateCommand.Execute(); err != nil {
+		t.Fatalf("branch restriction update json failed: %v", err)
+	}
+	if !strings.Contains(jsonRestrictionUpdateBuffer.String(), `"id": 12`) {
+		t.Fatalf("expected restriction id in update output, got: %s", jsonRestrictionUpdateBuffer.String())
+	}
+
+	jsonRestrictionDeleteCommand := NewRootCommand()
+	jsonRestrictionDeleteBuffer := &bytes.Buffer{}
+	jsonRestrictionDeleteCommand.SetOut(jsonRestrictionDeleteBuffer)
+	jsonRestrictionDeleteCommand.SetErr(jsonRestrictionDeleteBuffer)
+	jsonRestrictionDeleteCommand.SetArgs([]string{"--json", "branch", "restriction", "delete", "12"})
+	if err := jsonRestrictionDeleteCommand.Execute(); err != nil {
+		t.Fatalf("branch restriction delete json failed: %v", err)
+	}
+	if !strings.Contains(jsonRestrictionDeleteBuffer.String(), `"restriction_id": "12"`) {
+		t.Fatalf("expected restriction_id in delete output, got: %s", jsonRestrictionDeleteBuffer.String())
+	}
+
+	jsonRestrictionCreateWithAccessKeyCommand := NewRootCommand()
+	jsonRestrictionCreateWithAccessKeyBuffer := &bytes.Buffer{}
+	jsonRestrictionCreateWithAccessKeyCommand.SetOut(jsonRestrictionCreateWithAccessKeyBuffer)
+	jsonRestrictionCreateWithAccessKeyCommand.SetErr(jsonRestrictionCreateWithAccessKeyBuffer)
+	jsonRestrictionCreateWithAccessKeyCommand.SetArgs([]string{"--json", "branch", "restriction", "create", "--type", "read-only", "--matcher-id", "refs/heads/main", "--user", "alice", "--group", "devs", "--access-key-id", "7"})
+	if err := jsonRestrictionCreateWithAccessKeyCommand.Execute(); err != nil {
+		t.Fatalf("branch restriction create with access key json failed: %v", err)
+	}
+	if !strings.Contains(jsonRestrictionCreateWithAccessKeyBuffer.String(), `"id": 12`) {
+		t.Fatalf("expected restriction id in create with access key output, got: %s", jsonRestrictionCreateWithAccessKeyBuffer.String())
+	}
+
+	jsonRestrictionUpdateWithAccessKeyCommand := NewRootCommand()
+	jsonRestrictionUpdateWithAccessKeyBuffer := &bytes.Buffer{}
+	jsonRestrictionUpdateWithAccessKeyCommand.SetOut(jsonRestrictionUpdateWithAccessKeyBuffer)
+	jsonRestrictionUpdateWithAccessKeyCommand.SetErr(jsonRestrictionUpdateWithAccessKeyBuffer)
+	jsonRestrictionUpdateWithAccessKeyCommand.SetArgs([]string{"--json", "branch", "restriction", "update", "12", "--type", "read-only", "--matcher-id", "refs/heads/main", "--user", "alice", "--group", "devs", "--access-key-id", "7"})
+	if err := jsonRestrictionUpdateWithAccessKeyCommand.Execute(); err != nil {
+		t.Fatalf("branch restriction update with access key json failed: %v", err)
+	}
+	if !strings.Contains(jsonRestrictionUpdateWithAccessKeyBuffer.String(), `"id": 12`) {
+		t.Fatalf("expected restriction id in update with access key output, got: %s", jsonRestrictionUpdateWithAccessKeyBuffer.String())
+	}
+}
+
+func TestSafeUsersHelper(t *testing.T) {
+	if len(safeUsers(nil)) != 0 {
+		t.Fatal("expected safeUsers(nil) to return empty slice")
+	}
+
+	name := "alice"
+	users := []openapigenerated.RestApplicationUser{{Name: &name}}
+	if len(safeUsers(&users)) != 1 {
+		t.Fatal("expected safeUsers to return provided users")
+	}
+}
+
+func TestBranchCommandEmptyResultsOutput(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/branches":
+			_, _ = writer.Write([]byte(`{"values":[],"isLastPage":true}`))
+		case request.Method == http.MethodGet && strings.HasPrefix(request.URL.Path, "/rest/branch-utils/latest/projects/TEST/repos/demo/branches/info/"):
+			_, _ = writer.Write([]byte(`{"values":[],"isLastPage":true}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions":
+			_, _ = writer.Write([]byte(`{"values":[],"isLastPage":true}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name          string
+		args          []string
+		expectSnippet string
+	}{
+		{name: "branch list empty", args: []string{"branch", "list"}, expectSnippet: "No branches found"},
+		{name: "branch model inspect empty", args: []string{"branch", "model", "inspect", "abc"}, expectSnippet: "No matching refs found"},
+		{name: "branch restriction list empty", args: []string{"branch", "restriction", "list"}, expectSnippet: "No restrictions found"},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			buffer := &bytes.Buffer{}
+			command.SetOut(buffer)
+			command.SetErr(buffer)
+			command.SetArgs(testCase.args)
+
+			if err := command.Execute(); err != nil {
+				t.Fatalf("command failed: %v", err)
+			}
+			if !strings.Contains(buffer.String(), testCase.expectSnippet) {
+				t.Fatalf("expected output to contain %q, got: %s", testCase.expectSnippet, buffer.String())
+			}
+		})
 	}
 }
 
@@ -2138,6 +2511,54 @@ func TestRepoSettingsJSONCommandPaths(t *testing.T) {
 			}
 			if !strings.Contains(buffer.String(), testCase.expectSnippet) {
 				t.Fatalf("expected output to contain %q, got: %s", testCase.expectSnippet, buffer.String())
+			}
+		})
+	}
+}
+
+func TestBranchCommandsPropagateServiceErrors(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusNotFound)
+		_, _ = writer.Write([]byte("missing"))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{name: "branch list", args: []string{"branch", "list"}},
+		{name: "branch create", args: []string{"branch", "create", "feature/demo", "--start-point", "abc"}},
+		{name: "branch delete", args: []string{"branch", "delete", "feature/demo"}},
+		{name: "branch default get", args: []string{"branch", "default", "get"}},
+		{name: "branch default set", args: []string{"branch", "default", "set", "main"}},
+		{name: "branch model inspect", args: []string{"branch", "model", "inspect", "abc"}},
+		{name: "branch model update", args: []string{"branch", "model", "update", "main"}},
+		{name: "branch restriction list", args: []string{"branch", "restriction", "list"}},
+		{name: "branch restriction get", args: []string{"branch", "restriction", "get", "12"}},
+		{name: "branch restriction create", args: []string{"branch", "restriction", "create", "--type", "read-only", "--matcher-id", "refs/heads/main"}},
+		{name: "branch restriction update", args: []string{"branch", "restriction", "update", "12", "--type", "read-only", "--matcher-id", "refs/heads/main"}},
+		{name: "branch restriction delete", args: []string{"branch", "restriction", "delete", "12"}},
+	}
+
+	for _, testCase := range tests {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			command.SetOut(&bytes.Buffer{})
+			command.SetErr(&bytes.Buffer{})
+			command.SetArgs(testCase.args)
+
+			err := command.Execute()
+			if err == nil {
+				t.Fatalf("expected not found error for args: %v", testCase.args)
+			}
+			if apperrors.ExitCode(err) != 4 {
+				t.Fatalf("expected exit code 4 for args %v, got %d (%v)", testCase.args, apperrors.ExitCode(err), err)
 			}
 		})
 	}
