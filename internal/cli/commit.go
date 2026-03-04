@@ -226,7 +226,6 @@ func newRefCommand(options *rootOptions) *cobra.Command {
 			}
 
 			// Find exact match
-			var matched *commitservice.RepositoryRef // dummy use, using openapigenerated models
 			var foundRef map[string]any
 
 			for _, ref := range refs {
@@ -246,7 +245,6 @@ func newRefCommand(options *rootOptions) *cobra.Command {
 				err := apperrors.New(apperrors.KindNotFound, fmt.Sprintf("ref not found: %s", args[0]), nil)
 				return err
 			}
-			_ = matched // keep compiler happy
 
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "ref": foundRef})

@@ -206,11 +206,15 @@ func newRepoBrowseCommand(options *rootOptions) *cobra.Command {
 					Text string `json:"text"`
 				} `json:"lines"`
 			}
-			// basic attempt, if parsing fails just print raw JSON
 			if err := json.Unmarshal(content, &parsed); err == nil {
-				// The schema is complex, printing the raw json for standard text is tricky for blame without the full schema.
-				// We'll just print json.
-				return writeJSON(cmd.OutOrStdout(), parsed) // or map generic parsed
+				author := "unknown"
+				if name, ok := parsed.Blame.Author["name"]; ok {
+					author = name
+				}
+				for _, line := range parsed.Lines {
+					fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", author, line.Text)
+				}
+				return nil
 			}
 
 			_, _ = cmd.OutOrStdout().Write(content)
