@@ -416,6 +416,9 @@ func (service *Service) UpdateRepositoryPullRequestRequiredAllTasks(ctx context.
 }
 
 func (service *Service) UpdateRepositoryPullRequestRequiredApproversCount(ctx context.Context, repo RepositoryRef, count int) (map[string]any, error) {
+	if err := validateRepositoryRef(repo); err != nil {
+		return nil, err
+	}
 	if count < 0 {
 		return nil, apperrors.New(apperrors.KindValidation, "required approvers count must be >= 0", nil)
 	}
@@ -435,8 +438,10 @@ func (service *Service) UpdateRepositoryPullRequestRequiredApproversCount(ctx co
 
 	result, err := service.UpdateRepositoryPullRequestSettings(ctx, repo, settings)
 	if err != nil {
-		// If it's a validation error (400), try the legacy integer format
-		if apperrors.IsKind(err, apperrors.KindValidation) {
+		// Only fallback if it's a validation error AND it likely relates to the payload structure.
+		// Our MapStatusError includes the body in the message.
+		if apperrors.IsKind(err, apperrors.KindValidation) &&
+			(strings.Contains(strings.ToLower(err.Error()), "invalid") || strings.Contains(strings.ToLower(err.Error()), "payload")) {
 			return service.UpdateRepositoryPullRequestSettings(ctx, repo, map[string]any{"requiredApprovers": count})
 		}
 		return nil, err

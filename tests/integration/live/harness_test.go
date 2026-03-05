@@ -67,9 +67,8 @@ func (h *liveHarness) seedProjectWithRepositories(ctx context.Context, repositor
 	if repositoryCount < 1 {
 		return seededProject{}, fmt.Errorf("repository count must be >= 1")
 	}
-	// We need at least 2 commits for comparison tests
-	if commitsPerRepository < 2 {
-		commitsPerRepository = 2
+	if commitsPerRepository < 1 {
+		return seededProject{}, fmt.Errorf("commits per repository must be >= 1")
 	}
 
 	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
