@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -17,9 +18,19 @@ import (
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
 )
 
+func init() {
+	// Block external network access during tests by default
+	os.Setenv("BBSC_BLOCK_EXTERNAL_NETWORK", "1")
+}
+
 func TestAuthStatusSmoke(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
-	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
 	t.Setenv("BITBUCKET_VERSION_TARGET", "9.4.16")
 	t.Setenv("BITBUCKET_TOKEN", "")
 	t.Setenv("BITBUCKET_USERNAME", "")
@@ -52,7 +63,12 @@ func TestAuthStatusSmoke(t *testing.T) {
 }
 func TestBranchValidationErrors(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
-	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
 	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
 
