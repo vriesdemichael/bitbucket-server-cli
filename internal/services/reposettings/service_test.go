@@ -488,3 +488,159 @@ func TestRepositorySettingsAdditionalBranches(t *testing.T) {
 		}
 	})
 }
+
+func TestRepositoryServicePermissionsAndChecks(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/api/latest/projects/PRJ/repos/demo/permissions/groups":
+			_, _ = w.Write([]byte(`{"isLastPage":true,"values":[{"group":{"name":"admins"},"permission":"REPO_ADMIN"}]}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/api/latest/projects/PRJ/repos/demo/permissions/groups":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/latest/projects/PRJ/repos/demo/permissions/groups":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodDelete && r.URL.Path == "/api/latest/projects/PRJ/repos/demo/permissions/users":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodGet && r.URL.Path == "/required-builds/latest/projects/PRJ/repos/demo/conditions":
+			_, _ = w.Write([]byte(`{"values":[{"id":1,"buildParentKeys":["plan1"]}]}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, _ := openapigenerated.NewClientWithResponses(server.URL)
+	service := NewService(client)
+	repo := RepositoryRef{ProjectKey: "PRJ", Slug: "demo"}
+
+	groups, err := service.ListRepositoryPermissionGroups(context.Background(), repo, 100)
+	if err != nil || len(groups) != 1 || groups[0].Name != "admins" {
+		t.Fatalf("list groups failed: %v", err)
+	}
+
+	if err := service.GrantRepositoryGroupPermission(context.Background(), repo, "admins", "REPO_WRITE"); err != nil {
+		t.Fatalf("grant group failed: %v", err)
+	}
+
+	if err := service.RevokeRepositoryGroupPermission(context.Background(), repo, "admins"); err != nil {
+		t.Fatalf("revoke group failed: %v", err)
+	}
+
+	if err := service.RevokeRepositoryUserPermission(context.Background(), repo, "alice"); err != nil {
+		t.Fatalf("revoke user failed: %v", err)
+	}
+
+	checks, err := service.ListRequiredBuildsMergeChecks(context.Background(), repo)
+	if err != nil {
+		t.Fatalf("list checks failed: %v", err)
+	}
+	if m, ok := checks.(map[string]any); !ok || len(m["values"].([]any)) != 1 {
+		t.Fatalf("unexpected checks payload: %#v", checks)
+	}
+}
+
+func TestRepositoryServicePermissionsValidationAdditional(t *testing.T) {
+	service := NewService(nil)
+	repo := RepositoryRef{ProjectKey: "P", Slug: "S"}
+	if err := service.GrantRepositoryGroupPermission(context.Background(), RepositoryRef{}, "g", "p"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.GrantRepositoryGroupPermission(context.Background(), repo, "", "p"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeRepositoryGroupPermission(context.Background(), RepositoryRef{}, "g"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeRepositoryGroupPermission(context.Background(), repo, ""); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeRepositoryUserPermission(context.Background(), RepositoryRef{}, "u"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeRepositoryUserPermission(context.Background(), repo, ""); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := service.ListRequiredBuildsMergeChecks(context.Background(), RepositoryRef{}); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestRepositoryServiceAdditionalCoverage(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// Return 200 with empty body to hit !json.Valid branches
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client, _ := openapigenerated.NewClientWithResponses(server.URL)
+	service := NewService(client)
+	repo := RepositoryRef{ProjectKey: "P", Slug: "S"}
+
+	_, _ = service.ListRepositoryWebhooks(context.Background(), repo)
+	_, _ = service.CreateRepositoryWebhook(context.Background(), repo, WebhookCreateInput{Name: "n", URL: "u"})
+}
+
+func TestRepositoryServiceUpdateNilBody(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		// No body
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	client, _ := openapigenerated.NewClientWithResponses(server.URL)
+	service := NewService(client)
+	repo := RepositoryRef{ProjectKey: "P", Slug: "S"}
+
+	_, _ = service.UpdateRepositoryPullRequestSettings(context.Background(), repo, map[string]any{"a": 1})
+}
+
+func TestRepositoryServiceErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	client, _ := openapigenerated.NewClientWithResponses(server.URL)
+	service := NewService(client)
+	repo := RepositoryRef{ProjectKey: "P", Slug: "S"}
+	ctx := context.Background()
+
+	if _, err := service.ListRepositoryPermissionUsers(ctx, repo, 100); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := service.ListRepositoryPermissionGroups(ctx, repo, 100); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.GrantRepositoryUserPermission(ctx, repo, "u", "REPO_READ"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.GrantRepositoryGroupPermission(ctx, repo, "g", "REPO_READ"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeRepositoryUserPermission(ctx, repo, "u"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeRepositoryGroupPermission(ctx, repo, "g"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := service.ListRepositoryWebhooks(ctx, repo); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := service.CreateRepositoryWebhook(ctx, repo, WebhookCreateInput{Name: "n", URL: "u"}); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.DeleteRepositoryWebhook(ctx, repo, "1"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := service.GetRepositoryPullRequestSettings(ctx, repo); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := service.UpdateRepositoryPullRequestSettings(ctx, repo, map[string]any{}); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := service.ListRequiredBuildsMergeChecks(ctx, repo); err == nil {
+		t.Fatal("expected error")
+	}
+}

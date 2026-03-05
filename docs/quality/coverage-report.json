@@ -1,40 +1,40 @@
 {
   "version": 2,
   "coverage": {
-    "unit_raw_percent": 21.34329806852373,
-    "unit_scoped_percent": 86.62254786102577,
-    "live_raw_percent": 1.7463430772502775,
-    "live_scoped_percent": 17.658303464755075,
-    "combined_raw_percent": 8.511181811848308,
-    "combined_scoped_percent": 86.45907053550366,
-    "patch_percent": 86.05877920120572,
+    "unit_raw_percent": 10.229264849850875,
+    "unit_scoped_percent": 88.08076847676925,
+    "live_raw_percent": 1.8805437828574074,
+    "live_scoped_percent": 16.08876560332871,
+    "combined_raw_percent": 10.229264849850875,
+    "combined_scoped_percent": 88.08076847676925,
+    "patch_percent": 85.47445255474453,
     "unit_statements": {
-      "covered": 10995,
-      "total": 51515
+      "covered": 4493,
+      "total": 43923
     },
     "live_statements": {
-      "covered": 2217,
-      "total": 126951
+      "covered": 812,
+      "total": 43179
     },
     "combined_statements": {
-      "covered": 3665,
-      "total": 43061
+      "covered": 4493,
+      "total": 43923
     },
     "unit_scoped_statements": {
-      "covered": 10995,
-      "total": 12693
+      "covered": 4493,
+      "total": 5101
     },
     "live_scoped_statements": {
-      "covered": 2217,
-      "total": 12555
+      "covered": 812,
+      "total": 5047
     },
     "combined_scoped_statements": {
-      "covered": 3665,
-      "total": 4239
+      "covered": 4493,
+      "total": 5101
     },
     "patch_lines": {
-      "covered": 1142,
-      "total": 1327
+      "covered": 1171,
+      "total": 1370
     },
     "scope": {
       "include_prefixes": [
@@ -48,7 +48,7 @@
     }
   },
   "generated_contracts": {
-    "coverage_percent": 61.19402985074627,
+    "coverage_percent": 43.15789473684211,
     "used_operations": [
       "AddAnnotationsWithResponse",
       "AddBuildStatusWithResponse",
@@ -56,6 +56,8 @@
       "CreateComment2WithResponse",
       "CreateCommentWithResponse",
       "CreateProjectWithResponse",
+      "CreatePullRequestCondition1WithResponse",
+      "CreatePullRequestConditionWithResponse",
       "CreateRepositoryWithResponse",
       "CreateRequiredBuildsMergeCheckWithBodyWithResponse",
       "CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse",
@@ -67,11 +69,17 @@
       "DeleteComment2WithResponse",
       "DeleteCommentWithResponse",
       "DeleteProjectWithResponse",
+      "DeletePullRequestCondition1WithResponse",
+      "DeletePullRequestConditionWithResponse",
       "DeleteRepositoryWithResponse",
       "DeleteRequiredBuildsMergeCheckWithResponse",
       "DeleteRestriction1WithResponse",
       "DeleteTagWithResponse",
       "DeleteWebhook1WithResponse",
+      "DisableHook1WithResponse",
+      "DisableHookWithResponse",
+      "EnableHook1WithResponse",
+      "EnableHookWithResponse",
       "FindByCommitWithResponse",
       "FindWebhooks1WithResponse",
       "ForkRepositoryWithResponse",
@@ -90,19 +98,37 @@
       "GetDefaultBranch2WithResponse",
       "GetDiffStatsSummary1WithResponse",
       "GetDiffStatsSummary2WithResponse",
+      "GetGroupsWithAnyPermission1WithResponse",
+      "GetGroupsWithAnyPermission2WithResponse",
       "GetPageOfRequiredBuildsMergeChecksWithResponse",
       "GetProjectWithResponse",
       "GetProjectsWithResponse",
+      "GetPullRequestConditions1WithResponse",
+      "GetPullRequestConditionsWithResponse",
       "GetPullRequestSettings1",
       "GetReportsWithResponse",
+      "GetRepositoryHooks1WithResponse",
+      "GetRepositoryHooksWithResponse",
       "GetRestriction1WithResponse",
       "GetRestrictions1WithResponse",
+      "GetSettings1WithResponse",
+      "GetSettingsWithResponse",
       "GetTagWithResponse",
       "GetTagsWithResponse",
+      "GetUsersWithAnyPermission1WithResponse",
       "GetUsersWithAnyPermission2WithResponse",
+      "RevokePermissionsForGroup1WithResponse",
+      "RevokePermissionsForGroup2WithResponse",
+      "RevokePermissionsForUser1WithResponse",
+      "RevokePermissionsForUser2WithResponse",
       "SetACodeInsightsReportWithResponse",
       "SetDefaultBranch2WithResponse",
+      "SetPermissionForGroupWithResponse",
+      "SetPermissionForGroups1WithResponse",
       "SetPermissionForUserWithResponse",
+      "SetPermissionForUsers1WithResponse",
+      "SetSettings1WithBodyWithResponse",
+      "SetSettingsWithBodyWithResponse",
       "StreamCommitsWithResponse",
       "StreamFiles1WithResponse",
       "StreamFilesWithResponse",
@@ -114,6 +140,8 @@
       "UpdateComment2WithResponse",
       "UpdateCommentWithResponse",
       "UpdateProjectWithResponse",
+      "UpdatePullRequestCondition1WithResponse",
+      "UpdatePullRequestConditionWithResponse",
       "UpdatePullRequestSettings1WithBody",
       "UpdateRepositoryWithResponse",
       "UpdateRequiredBuildsMergeCheckWithBodyWithResponse"
@@ -164,12 +192,20 @@
     "unmapped_operations": [
       "CreateBranchWithResponse",
       "CreateProjectWithResponse",
+      "CreatePullRequestCondition1WithResponse",
+      "CreatePullRequestConditionWithResponse",
       "CreateRepositoryWithResponse",
       "CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse",
       "DeleteBranchWithResponse",
       "DeleteProjectWithResponse",
+      "DeletePullRequestCondition1WithResponse",
+      "DeletePullRequestConditionWithResponse",
       "DeleteRepositoryWithResponse",
       "DeleteRestriction1WithResponse",
+      "DisableHook1WithResponse",
+      "DisableHookWithResponse",
+      "EnableHook1WithResponse",
+      "EnableHookWithResponse",
       "FindByCommitWithResponse",
       "ForkRepositoryWithResponse",
       "GetBranchesWithResponse",
@@ -177,16 +213,36 @@
       "GetCommitsWithResponse",
       "GetContent1WithResponse",
       "GetDefaultBranch2WithResponse",
+      "GetGroupsWithAnyPermission1WithResponse",
+      "GetGroupsWithAnyPermission2WithResponse",
       "GetProjectWithResponse",
       "GetProjectsWithResponse",
+      "GetPullRequestConditions1WithResponse",
+      "GetPullRequestConditionsWithResponse",
+      "GetRepositoryHooks1WithResponse",
+      "GetRepositoryHooksWithResponse",
       "GetRestriction1WithResponse",
       "GetRestrictions1WithResponse",
+      "GetSettings1WithResponse",
+      "GetSettingsWithResponse",
+      "GetUsersWithAnyPermission1WithResponse",
+      "RevokePermissionsForGroup1WithResponse",
+      "RevokePermissionsForGroup2WithResponse",
+      "RevokePermissionsForUser1WithResponse",
+      "RevokePermissionsForUser2WithResponse",
       "SetDefaultBranch2WithResponse",
+      "SetPermissionForGroupWithResponse",
+      "SetPermissionForGroups1WithResponse",
+      "SetPermissionForUsers1WithResponse",
+      "SetSettings1WithBodyWithResponse",
+      "SetSettingsWithBodyWithResponse",
       "StreamCommitsWithResponse",
       "StreamFiles1WithResponse",
       "StreamFilesWithResponse",
       "StreamRawWithResponse",
       "UpdateProjectWithResponse",
+      "UpdatePullRequestCondition1WithResponse",
+      "UpdatePullRequestConditionWithResponse",
       "UpdateRepositoryWithResponse"
     ]
   }

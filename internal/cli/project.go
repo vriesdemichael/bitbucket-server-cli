@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 	projectservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/project"
@@ -175,6 +176,183 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 		},
 	}
 	projectCmd.AddCommand(deleteCmd)
+
+	var projectPermissionsLimit int
+	permissionsCmd := &cobra.Command{Use: "permissions", Short: "Project permissions"}
+
+	permissionsUsersCmd := &cobra.Command{Use: "users", Short: "User permissions"}
+	permissionsUsersListCmd := &cobra.Command{
+		Use:   "list <key>",
+		Short: "List users with project permissions",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			service := projectservice.NewService(client)
+			users, err := service.ListProjectPermissionUsers(cmd.Context(), args[0], projectPermissionsLimit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"users": users})
+			}
+			if len(users) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No users with project permissions found")
+				return nil
+			}
+			for _, user := range users {
+				display := user.Display
+				if strings.TrimSpace(display) == "" {
+					display = user.Name
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", display, user.Permission)
+			}
+
+			return nil
+		},
+	}
+	permissionsUsersListCmd.Flags().IntVar(&projectPermissionsLimit, "limit", 100, "Page size for listing permission users")
+
+	permissionsUsersGrantCmd := &cobra.Command{
+		Use:   "grant <key> <username> <permission>",
+		Short: "Grant a project permission to a user",
+		Args:  cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			service := projectservice.NewService(client)
+			if err := service.GrantProjectUserPermission(cmd.Context(), args[0], args[1], args[2]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "username": args[1], "permission": strings.ToUpper(args[2])})
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to %s for project %s\n", strings.ToUpper(args[2]), args[1], args[0])
+			return nil
+		},
+	}
+
+	permissionsUsersRevokeCmd := &cobra.Command{
+		Use:   "revoke <key> <username>",
+		Short: "Revoke a project permission from a user",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			service := projectservice.NewService(client)
+			if err := service.RevokeProjectUserPermission(cmd.Context(), args[0], args[1]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "username": args[1]})
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Revoked permissions for %s on project %s\n", args[1], args[0])
+			return nil
+		},
+	}
+
+	permissionsUsersCmd.AddCommand(permissionsUsersListCmd)
+	permissionsUsersCmd.AddCommand(permissionsUsersGrantCmd)
+	permissionsUsersCmd.AddCommand(permissionsUsersRevokeCmd)
+	permissionsCmd.AddCommand(permissionsUsersCmd)
+
+	permissionsGroupsCmd := &cobra.Command{Use: "groups", Short: "Group permissions"}
+	permissionsGroupsListCmd := &cobra.Command{
+		Use:   "list <key>",
+		Short: "List groups with project permissions",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			service := projectservice.NewService(client)
+			groups, err := service.ListProjectPermissionGroups(cmd.Context(), args[0], projectPermissionsLimit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"groups": groups})
+			}
+			if len(groups) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No groups with project permissions found")
+				return nil
+			}
+			for _, group := range groups {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", group.Name, group.Permission)
+			}
+
+			return nil
+		},
+	}
+	permissionsGroupsListCmd.Flags().IntVar(&projectPermissionsLimit, "limit", 100, "Page size for listing permission groups")
+
+	permissionsGroupsGrantCmd := &cobra.Command{
+		Use:   "grant <key> <group> <permission>",
+		Short: "Grant a project permission to a group",
+		Args:  cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			service := projectservice.NewService(client)
+			if err := service.GrantProjectGroupPermission(cmd.Context(), args[0], args[1], args[2]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "group": args[1], "permission": strings.ToUpper(args[2])})
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to group %s for project %s\n", strings.ToUpper(args[2]), args[1], args[0])
+			return nil
+		},
+	}
+
+	permissionsGroupsRevokeCmd := &cobra.Command{
+		Use:   "revoke <key> <group>",
+		Short: "Revoke a project permission from a group",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			service := projectservice.NewService(client)
+			if err := service.RevokeProjectGroupPermission(cmd.Context(), args[0], args[1]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "group": args[1]})
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Revoked permissions for group %s on project %s\n", args[1], args[0])
+			return nil
+		},
+	}
+
+	permissionsGroupsCmd.AddCommand(permissionsGroupsListCmd)
+	permissionsGroupsCmd.AddCommand(permissionsGroupsGrantCmd)
+	permissionsGroupsCmd.AddCommand(permissionsGroupsRevokeCmd)
+	permissionsCmd.AddCommand(permissionsGroupsCmd)
+
+	projectCmd.AddCommand(permissionsCmd)
 
 	return projectCmd
 }

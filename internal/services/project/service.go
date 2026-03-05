@@ -26,6 +26,17 @@ type UpdateInput struct {
 	Description string
 }
 
+type PermissionUser struct {
+	Name       string `json:"name"`
+	Display    string `json:"display_name,omitempty"`
+	Permission string `json:"permission,omitempty"`
+}
+
+type PermissionGroup struct {
+	Name       string `json:"name"`
+	Permission string `json:"permission,omitempty"`
+}
+
 type Service struct {
 	client *openapigenerated.ClientWithResponses
 }
@@ -204,5 +215,213 @@ func mapStatusError(status int, body []byte) error {
 			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
 		}
 		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
+	}
+}
+
+func (service *Service) ListProjectPermissionUsers(ctx context.Context, projectKey string, limit int) ([]PermissionUser, error) {
+	if strings.TrimSpace(projectKey) == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "project key is required", nil)
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+
+	start := float32(0)
+	pageLimit := float32(limit)
+	results := make([]PermissionUser, 0)
+
+	for {
+		response, err := service.client.GetUsersWithAnyPermission1WithResponse(ctx, projectKey, &openapigenerated.GetUsersWithAnyPermission1Params{
+			Start: &start,
+			Limit: &pageLimit,
+		})
+		if err != nil {
+			return nil, apperrors.New(apperrors.KindTransient, "failed to list project user permissions", err)
+		}
+		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+			return nil, err
+		}
+		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
+			break
+		}
+
+		for _, value := range *response.ApplicationjsonCharsetUTF8200.Values {
+			entry := PermissionUser{}
+			if value.User != nil {
+				if value.User.Name != nil {
+					entry.Name = *value.User.Name
+				}
+				if value.User.DisplayName != nil {
+					entry.Display = *value.User.DisplayName
+				}
+			}
+			if value.Permission != nil {
+				entry.Permission = string(*value.Permission)
+			}
+			results = append(results, entry)
+		}
+
+		if response.ApplicationjsonCharsetUTF8200.IsLastPage != nil && *response.ApplicationjsonCharsetUTF8200.IsLastPage {
+			break
+		}
+		if response.ApplicationjsonCharsetUTF8200.NextPageStart == nil {
+			break
+		}
+		start = float32(*response.ApplicationjsonCharsetUTF8200.NextPageStart)
+	}
+
+	return results, nil
+}
+
+func (service *Service) GrantProjectUserPermission(ctx context.Context, projectKey string, username string, permission string) error {
+	if strings.TrimSpace(projectKey) == "" {
+		return apperrors.New(apperrors.KindValidation, "project key is required", nil)
+	}
+	trimmedUser := strings.TrimSpace(username)
+	if trimmedUser == "" {
+		return apperrors.New(apperrors.KindValidation, "username is required", nil)
+	}
+
+	normalizedPermission, err := normalizeProjectPermission(permission)
+	if err != nil {
+		return err
+	}
+
+	response, err := service.client.SetPermissionForUsers1WithResponse(ctx, projectKey, &openapigenerated.SetPermissionForUsers1Params{
+		Name:       &trimmedUser,
+		Permission: &normalizedPermission,
+	})
+	if err != nil {
+		return apperrors.New(apperrors.KindTransient, "failed to grant project user permission", err)
+	}
+
+	return mapStatusError(response.StatusCode(), response.Body)
+}
+
+func (service *Service) RevokeProjectUserPermission(ctx context.Context, projectKey string, username string) error {
+	if strings.TrimSpace(projectKey) == "" {
+		return apperrors.New(apperrors.KindValidation, "project key is required", nil)
+	}
+	trimmedUser := strings.TrimSpace(username)
+	if trimmedUser == "" {
+		return apperrors.New(apperrors.KindValidation, "username is required", nil)
+	}
+
+	response, err := service.client.RevokePermissionsForUser1WithResponse(ctx, projectKey, &openapigenerated.RevokePermissionsForUser1Params{
+		Name: &trimmedUser,
+	})
+	if err != nil {
+		return apperrors.New(apperrors.KindTransient, "failed to revoke project user permission", err)
+	}
+
+	return mapStatusError(response.StatusCode(), response.Body)
+}
+
+func (service *Service) ListProjectPermissionGroups(ctx context.Context, projectKey string, limit int) ([]PermissionGroup, error) {
+	if strings.TrimSpace(projectKey) == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "project key is required", nil)
+	}
+	if limit <= 0 {
+		limit = 100
+	}
+
+	start := float32(0)
+	pageLimit := float32(limit)
+	results := make([]PermissionGroup, 0)
+
+	for {
+		response, err := service.client.GetGroupsWithAnyPermission1WithResponse(ctx, projectKey, &openapigenerated.GetGroupsWithAnyPermission1Params{
+			Start: &start,
+			Limit: &pageLimit,
+		})
+		if err != nil {
+			return nil, apperrors.New(apperrors.KindTransient, "failed to list project group permissions", err)
+		}
+		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+			return nil, err
+		}
+		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
+			break
+		}
+
+		for _, value := range *response.ApplicationjsonCharsetUTF8200.Values {
+			entry := PermissionGroup{}
+			if value.Group != nil {
+				if value.Group.Name != nil {
+					entry.Name = *value.Group.Name
+				}
+			}
+			if value.Permission != nil {
+				entry.Permission = string(*value.Permission)
+			}
+			results = append(results, entry)
+		}
+
+		if response.ApplicationjsonCharsetUTF8200.IsLastPage != nil && *response.ApplicationjsonCharsetUTF8200.IsLastPage {
+			break
+		}
+		if response.ApplicationjsonCharsetUTF8200.NextPageStart == nil {
+			break
+		}
+		start = float32(*response.ApplicationjsonCharsetUTF8200.NextPageStart)
+	}
+
+	return results, nil
+}
+
+func (service *Service) GrantProjectGroupPermission(ctx context.Context, projectKey string, group string, permission string) error {
+	if strings.TrimSpace(projectKey) == "" {
+		return apperrors.New(apperrors.KindValidation, "project key is required", nil)
+	}
+	trimmedGroup := strings.TrimSpace(group)
+	if trimmedGroup == "" {
+		return apperrors.New(apperrors.KindValidation, "group name is required", nil)
+	}
+
+	normalizedPermission, err := normalizeProjectPermission(permission)
+	if err != nil {
+		return err
+	}
+
+	response, err := service.client.SetPermissionForGroups1WithResponse(ctx, projectKey, &openapigenerated.SetPermissionForGroups1Params{
+		Name:       &trimmedGroup,
+		Permission: &normalizedPermission,
+	})
+	if err != nil {
+		return apperrors.New(apperrors.KindTransient, "failed to grant project group permission", err)
+	}
+
+	return mapStatusError(response.StatusCode(), response.Body)
+}
+
+func (service *Service) RevokeProjectGroupPermission(ctx context.Context, projectKey string, group string) error {
+	if strings.TrimSpace(projectKey) == "" {
+		return apperrors.New(apperrors.KindValidation, "project key is required", nil)
+	}
+	trimmedGroup := strings.TrimSpace(group)
+	if trimmedGroup == "" {
+		return apperrors.New(apperrors.KindValidation, "group name is required", nil)
+	}
+
+	response, err := service.client.RevokePermissionsForGroup1WithResponse(ctx, projectKey, &openapigenerated.RevokePermissionsForGroup1Params{
+		Name: &trimmedGroup,
+	})
+	if err != nil {
+		return apperrors.New(apperrors.KindTransient, "failed to revoke project group permission", err)
+	}
+
+	return mapStatusError(response.StatusCode(), response.Body)
+}
+
+func normalizeProjectPermission(permission string) (string, error) {
+	switch strings.ToUpper(strings.TrimSpace(permission)) {
+	case "PROJECT_READ":
+		return "PROJECT_READ", nil
+	case "PROJECT_WRITE":
+		return "PROJECT_WRITE", nil
+	case "PROJECT_ADMIN":
+		return "PROJECT_ADMIN", nil
+	default:
+		return "", apperrors.New(apperrors.KindValidation, "permission must be one of PROJECT_READ, PROJECT_WRITE, PROJECT_ADMIN", nil)
 	}
 }

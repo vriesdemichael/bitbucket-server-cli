@@ -2662,3 +2662,92 @@ func TestRepoSettingsCommandsPropagateServiceErrors(t *testing.T) {
 		})
 	}
 }
+
+func TestRepoSettingsPullRequestsMergeChecksList(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/required-builds/latest/projects/TEST/repos/demo/conditions" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`{"values":[{"id":1}]}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetArgs([]string{"--json", "repo", "settings", "pull-requests", "merge-checks", "list"})
+
+	err := command.Execute()
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+
+	if !strings.Contains(buffer.String(), `"merge_checks"`) {
+		t.Fatalf("expected merge_checks in output, got: %s", buffer.String())
+	}
+}
+
+func TestProjectPermissionsUsersList(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/api/latest/projects/PRJ/permissions/users" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`{"values":[{"user":{"name":"alice"},"permission":"PROJECT_ADMIN"}],"isLastPage":true}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetArgs([]string{"--json", "project", "permissions", "users", "list", "PRJ"})
+
+	err := command.Execute()
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+
+	if !strings.Contains(buffer.String(), `"alice"`) {
+		t.Fatalf("expected alice in output, got: %s", buffer.String())
+	}
+}
+
+func TestHookList(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/api/latest/projects/PRJ/settings/hooks" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		_, _ = writer.Write([]byte(`{"values":[{"enabled":true,"details":{"key":"hook1","name":"Hook 1"}}],"isLastPage":true}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetArgs([]string{"--json", "hook", "list", "--project", "PRJ"})
+
+	err := command.Execute()
+	if err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+
+	if !strings.Contains(buffer.String(), `"hook1"`) {
+		t.Fatalf("expected hook1 in output, got: %s", buffer.String())
+	}
+}
