@@ -375,6 +375,7 @@ func TestHookConfigureFileAndStdinCLI(t *testing.T) {
 	}
 
 	// Test stdin
+	command = NewRootCommand()
 	stdinBuffer := bytes.NewBufferString(`{"foo":"bar"}`)
 	command.SetIn(stdinBuffer)
 	command.SetArgs([]string{"--json", "hook", "configure", "h1", "-", "--project", "PRJ"})

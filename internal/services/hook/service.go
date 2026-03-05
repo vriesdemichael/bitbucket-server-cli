@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"strings"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -39,7 +40,7 @@ func (service *Service) ListProjectHooks(ctx context.Context, projectKey string,
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list project hooks", err)
 		}
 		if response.StatusCode() != 200 {
-			return nil, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+			return nil, openapi.MapStatusError(response.StatusCode(), response.Body)
 		}
 
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -81,7 +82,7 @@ func (service *Service) ListRepositoryHooks(ctx context.Context, projectKey, rep
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list repository hooks", err)
 		}
 		if response.StatusCode() != 200 {
-			return nil, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+			return nil, openapi.MapStatusError(response.StatusCode(), response.Body)
 		}
 
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -111,7 +112,7 @@ func (service *Service) EnableProjectHook(ctx context.Context, projectKey, hookK
 		return openapigenerated.RestRepositoryHook{}, apperrors.New(apperrors.KindTransient, "failed to enable project hook", err)
 	}
 	if response.StatusCode() != 200 {
-		return openapigenerated.RestRepositoryHook{}, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+		return openapigenerated.RestRepositoryHook{}, openapi.MapStatusError(response.StatusCode(), response.Body)
 	}
 	if response.ApplicationjsonCharsetUTF8200 == nil {
 		return openapigenerated.RestRepositoryHook{}, nil
@@ -128,7 +129,7 @@ func (service *Service) DisableProjectHook(ctx context.Context, projectKey, hook
 		return apperrors.New(apperrors.KindTransient, "failed to disable project hook", err)
 	}
 	if response.StatusCode() != 204 {
-		return apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+		return openapi.MapStatusError(response.StatusCode(), response.Body)
 	}
 	return nil
 }
@@ -142,7 +143,7 @@ func (service *Service) EnableRepositoryHook(ctx context.Context, projectKey, re
 		return openapigenerated.RestRepositoryHook{}, apperrors.New(apperrors.KindTransient, "failed to enable repository hook", err)
 	}
 	if response.StatusCode() != 200 {
-		return openapigenerated.RestRepositoryHook{}, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+		return openapigenerated.RestRepositoryHook{}, openapi.MapStatusError(response.StatusCode(), response.Body)
 	}
 	if response.ApplicationjsonCharsetUTF8200 == nil {
 		return openapigenerated.RestRepositoryHook{}, nil
@@ -159,7 +160,7 @@ func (service *Service) DisableRepositoryHook(ctx context.Context, projectKey, r
 		return apperrors.New(apperrors.KindTransient, "failed to disable repository hook", err)
 	}
 	if response.StatusCode() != 204 {
-		return apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+		return openapi.MapStatusError(response.StatusCode(), response.Body)
 	}
 	return nil
 }
@@ -173,7 +174,7 @@ func (service *Service) GetProjectHookSettings(ctx context.Context, projectKey, 
 		return nil, apperrors.New(apperrors.KindTransient, "failed to get project hook settings", err)
 	}
 	if response.StatusCode() != 200 {
-		return nil, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+		return nil, openapi.MapStatusError(response.StatusCode(), response.Body)
 	}
 
 	var settings any
@@ -192,7 +193,7 @@ func (service *Service) GetRepositoryHookSettings(ctx context.Context, projectKe
 		return nil, apperrors.New(apperrors.KindTransient, "failed to get repository hook settings", err)
 	}
 	if response.StatusCode() != 200 {
-		return nil, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+		return nil, openapi.MapStatusError(response.StatusCode(), response.Body)
 	}
 
 	var settings any
@@ -216,7 +217,7 @@ func (service *Service) SetProjectHookSettings(ctx context.Context, projectKey, 
 		return nil, apperrors.New(apperrors.KindTransient, "failed to set project hook settings", err)
 	}
 	if response.StatusCode() != 200 {
-		return nil, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+		return nil, openapi.MapStatusError(response.StatusCode(), response.Body)
 	}
 
 	var result any
@@ -240,7 +241,7 @@ func (service *Service) SetRepositoryHookSettings(ctx context.Context, projectKe
 		return nil, apperrors.New(apperrors.KindTransient, "failed to set repository hook settings", err)
 	}
 	if response.StatusCode() != 200 {
-		return nil, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+		return nil, openapi.MapStatusError(response.StatusCode(), response.Body)
 	}
 
 	var result any

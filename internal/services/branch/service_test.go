@@ -3,6 +3,7 @@ package branch
 import (
 	"context"
 	"fmt"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -176,10 +177,10 @@ func TestBranchServiceValidationAndHelpers(t *testing.T) {
 		t.Fatal("expected normalizeBranchRef to add refs/heads prefix")
 	}
 
-	if err := mapStatusError(http.StatusCreated, nil); err != nil {
+	if err := openapi.MapStatusError(http.StatusCreated, nil); err != nil {
 		t.Fatalf("expected nil for success status, got %v", err)
 	}
-	err := mapStatusError(http.StatusConflict, []byte("conflict"))
+	err := openapi.MapStatusError(http.StatusConflict, []byte("conflict"))
 	if err == nil || apperrors.ExitCode(err) != 5 {
 		t.Fatalf("expected conflict exit code 5, got %v (%d)", err, apperrors.ExitCode(err))
 	}
@@ -287,7 +288,7 @@ func TestBranchServiceStatusMappingAndNormalizers(t *testing.T) {
 
 	for _, testCase := range statusCases {
 		t.Run(fmt.Sprintf("status_%d", testCase.status), func(t *testing.T) {
-			err := mapStatusError(testCase.status, []byte(testCase.body))
+			err := openapi.MapStatusError(testCase.status, []byte(testCase.body))
 			if err == nil {
 				t.Fatalf("expected mapped error for status %d", testCase.status)
 			}

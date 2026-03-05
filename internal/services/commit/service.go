@@ -2,8 +2,7 @@ package commit
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"strings"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -58,7 +57,7 @@ func (service *Service) List(ctx context.Context, repo RepositoryRef, options Li
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list repository commits", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -94,7 +93,7 @@ func (service *Service) Get(ctx context.Context, repo RepositoryRef, commitID st
 	if err != nil {
 		return openapigenerated.RestCommit{}, apperrors.New(apperrors.KindTransient, "failed to get repository commit", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestCommit{}, err
 	}
 
@@ -137,7 +136,7 @@ func (service *Service) Compare(ctx context.Context, repo RepositoryRef, options
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to compare commits", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 
@@ -179,7 +178,7 @@ func (service *Service) ListTagsAndBranches(ctx context.Context, repo Repository
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to query branches for refs", err)
 	}
-	if err := mapStatusError(branchResp.StatusCode(), branchResp.Body); err != nil {
+	if err := openapi.MapStatusError(branchResp.StatusCode(), branchResp.Body); err != nil {
 		return nil, err
 	}
 	if branchResp.ApplicationjsonCharsetUTF8200 != nil && branchResp.ApplicationjsonCharsetUTF8200.Values != nil {
@@ -204,7 +203,7 @@ func (service *Service) ListTagsAndBranches(ctx context.Context, repo Repository
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to query tags for refs", err)
 	}
-	if err := mapStatusError(tagResp.StatusCode(), tagResp.Body); err != nil {
+	if err := openapi.MapStatusError(tagResp.StatusCode(), tagResp.Body); err != nil {
 		return nil, err
 	}
 	if tagResp.ApplicationjsonCharsetUTF8200 != nil && tagResp.ApplicationjsonCharsetUTF8200.Values != nil {
@@ -230,37 +229,4 @@ func validateRepositoryRef(repo RepositoryRef) error {
 		return apperrors.New(apperrors.KindValidation, "repository must be specified as project/repo", nil)
 	}
 	return nil
-}
-
-func mapStatusError(status int, body []byte) error {
-	if status >= 200 && status < 300 {
-		return nil
-	}
-
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
-	}
 }

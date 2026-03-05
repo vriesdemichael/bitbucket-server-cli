@@ -2,6 +2,7 @@ package comment
 
 import (
 	"context"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -202,7 +203,7 @@ func TestServicePullRequestPaginationAndCRUDFallbacks(t *testing.T) {
 }
 
 func TestCommentMapStatusErrorCoverage(t *testing.T) {
-	if err := mapStatusError(http.StatusOK, nil); err != nil {
+	if err := openapi.MapStatusError(http.StatusOK, nil); err != nil {
 		t.Fatalf("expected nil for success status, got: %v", err)
 	}
 
@@ -221,7 +222,7 @@ func TestCommentMapStatusErrorCoverage(t *testing.T) {
 	}
 
 	for _, testCase := range tests {
-		err := mapStatusError(testCase.status, []byte("boom"))
+		err := openapi.MapStatusError(testCase.status, []byte("boom"))
 		if err == nil {
 			t.Fatalf("expected error for status %d", testCase.status)
 		}

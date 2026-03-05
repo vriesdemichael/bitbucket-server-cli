@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"io"
 	"net/http"
 	"net/url"
@@ -92,7 +93,7 @@ func (service *Service) List(ctx context.Context, repo RepositoryRef, options Li
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list repository branches", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -137,7 +138,7 @@ func (service *Service) Create(ctx context.Context, repo RepositoryRef, name str
 	if err != nil {
 		return openapigenerated.RestBranch{}, apperrors.New(apperrors.KindTransient, "failed to create repository branch", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestBranch{}, err
 	}
 
@@ -176,7 +177,7 @@ func (service *Service) Delete(ctx context.Context, repo RepositoryRef, name str
 		return apperrors.New(apperrors.KindTransient, "failed to delete repository branch", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) GetDefault(ctx context.Context, repo RepositoryRef) (openapigenerated.RestMinimalRef, error) {
@@ -188,7 +189,7 @@ func (service *Service) GetDefault(ctx context.Context, repo RepositoryRef) (ope
 	if err != nil {
 		return openapigenerated.RestMinimalRef{}, apperrors.New(apperrors.KindTransient, "failed to get repository default branch", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestMinimalRef{}, err
 	}
 
@@ -215,7 +216,7 @@ func (service *Service) SetDefault(ctx context.Context, repo RepositoryRef, bran
 		return apperrors.New(apperrors.KindTransient, "failed to set repository default branch", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) FindByCommit(ctx context.Context, repo RepositoryRef, commitID string, limit int) ([]openapigenerated.RestMinimalRef, error) {
@@ -241,7 +242,7 @@ func (service *Service) FindByCommit(ctx context.Context, repo RepositoryRef, co
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to inspect branch model details", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -301,7 +302,7 @@ func (service *Service) ListRestrictions(ctx context.Context, repo RepositoryRef
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list branch restrictions", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -337,7 +338,7 @@ func (service *Service) GetRestriction(ctx context.Context, repo RepositoryRef, 
 	if err != nil {
 		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to get branch restriction", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestRefRestriction{}, err
 	}
 
@@ -429,7 +430,7 @@ func (service *Service) upsertRestriction(ctx context.Context, repo RepositoryRe
 	if err != nil {
 		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to upsert branch restriction", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestRefRestriction{}, err
 	}
 
@@ -481,7 +482,7 @@ func (service *Service) updateRestriction(ctx context.Context, repo RepositoryRe
 		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to read update restriction response", readErr)
 	}
 
-	if err := mapStatusError(response.StatusCode, responseBody); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode, responseBody); err != nil {
 		return openapigenerated.RestRefRestriction{}, err
 	}
 
@@ -512,7 +513,7 @@ func (service *Service) DeleteRestriction(ctx context.Context, repo RepositoryRe
 		return apperrors.New(apperrors.KindTransient, "failed to delete branch restriction", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func validateRepositoryRef(repo RepositoryRef) error {
@@ -614,37 +615,4 @@ func normalizeBranchRef(branch string) string {
 	}
 
 	return "refs/heads/" + trimmed
-}
-
-func mapStatusError(status int, body []byte) error {
-	if status >= 200 && status < 300 {
-		return nil
-	}
-
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
-	}
 }

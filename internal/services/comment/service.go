@@ -2,8 +2,7 @@ package comment
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"strconv"
 	"strings"
 
@@ -77,7 +76,7 @@ func (service *Service) List(ctx context.Context, target Target, path string, li
 			if err != nil {
 				return nil, apperrors.New(apperrors.KindTransient, "failed to list commit comments", err)
 			}
-			if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+			if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 				return nil, err
 			}
 			if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -99,7 +98,7 @@ func (service *Service) List(ctx context.Context, target Target, path string, li
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list pull request comments", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -136,7 +135,7 @@ func (service *Service) Create(ctx context.Context, target Target, text string) 
 		if err != nil {
 			return openapigenerated.RestComment{}, apperrors.New(apperrors.KindTransient, "failed to create commit comment", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return openapigenerated.RestComment{}, err
 		}
 		if response.ApplicationjsonCharsetUTF8201 != nil {
@@ -149,7 +148,7 @@ func (service *Service) Create(ctx context.Context, target Target, text string) 
 	if err != nil {
 		return openapigenerated.RestComment{}, apperrors.New(apperrors.KindTransient, "failed to create pull request comment", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestComment{}, err
 	}
 	if response.ApplicationjsonCharsetUTF8201 != nil {
@@ -190,7 +189,7 @@ func (service *Service) Update(ctx context.Context, target Target, commentID str
 		if err != nil {
 			return openapigenerated.RestComment{}, apperrors.New(apperrors.KindTransient, "failed to update commit comment", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return openapigenerated.RestComment{}, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 != nil {
@@ -203,7 +202,7 @@ func (service *Service) Update(ctx context.Context, target Target, commentID str
 	if err != nil {
 		return openapigenerated.RestComment{}, apperrors.New(apperrors.KindTransient, "failed to update pull request comment", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestComment{}, err
 	}
 	if response.ApplicationjsonCharsetUTF8200 != nil {
@@ -243,7 +242,7 @@ func (service *Service) Delete(ctx context.Context, target Target, commentID str
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to delete commit comment", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		return resolvedVersion, nil
@@ -253,7 +252,7 @@ func (service *Service) Delete(ctx context.Context, target Target, commentID str
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to delete pull request comment", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return nil, err
 	}
 
@@ -275,7 +274,7 @@ func (service *Service) Get(ctx context.Context, target Target, commentID string
 		if err != nil {
 			return openapigenerated.RestComment{}, apperrors.New(apperrors.KindTransient, "failed to get commit comment", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return openapigenerated.RestComment{}, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 != nil {
@@ -288,7 +287,7 @@ func (service *Service) Get(ctx context.Context, target Target, commentID string
 	if err != nil {
 		return openapigenerated.RestComment{}, apperrors.New(apperrors.KindTransient, "failed to get pull request comment", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestComment{}, err
 	}
 	if response.ApplicationjsonCharsetUTF8200 != nil {
@@ -311,37 +310,4 @@ func validateTarget(target Target) error {
 	}
 
 	return nil
-}
-
-func mapStatusError(status int, body []byte) error {
-	if status >= 200 && status < 300 {
-		return nil
-	}
-
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
-	}
 }

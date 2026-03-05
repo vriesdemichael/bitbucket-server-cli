@@ -2,8 +2,7 @@ package repository
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"strings"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -70,7 +69,7 @@ func (service *AdminService) Create(ctx context.Context, projectKey string, inpu
 	if err != nil {
 		return openapigenerated.RestRepository{}, apperrors.New(apperrors.KindTransient, "failed to create repository", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestRepository{}, err
 	}
 
@@ -110,7 +109,7 @@ func (service *AdminService) Fork(ctx context.Context, repo RepositoryRef, input
 	if err != nil {
 		return openapigenerated.RestRepository{}, apperrors.New(apperrors.KindTransient, "failed to fork repository", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestRepository{}, err
 	}
 
@@ -131,7 +130,7 @@ func (service *AdminService) Delete(ctx context.Context, repo RepositoryRef) err
 		return apperrors.New(apperrors.KindTransient, "failed to delete repository", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *AdminService) Update(ctx context.Context, repo RepositoryRef, input UpdateInput) (openapigenerated.RestRepository, error) {
@@ -154,7 +153,7 @@ func (service *AdminService) Update(ctx context.Context, repo RepositoryRef, inp
 	if err != nil {
 		return openapigenerated.RestRepository{}, apperrors.New(apperrors.KindTransient, "failed to update repository", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestRepository{}, err
 	}
 
@@ -170,37 +169,4 @@ func validateRepositoryRef(repo RepositoryRef) error {
 		return apperrors.New(apperrors.KindValidation, "repository must be specified as project/repo", nil)
 	}
 	return nil
-}
-
-func mapStatusError(status int, body []byte) error {
-	if status >= 200 && status < 300 {
-		return nil
-	}
-
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
-	}
 }

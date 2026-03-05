@@ -1,10 +1,8 @@
 package diff
 
 import (
-	"bytes"
 	"context"
-	"fmt"
-	"net/http"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"strings"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -85,7 +83,7 @@ func (service *Service) DiffRefs(ctx context.Context, input DiffRefsInput) (Resu
 		if err != nil {
 			return Result{}, apperrors.New(apperrors.KindTransient, "failed to stream patch", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return Result{}, err
 		}
 		return Result{Patch: string(response.Body)}, nil
@@ -100,7 +98,7 @@ func (service *Service) DiffRefs(ctx context.Context, input DiffRefsInput) (Resu
 		if err != nil {
 			return Result{}, apperrors.New(apperrors.KindTransient, "failed to get diff stats", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return Result{}, err
 		}
 		return Result{Stats: response.ApplicationjsonCharsetUTF8200}, nil
@@ -137,7 +135,7 @@ func (service *Service) DiffPR(ctx context.Context, input DiffPRInput) (Result, 
 		if err != nil {
 			return Result{}, apperrors.New(apperrors.KindTransient, "failed to stream pull request patch", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return Result{}, err
 		}
 		return Result{Patch: string(response.Body)}, nil
@@ -146,7 +144,7 @@ func (service *Service) DiffPR(ctx context.Context, input DiffPRInput) (Result, 
 		if err != nil {
 			return Result{}, apperrors.New(apperrors.KindTransient, "failed to get pull request diff stats", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return Result{}, err
 		}
 		return Result{Stats: response.ApplicationjsonCharsetUTF8200}, nil
@@ -155,7 +153,7 @@ func (service *Service) DiffPR(ctx context.Context, input DiffPRInput) (Result, 
 		if err != nil {
 			return Result{}, apperrors.New(apperrors.KindTransient, "failed to stream pull request diff", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return Result{}, err
 		}
 		diffText := string(response.Body)
@@ -196,7 +194,7 @@ func (service *Service) streamRefRawDiff(ctx context.Context, repo RepositoryRef
 		if err != nil {
 			return "", apperrors.New(apperrors.KindTransient, "failed to stream raw diff", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return "", err
 		}
 		return string(response.Body), nil
@@ -206,7 +204,7 @@ func (service *Service) streamRefRawDiff(ctx context.Context, repo RepositoryRef
 	if err != nil {
 		return "", apperrors.New(apperrors.KindTransient, "failed to stream raw diff for file path", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return "", err
 	}
 
@@ -260,37 +258,4 @@ func extractNamesFromUnifiedDiff(diffText string) []string {
 	}
 
 	return names
-}
-
-func mapStatusError(status int, body []byte) error {
-	if status >= 200 && status < 300 {
-		return nil
-	}
-
-	message := strings.TrimSpace(string(bytes.TrimSpace(body)))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
-	}
 }
