@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -206,5 +207,141 @@ func testMapStatusErrors(t *testing.T) {
 	}
 	if err := mapStatusError(http.StatusTeapot, nil); err == nil || apperrors.ExitCode(err) != 1 {
 		t.Fatalf("expected permanent error")
+	}
+}
+
+func TestProjectServicePermissions(t *testing.T) {
+	service := newProjectTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			_, _ = w.Write([]byte(`{"isLastPage":true,"values":[{"user":{"name":"alice"},"permission":"PROJECT_ADMIN"}]}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/latest/projects/PRJ/permissions/groups":
+			_, _ = w.Write([]byte(`{"isLastPage":true,"values":[{"group":{"name":"admins"},"permission":"PROJECT_ADMIN"}]}`))
+		case r.Method == http.MethodPut && r.URL.Path == "/rest/api/latest/projects/PRJ/permissions/groups":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/latest/projects/PRJ/permissions/groups":
+			w.WriteHeader(http.StatusNoContent)
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	users, err := service.ListProjectPermissionUsers(context.Background(), "PRJ", 100)
+	if err != nil || len(users) != 1 || users[0].Name != "alice" {
+		t.Fatalf("list users failed: %v", err)
+	}
+
+	if err := service.GrantProjectUserPermission(context.Background(), "PRJ", "alice", "PROJECT_WRITE"); err != nil {
+		t.Fatalf("grant user failed: %v", err)
+	}
+
+	if err := service.RevokeProjectUserPermission(context.Background(), "PRJ", "alice"); err != nil {
+		t.Fatalf("revoke user failed: %v", err)
+	}
+
+	groups, err := service.ListProjectPermissionGroups(context.Background(), "PRJ", 100)
+	if err != nil || len(groups) != 1 || groups[0].Name != "admins" {
+		t.Fatalf("list groups failed: %v", err)
+	}
+
+	if err := service.GrantProjectGroupPermission(context.Background(), "PRJ", "admins", "PROJECT_WRITE"); err != nil {
+		t.Fatalf("grant group failed: %v", err)
+	}
+
+	if err := service.RevokeProjectGroupPermission(context.Background(), "PRJ", "admins"); err != nil {
+		t.Fatalf("revoke group failed: %v", err)
+	}
+}
+
+func TestProjectServicePermissionsAdditional(t *testing.T) {
+	var userCount atomic.Int32
+	var groupCount atomic.Int32
+	service := newProjectTestService(t, func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			if userCount.Add(1) == 1 {
+				_, _ = w.Write([]byte(`{"isLastPage":false,"nextPageStart":1,"values":[{"user":{"name":"alice"},"permission":"PROJECT_ADMIN"}]}`))
+			} else {
+				_, _ = w.Write([]byte(`{"isLastPage":true,"values":[]}`))
+			}
+		case r.URL.Path == "/rest/api/latest/projects/PRJ/permissions/groups":
+			if groupCount.Add(1) == 1 {
+				_, _ = w.Write([]byte(`{"isLastPage":false,"nextPageStart":1,"values":[{"group":{"name":"g1"},"permission":"PROJECT_READ"}]}`))
+			} else {
+				_, _ = w.Write([]byte(`{"isLastPage":true,"values":[]}`))
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	})
+
+	// Test pagination branches
+	_, _ = service.ListProjectPermissionUsers(context.Background(), "PRJ", 1)
+	_, _ = service.ListProjectPermissionGroups(context.Background(), "PRJ", 1)
+}
+
+func TestProjectServicePermissionsValidation(t *testing.T) {
+	service := NewService(nil)
+	if err := service.GrantProjectUserPermission(context.Background(), "", "u", "p"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.GrantProjectUserPermission(context.Background(), "P", "", "p"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeProjectUserPermission(context.Background(), "", "u"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeProjectUserPermission(context.Background(), "P", ""); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.GrantProjectGroupPermission(context.Background(), "", "g", "p"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.GrantProjectGroupPermission(context.Background(), "P", "", "p"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeProjectGroupPermission(context.Background(), "", "g"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeProjectGroupPermission(context.Background(), "P", ""); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := normalizeProjectPermission("INVALID"); err == nil {
+		t.Fatal("expected error")
+	}
+}
+
+func TestProjectServicePermissionsMapStatusError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	client, _ := openapigenerated.NewClientWithResponses(server.URL)
+	service := NewService(client)
+
+	if _, err := service.ListProjectPermissionUsers(context.Background(), "PRJ", 1); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.GrantProjectUserPermission(context.Background(), "PRJ", "u", "PROJECT_READ"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeProjectUserPermission(context.Background(), "PRJ", "u"); err == nil {
+		t.Fatal("expected error")
+	}
+	if _, err := service.ListProjectPermissionGroups(context.Background(), "PRJ", 1); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.GrantProjectGroupPermission(context.Background(), "PRJ", "g", "PROJECT_READ"); err == nil {
+		t.Fatal("expected error")
+	}
+	if err := service.RevokeProjectGroupPermission(context.Background(), "PRJ", "g"); err == nil {
+		t.Fatal("expected error")
 	}
 }

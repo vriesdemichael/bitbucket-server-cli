@@ -48,6 +48,8 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newCommitCommand(options))
 	rootCmd.AddCommand(newRefCommand(options))
 	rootCmd.AddCommand(newProjectCommand(options))
+	rootCmd.AddCommand(newReviewerCommand(options))
+	rootCmd.AddCommand(newHookCommand(options))
 
 	return rootCmd
 }
@@ -529,9 +531,137 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
+	permissionsUsersRevokeCmd := &cobra.Command{
+		Use:   "revoke <username>",
+		Short: "Revoke a repository permission from a user",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := reposettings.NewService(client)
+			if err := service.RevokeRepositoryUserPermission(cmd.Context(), repo, args[0]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "username": args[0]})
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Revoked permissions for %s\n", args[0])
+			return nil
+		},
+	}
+
+	permissionsGroupsCmd := &cobra.Command{Use: "groups", Short: "Group permissions"}
+	permissionsGroupsListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List groups with repository permissions",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := reposettings.NewService(client)
+			groups, err := service.ListRepositoryPermissionGroups(cmd.Context(), repo, permissionsLimit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"groups": groups})
+			}
+			if len(groups) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No groups with repository permissions found")
+				return nil
+			}
+			for _, group := range groups {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", group.Name, group.Permission)
+			}
+
+			return nil
+		},
+	}
+	permissionsGroupsListCmd.Flags().IntVar(&permissionsLimit, "limit", 100, "Page size for listing permission groups")
+
+	permissionsGroupsGrantCmd := &cobra.Command{
+		Use:   "grant <group> <permission>",
+		Short: "Grant a repository permission to a group",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := reposettings.NewService(client)
+			if err := service.GrantRepositoryGroupPermission(cmd.Context(), repo, args[0], args[1]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "group": args[0], "permission": strings.ToUpper(args[1])})
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to group %s\n", strings.ToUpper(args[1]), args[0])
+			return nil
+		},
+	}
+
+	permissionsGroupsRevokeCmd := &cobra.Command{
+		Use:   "revoke <group>",
+		Short: "Revoke a repository permission from a group",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := reposettings.NewService(client)
+			if err := service.RevokeRepositoryGroupPermission(cmd.Context(), repo, args[0]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "group": args[0]})
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Revoked permissions for group %s\n", args[0])
+			return nil
+		},
+	}
+
 	permissionsUsersCmd.AddCommand(permissionsUsersListCmd)
 	permissionsUsersCmd.AddCommand(permissionsUsersGrantCmd)
+	permissionsUsersCmd.AddCommand(permissionsUsersRevokeCmd)
 	permissionsCmd.AddCommand(permissionsUsersCmd)
+
+	permissionsGroupsCmd.AddCommand(permissionsGroupsListCmd)
+	permissionsGroupsCmd.AddCommand(permissionsGroupsGrantCmd)
+	permissionsGroupsCmd.AddCommand(permissionsGroupsRevokeCmd)
+	permissionsCmd.AddCommand(permissionsGroupsCmd)
+
 	securityCmd.AddCommand(permissionsCmd)
 	settingsCmd.AddCommand(securityCmd)
 
@@ -681,9 +811,54 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 
 			fmt.Fprintf(cmd.OutOrStdout(), "Required tasks complete: %t\n", requiredTasks)
 			fmt.Fprintf(cmd.OutOrStdout(), "Required approvers: %s\n", requiredApprovals)
+
+			if mergeConfig, ok := settings["mergeConfig"].(map[string]any); ok {
+				if strategies, ok := mergeConfig["strategies"].([]any); ok {
+					fmt.Fprintf(cmd.OutOrStdout(), "Available merge strategies: %d\n", len(strategies))
+					for _, s := range strategies {
+						if sm, ok := s.(map[string]any); ok {
+							enabled := ""
+							if en, ok := sm["enabled"].(bool); ok && en {
+								enabled = "*"
+							}
+							fmt.Fprintf(cmd.OutOrStdout(), "- %s%s (%s)\n", sm["id"], enabled, sm["name"])
+						}
+					}
+				}
+			}
 			return nil
 		},
 	}
+
+	mergeChecksCmd := &cobra.Command{
+		Use:   "merge-checks",
+		Short: "Manage repository merge checks",
+	}
+	mergeChecksListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List configured merge checks",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := reposettings.NewService(client)
+			checks, err := service.ListRequiredBuildsMergeChecks(cmd.Context(), repo)
+			if err != nil {
+				return err
+			}
+
+			return writeJSON(cmd.OutOrStdout(), map[string]any{"merge_checks": checks})
+		},
+	}
+	mergeChecksCmd.AddCommand(mergeChecksListCmd)
+	pullRequestsCmd.AddCommand(mergeChecksCmd)
 	var requiredAllTasksComplete bool
 	var requiredApproversCount int
 	pullRequestsUpdateCmd := &cobra.Command{
@@ -742,6 +917,47 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		},
 	}
 	pullRequestsUpdateApproversCmd.Flags().IntVar(&requiredApproversCount, "count", 2, "Required approvers count (0 disables check)")
+	var mergeStrategyID string
+	pullRequestsSetStrategyCmd := &cobra.Command{
+		Use:   "set-strategy <strategy-id>",
+		Short: "Set default merge strategy",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := reposettings.NewService(client)
+			mergeStrategyID = args[0]
+
+			settings := map[string]any{
+				"mergeConfig": map[string]any{
+					"defaultStrategy": map[string]any{
+						"id": mergeStrategyID,
+					},
+				},
+			}
+
+			updated, err := service.UpdateRepositoryPullRequestSettings(cmd.Context(), repo, settings)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "pull_request_settings": updated})
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Updated default merge strategy to %s\n", mergeStrategyID)
+			return nil
+		},
+	}
+	pullRequestsCmd.AddCommand(pullRequestsSetStrategyCmd)
+
 	pullRequestsCmd.AddCommand(pullRequestsGetCmd)
 	pullRequestsCmd.AddCommand(pullRequestsUpdateCmd)
 	pullRequestsCmd.AddCommand(pullRequestsUpdateApproversCmd)
