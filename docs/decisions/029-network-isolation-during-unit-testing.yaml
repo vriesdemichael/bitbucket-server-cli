@@ -1,0 +1,18 @@
+id: "029"
+title: "Network Isolation during Unit Testing"
+status: "accepted"
+date: "2026-03-05"
+context: |
+  Unit tests should not depend on or attempt to access the external network. Unintended network calls in tests can lead to flaky behavior, slow test suites, and potential security leaks. In some CI environments, these calls result in connection failures that block builds. Previously, some tests defaulted to `localhost:7990` if not explicitly configured, causing failures in environments where no local server was running.
+decision: |
+  We will implement a project-wide network isolation policy for unit tests:
+  1. A `SafeTransport` (implementing `http.RoundTripper`) is introduced in the `internal/transport/network` package.
+  2. By default, `SafeTransport` blocks all outgoing HTTP requests unless the destination is `127.0.0.1`, `localhost`, or `::1`.
+  3. This blocking is enabled when the environment variable `BBSC_BLOCK_EXTERNAL_NETWORK=1` is set.
+  4. All core HTTP clients (including the OpenAPI generated client) must use this transport by default.
+  5. All CLI and transport unit test suites will enable this blocking in an `init()` function to ensure isolation is active by default during developer and CI test runs.
+consequences: |
+  - Unit tests are guaranteed to be isolated from the network.
+  - Any unintended network calls in new tests will result in an immediate and descriptive failure.
+  - Tests using `httptest.Server` will continue to function normally as they use local loopback addresses.
+  - Integration/Live tests (`//go:build live`) must explicitly disable this block if they need to reach a real Bitbucket server, or run in an environment where the variable is not set.

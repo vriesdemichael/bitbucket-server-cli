@@ -13,6 +13,7 @@ import (
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/network"
 )
 
 type Client struct {
@@ -35,7 +36,8 @@ func NewFromConfig(cfg config.AppConfig) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(cfg.BitbucketURL, "/"),
 		http: &http.Client{
-			Timeout: 20 * time.Second,
+			Timeout:   20 * time.Second,
+			Transport: &network.SafeTransport{},
 		},
 		token:    cfg.BitbucketToken,
 		username: cfg.BitbucketUsername,
