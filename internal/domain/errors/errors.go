@@ -45,6 +45,14 @@ func (appError *AppError) Unwrap() error {
 	return appError.Cause
 }
 
+func IsKind(err error, kind Kind) bool {
+	var appError *AppError
+	if errors.As(err, &appError) {
+		return appError.Kind == kind
+	}
+	return false
+}
+
 func ExitCode(err error) int {
 	if err == nil {
 		return 0
