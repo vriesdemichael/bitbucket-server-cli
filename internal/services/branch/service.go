@@ -1,16 +1,14 @@
 package branch
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"io"
-	"net/http"
-	"net/url"
 	"strconv"
 	"strings"
+	"time"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
@@ -362,6 +360,15 @@ func (service *Service) upsertRestriction(ctx context.Context, repo RepositoryRe
 		return openapigenerated.RestRefRestriction{}, err
 	}
 
+	trimmedUpdateID := strings.TrimSpace(id)
+	if trimmedUpdateID != "" {
+		// Bitbucket REST API does not have a PUT endpoint for updating a single restriction.
+		// We implement update as a Delete followed by a Create (bulk POST).
+		if err := service.DeleteRestriction(ctx, repo, trimmedUpdateID); err != nil {
+			return openapigenerated.RestRefRestriction{}, fmt.Errorf("failed to delete existing restriction for update: %w", err)
+		}
+	}
+
 	trimmedType := strings.TrimSpace(input.Type)
 	if trimmedType == "" {
 		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindValidation, "restriction type is required", nil)
@@ -378,15 +385,6 @@ func (service *Service) upsertRestriction(ctx context.Context, repo RepositoryRe
 	}
 
 	bodyEntry := openapigenerated.RestRestrictionRequest{Type: &trimmedType}
-	trimmedUpdateID := strings.TrimSpace(id)
-	if trimmedUpdateID != "" {
-		parsedID, parseErr := parseRestrictionID(trimmedUpdateID)
-		if parseErr != nil {
-			return openapigenerated.RestRefRestriction{}, parseErr
-		}
-		bodyEntry.Id = &parsedID
-	}
-
 	bodyEntry.Matcher = &struct {
 		DisplayId *string `json:"displayId,omitempty"`
 		Id        *string `json:"id,omitempty"`
@@ -401,101 +399,88 @@ func (service *Service) upsertRestriction(ctx context.Context, repo RepositoryRe
 			Name *string                                               `json:"name,omitempty"`
 		}{Id: &matcherType},
 	}
-	if strings.TrimSpace(input.MatcherDisplay) != "" {
-		matcherDisplay := strings.TrimSpace(input.MatcherDisplay)
-		bodyEntry.Matcher.DisplayId = &matcherDisplay
+
+	if trimmedMatcherID != "" && input.MatcherDisplay != "" {
+		bodyEntry.Matcher.DisplayId = &input.MatcherDisplay
 	}
 
-	groupNames := cleanedStrings(input.Groups)
-	if len(groupNames) > 0 {
-		bodyEntry.GroupNames = &groupNames
-	}
-
-	userSlugs := cleanedStrings(input.Users)
-	if len(userSlugs) > 0 {
-		bodyEntry.UserSlugs = &userSlugs
-	}
-
-	if len(input.AccessKeyIDs) > 0 {
-		ids := append([]int32(nil), input.AccessKeyIDs...)
-		bodyEntry.AccessKeyIds = &ids
-	}
-
-	if trimmedUpdateID != "" {
-		return service.updateRestriction(ctx, repo, trimmedUpdateID, bodyEntry)
-	}
-
-	requestBody := openapigenerated.CreateRestrictions1ApplicationVndAtlBitbucketBulkPlusJSONRequestBody{bodyEntry}
-	response, err := service.client.CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse(ctx, repo.ProjectKey, repo.Slug, requestBody)
-	if err != nil {
-		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to upsert branch restriction", err)
-	}
-	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
-		return openapigenerated.RestRefRestriction{}, err
-	}
-
-	if response.ApplicationjsonCharsetUTF8200 != nil {
-		return *response.ApplicationjsonCharsetUTF8200, nil
-	}
-
-	return openapigenerated.RestRefRestriction{}, nil
-}
-
-func (service *Service) updateRestriction(ctx context.Context, repo RepositoryRef, id string, payload openapigenerated.RestRestrictionRequest) (openapigenerated.RestRefRestriction, error) {
-	client, ok := service.client.ClientInterface.(*openapigenerated.Client)
-	if !ok {
-		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindInternal, "failed to initialize update restriction request client", nil)
-	}
-
-	body, marshalErr := json.Marshal(payload)
-	if marshalErr != nil {
-		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindInternal, "failed to encode update restriction request", marshalErr)
-	}
-
-	baseURL := strings.TrimSuffix(client.Server, "/")
-	path := fmt.Sprintf(
-		"/branch-permissions/latest/projects/%s/repos/%s/restrictions/%s",
-		url.PathEscape(repo.ProjectKey),
-		url.PathEscape(repo.Slug),
-		url.PathEscape(id),
-	)
-	request, requestErr := http.NewRequestWithContext(ctx, http.MethodPut, baseURL+path, bytes.NewReader(body))
-	if requestErr != nil {
-		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindInternal, "failed to create update restriction request", requestErr)
-	}
-	request.Header.Set("Content-Type", "application/json")
-
-	for _, editor := range client.RequestEditors {
-		if editorErr := editor(ctx, request); editorErr != nil {
-			return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to apply update restriction request editor", editorErr)
+	if len(input.Users) > 0 {
+		users := make([]openapigenerated.RestApplicationUser, 0, len(input.Users))
+		for _, name := range input.Users {
+			if strings.TrimSpace(name) != "" {
+				nameCopy := strings.TrimSpace(name)
+				users = append(users, openapigenerated.RestApplicationUser{Name: &nameCopy})
+			}
+		}
+		if len(users) > 0 {
+			bodyEntry.Users = &users
 		}
 	}
 
-	response, doErr := client.Client.Do(request)
-	if doErr != nil {
-		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to upsert branch restriction", doErr)
+	if len(input.Groups) > 0 {
+		groups := cleanedStrings(input.Groups)
+		if len(groups) > 0 {
+			bodyEntry.Groups = &groups
+		}
 	}
-	defer response.Body.Close()
 
-	responseBody, readErr := io.ReadAll(response.Body)
+	if len(input.AccessKeyIDs) > 0 {
+		keys := make([]openapigenerated.RestSshAccessKey, 0, len(input.AccessKeyIDs))
+		for _, kid := range input.AccessKeyIDs {
+			kidCopy := kid
+			keys = append(keys, openapigenerated.RestSshAccessKey{Key: &struct {
+				AlgorithmType     *string    "json:\"algorithmType,omitempty\""
+				BitLength         *int32     "json:\"bitLength,omitempty\""
+				CreatedDate       *time.Time "json:\"createdDate,omitempty\""
+				ExpiryDays        *int32     "json:\"expiryDays,omitempty\""
+				Fingerprint       *string    "json:\"fingerprint,omitempty\""
+				Id                *int32     "json:\"id,omitempty\""
+				Label             *string    "json:\"label,omitempty\""
+				LastAuthenticated *string    "json:\"lastAuthenticated,omitempty\""
+				Text              *string    "json:\"text,omitempty\""
+				Warning           *string    "json:\"warning,omitempty\""
+			}{Id: &kidCopy}})
+		}
+		if len(keys) > 0 {
+			bodyEntry.AccessKeys = &keys
+		}
+	}
+
+	requestBody := openapigenerated.CreateRestrictions1ApplicationVndAtlBitbucketBulkPlusJSONBody{bodyEntry}
+
+	// Use the direct client to avoid generated response parsing errors for this array endpoint
+	client, ok := service.client.ClientInterface.(*openapigenerated.Client)
+	if !ok {
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindInternal, "failed to initialize branch restriction request client", nil)
+	}
+
+	rawResponse, err := client.CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBody(ctx, repo.ProjectKey, repo.Slug, requestBody)
+	if err != nil {
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to upsert branch restriction", err)
+	}
+	defer rawResponse.Body.Close()
+
+	responseBody, readErr := io.ReadAll(rawResponse.Body)
 	if readErr != nil {
-		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to read update restriction response", readErr)
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to read branch restriction response", readErr)
 	}
 
-	if err := openapi.MapStatusError(response.StatusCode, responseBody); err != nil {
+	if err := openapi.MapStatusError(rawResponse.StatusCode, responseBody); err != nil {
 		return openapigenerated.RestRefRestriction{}, err
 	}
 
-	if len(responseBody) == 0 || !json.Valid(responseBody) {
-		return openapigenerated.RestRefRestriction{}, nil
+	// The API returns an array of restrictions for this bulk endpoint.
+	// We only sent one, so we take the first one from the array.
+	var results []openapigenerated.RestRefRestriction
+	if err := json.Unmarshal(responseBody, &results); err != nil {
+		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindPermanent, "failed to decode branch restriction response", err)
 	}
 
-	decoded := openapigenerated.RestRefRestriction{}
-	if err := json.Unmarshal(responseBody, &decoded); err != nil {
-		return openapigenerated.RestRefRestriction{}, apperrors.New(apperrors.KindTransient, "failed to decode update restriction response", err)
+	if len(results) > 0 {
+		return results[0], nil
 	}
 
-	return decoded, nil
+	return openapigenerated.RestRefRestriction{}, nil
 }
 
 func (service *Service) DeleteRestriction(ctx context.Context, repo RepositoryRef, id string) error {
@@ -615,4 +600,85 @@ func normalizeBranchRef(branch string) string {
 	}
 
 	return "refs/heads/" + trimmed
+}
+
+func mapRestrictionInput(input RestrictionUpsertInput) (openapigenerated.RestRestrictionRequest, error) {
+	trimmedType := strings.TrimSpace(input.Type)
+	if trimmedType == "" {
+		return openapigenerated.RestRestrictionRequest{}, apperrors.New(apperrors.KindValidation, "restriction type is required", nil)
+	}
+
+	trimmedMatcherID := strings.TrimSpace(input.MatcherID)
+	if trimmedMatcherID == "" {
+		return openapigenerated.RestRestrictionRequest{}, apperrors.New(apperrors.KindValidation, "matcher id is required", nil)
+	}
+
+	matcherType, err := normalizeRestrictionRequestMatcherType(input.MatcherType)
+	if err != nil {
+		return openapigenerated.RestRestrictionRequest{}, err
+	}
+
+	bodyEntry := openapigenerated.RestRestrictionRequest{Type: &trimmedType}
+	bodyEntry.Matcher = &struct {
+		DisplayId *string `json:"displayId,omitempty"`
+		Id        *string `json:"id,omitempty"`
+		Type      *struct {
+			Id   *openapigenerated.RestRestrictionRequestMatcherTypeId `json:"id,omitempty"`
+			Name *string                                               `json:"name,omitempty"`
+		} `json:"type,omitempty"`
+	}{
+		Id: &trimmedMatcherID,
+		Type: &struct {
+			Id   *openapigenerated.RestRestrictionRequestMatcherTypeId `json:"id,omitempty"`
+			Name *string                                               `json:"name,omitempty"`
+		}{Id: &matcherType},
+	}
+
+	if trimmedMatcherID != "" && input.MatcherDisplay != "" {
+		bodyEntry.Matcher.DisplayId = &input.MatcherDisplay
+	}
+
+	if len(input.Users) > 0 {
+		users := make([]openapigenerated.RestApplicationUser, 0, len(input.Users))
+		for _, name := range input.Users {
+			if strings.TrimSpace(name) != "" {
+				nameCopy := strings.TrimSpace(name)
+				users = append(users, openapigenerated.RestApplicationUser{Name: &nameCopy})
+			}
+		}
+		if len(users) > 0 {
+			bodyEntry.Users = &users
+		}
+	}
+
+	if len(input.Groups) > 0 {
+		groups := cleanedStrings(input.Groups)
+		if len(groups) > 0 {
+			bodyEntry.Groups = &groups
+		}
+	}
+
+	if len(input.AccessKeyIDs) > 0 {
+		keys := make([]openapigenerated.RestSshAccessKey, 0, len(input.AccessKeyIDs))
+		for _, kid := range input.AccessKeyIDs {
+			kidCopy := kid
+			keys = append(keys, openapigenerated.RestSshAccessKey{Key: &struct {
+				AlgorithmType     *string    "json:\"algorithmType,omitempty\""
+				BitLength         *int32     "json:\"bitLength,omitempty\""
+				CreatedDate       *time.Time "json:\"createdDate,omitempty\""
+				ExpiryDays        *int32     "json:\"expiryDays,omitempty\""
+				Fingerprint       *string    "json:\"fingerprint,omitempty\""
+				Id                *int32     "json:\"id,omitempty\""
+				Label             *string    "json:\"label,omitempty\""
+				LastAuthenticated *string    "json:\"lastAuthenticated,omitempty\""
+				Text              *string    "json:\"text,omitempty\""
+				Warning           *string    "json:\"warning,omitempty\""
+			}{Id: &kidCopy}})
+		}
+		if len(keys) > 0 {
+			bodyEntry.AccessKeys = &keys
+		}
+	}
+
+	return bodyEntry, nil
 }

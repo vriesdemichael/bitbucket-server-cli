@@ -15,7 +15,7 @@ func TestLiveCLICommitAndRefLifecycle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
-	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 2)
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 3)
 	if err != nil {
 		t.Fatalf("seed project with repositories failed: %v", err)
 	}
@@ -46,8 +46,9 @@ func TestLiveCLICommitAndRefLifecycle(t *testing.T) {
 	}
 
 	// Commit compare
-	from := repo.CommitIDs[len(repo.CommitIDs)-1]
-	to := repo.CommitIDs[0]
+	// Comparing from head to tail usually yields the commits in between
+	from := repo.CommitIDs[0]
+	to := repo.CommitIDs[len(repo.CommitIDs)-1]
 	compareOutput, err := executeLiveCLI(t, "--json", "commit", "compare", from, to)
 	if err != nil {
 		t.Fatalf("commit compare failed: %v\noutput: %s", err, compareOutput)

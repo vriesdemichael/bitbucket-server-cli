@@ -89,6 +89,11 @@ func TestCommitServiceValidationAndHelpers(t *testing.T) {
 	if _, err := service.List(context.Background(), repo, ListOptions{}); err == nil || !strings.Contains(err.Error(), "authorization") {
 		t.Fatalf("expected mapped authorization error, got %v", err)
 	}
+
+	invalidRepo := RepositoryRef{ProjectKey: "", Slug: ""}
+	if _, err := service.List(context.Background(), invalidRepo, ListOptions{}); err == nil {
+		t.Error("expected error for invalid repository")
+	}
 }
 
 func TestCommitServicePagination(t *testing.T) {
