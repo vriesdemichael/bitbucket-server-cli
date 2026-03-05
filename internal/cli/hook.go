@@ -216,7 +216,16 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 					if err != nil {
 						return err
 					}
-					return writeJSON(cmd.OutOrStdout(), settings)
+					if options.JSON {
+						return writeJSON(cmd.OutOrStdout(), settings)
+					}
+					pretty, err := json.MarshalIndent(settings, "", "  ")
+					if err != nil {
+						fmt.Fprintf(cmd.OutOrStdout(), "%+v\n", settings)
+						return nil
+					}
+					fmt.Fprintln(cmd.OutOrStdout(), string(pretty))
+					return nil
 				}
 				if projectKey == "" {
 					projectKey = cfg.ProjectKey
@@ -228,7 +237,16 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 				if err != nil {
 					return err
 				}
-				return writeJSON(cmd.OutOrStdout(), settings)
+				if options.JSON {
+					return writeJSON(cmd.OutOrStdout(), settings)
+				}
+				pretty, err := json.MarshalIndent(settings, "", "  ")
+				if err != nil {
+					fmt.Fprintf(cmd.OutOrStdout(), "%+v\n", settings)
+					return nil
+				}
+				fmt.Fprintln(cmd.OutOrStdout(), string(pretty))
+				return nil
 			}
 
 			var settings map[string]any

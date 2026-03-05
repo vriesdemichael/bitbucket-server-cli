@@ -939,7 +939,6 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 		},
 	}
 	pullRequestsUpdateApproversCmd.Flags().IntVar(&requiredApproversCount, "count", 2, "Required approvers count (0 disables check)")
-	var mergeStrategyID string
 	pullRequestsSetStrategyCmd := &cobra.Command{
 		Use:   "set-strategy <strategy-id>",
 		Short: "Set default merge strategy",
@@ -956,7 +955,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposettings.NewService(client)
-			mergeStrategyID = args[0]
+			mergeStrategyID := args[0]
 
 			settings := map[string]any{
 				"mergeConfig": map[string]any{

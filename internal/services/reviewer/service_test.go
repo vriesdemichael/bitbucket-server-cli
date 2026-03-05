@@ -4,7 +4,6 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
@@ -122,10 +121,11 @@ func TestReviewerServiceErrors(t *testing.T) {
 	if _, err := service.ListRepositoryConditions(context.Background(), "PRJ", "demo"); err == nil {
 		t.Fatal("expected error")
 	}
-	if err := service.DeleteProjectCondition(context.Background(), "PRJ", "1"); err != nil && !strings.Contains(err.Error(), "API returned error") {
-		// StatusCode >= 300 branch
+	if err := service.DeleteProjectCondition(context.Background(), "PRJ", "1"); err == nil {
+		t.Fatal("expected delete project condition error")
 	}
-	if err := service.DeleteRepositoryCondition(context.Background(), "PRJ", "demo", "2"); err != nil && !strings.Contains(err.Error(), "API returned error") {
+	if err := service.DeleteRepositoryCondition(context.Background(), "PRJ", "demo", "2"); err == nil {
+		t.Fatal("expected delete repository condition error")
 	}
 }
 
