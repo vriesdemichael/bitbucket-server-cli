@@ -16,6 +16,25 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  linear-history:
+    name: Linear History
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+
+      - name: Verify PR branch has no merge commits
+        run: task quality:git:ensure-linear
+
   adr-validation:
     name: ADR Validation
     runs-on: ubuntu-latest
@@ -61,14 +80,17 @@ jobs:
     name: CI Complete
     runs-on: ubuntu-latest
     needs:
+      - linear-history
       - adr-validation
       - unit-tests
     if: always()
     steps:
       - name: Verify all required CI jobs passed
         env:
+          LINEAR_HISTORY_RESULT: ${{ needs.linear-history.result }}
           ADR_VALIDATION_RESULT: ${{ needs.adr-validation.result }}
           UNIT_TESTS_RESULT: ${{ needs.unit-tests.result }}
         run: |
+          [[ "$LINEAR_HISTORY_RESULT" == "success" ]]
           [[ "$ADR_VALIDATION_RESULT" == "success" ]]
           [[ "$UNIT_TESTS_RESULT" == "success" ]]

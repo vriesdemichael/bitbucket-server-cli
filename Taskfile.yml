@@ -57,11 +57,39 @@ tasks:
     desc: Validate ADR decision records with Go validator
     cmd: go run ./tools/adr-validator --validate
 
+  quality:git:ensure-linear:
+    desc: Fail when branch contains merge commits relative to origin/main
+    cmds:
+      - git fetch origin main
+      - |
+        merge_count="$(git rev-list --count --merges origin/main..HEAD)"
+        if [ "$merge_count" != "0" ]; then
+          echo "Branch must be linear (rebase-only). Found $merge_count merge commit(s) in origin/main..HEAD."
+          git log --oneline --merges origin/main..HEAD
+          exit 1
+        fi
+        echo "Branch is linear (no merge commits in origin/main..HEAD)."
+
   quality:check:
     desc: Run core quality checks
     deps:
+      - quality:git:ensure-linear
       - quality:validate-decisions
       - quality:coverage:report:verify
+
+  pr:linearize:
+    desc: Rebase branch on origin/main and refresh committed coverage report artifact
+    cmds:
+      - git fetch origin --prune
+      - git rebase origin/main
+      - task: quality:coverage:report:update
+      - git add docs/quality/coverage-report.json
+      - |
+        if git diff --cached --quiet -- docs/quality/coverage-report.json; then
+          echo "coverage report unchanged"
+        else
+          git commit -m "docs(quality): refresh committed coverage report after linear rebase"
+        fi
 
   quality:coverage:
     desc: Run combined (unit + live) global + patch coverage checks and generated-operation coverage metric
