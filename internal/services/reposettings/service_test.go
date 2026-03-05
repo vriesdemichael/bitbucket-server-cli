@@ -235,19 +235,29 @@ func TestDeleteRepositoryWebhook(t *testing.T) {
 }
 
 func TestUpdateRepositoryPullRequestRequiredApproversCount(t *testing.T) {
+	objectPayloadCalls := 0
+	integerPayloadCalls := 0
+
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.URL.Path != "/api/latest/projects/PRJ/repos/demo/settings/pull-requests" {
 			http.NotFound(writer, request)
 			return
 		}
 		body, _ := io.ReadAll(request.Body)
-		if !strings.Contains(string(body), `"requiredApprovers":2`) {
+		if strings.Contains(string(body), `"requiredApprovers":{"count":2,"enabled":true}`) {
+			objectPayloadCalls++
+			// Simulate older Bitbucket that rejects object with 400
 			writer.WriteHeader(http.StatusBadRequest)
-			_, _ = writer.Write([]byte("missing requiredApprovers payload"))
+			_, _ = writer.Write([]byte(`{"errors":[{"message":"invalid payload"}]}`))
 			return
 		}
-		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
-		_, _ = writer.Write([]byte(`{"requiredApprovers":2}`))
+		if strings.Contains(string(body), `"requiredApprovers":2`) {
+			integerPayloadCalls++
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"requiredApprovers":2}`))
+			return
+		}
+		writer.WriteHeader(http.StatusInternalServerError)
 	}))
 	defer server.Close()
 
@@ -259,7 +269,14 @@ func TestUpdateRepositoryPullRequestRequiredApproversCount(t *testing.T) {
 	service := NewService(client)
 	settings, err := service.UpdateRepositoryPullRequestRequiredApproversCount(context.Background(), RepositoryRef{ProjectKey: "PRJ", Slug: "demo"}, 2)
 	if err != nil {
-		t.Fatalf("expected no error, got: %v", err)
+		t.Fatalf("expected no error with fallback, got: %v", err)
+	}
+
+	if objectPayloadCalls != 1 {
+		t.Errorf("expected 1 call with object payload, got %d", objectPayloadCalls)
+	}
+	if integerPayloadCalls != 1 {
+		t.Errorf("expected 1 call with integer payload (fallback), got %d", integerPayloadCalls)
 	}
 
 	if value, ok := settings["requiredApprovers"].(float64); !ok || int(value) != 2 {
@@ -353,8 +370,22 @@ func TestRepositorySettingsJSONFallbackAndValidationBranches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("expected no error updating approvers with fallback response, got: %v", err)
 	}
-	if value, ok := approverSettings["requiredApprovers"].(int); !ok || value != 3 {
-		t.Fatalf("expected fallback requiredApprovers=3, got: %#v", approverSettings)
+	// With the new logic, the returned map will have the object structure if the first attempt (object) succeeded in the mock
+	approvers, ok := approverSettings["requiredApprovers"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected requiredApprovers object, got: %#v", approverSettings["requiredApprovers"])
+	}
+	countValue := float64(0)
+	switch v := approvers["count"].(type) {
+	case float64:
+		countValue = v
+	case int:
+		countValue = float64(v)
+	default:
+		t.Fatalf("unexpected type for count: %T", approvers["count"])
+	}
+	if countValue != 3 {
+		t.Fatalf("expected fallback requiredApprovers object with count 3, got: %v", countValue)
 	}
 
 	_, err = service.UpdateRepositoryPullRequestRequiredApproversCount(context.Background(), repo, -1)
@@ -468,7 +499,7 @@ func TestRepositorySettingsAdditionalBranches(t *testing.T) {
 			t.Fatal("expected decode error for all tasks update map")
 		}
 		if _, err := decodeService.UpdateRepositoryPullRequestRequiredApproversCount(context.Background(), RepositoryRef{ProjectKey: "PRJ", Slug: "demo"}, 2); err == nil {
-			t.Fatal("expected decode error for approvers update map")
+			t.Fatal("expected error for approvers update map")
 		}
 
 		statusService := newServiceWithBaseURL(t, func(writer http.ResponseWriter, request *http.Request) {

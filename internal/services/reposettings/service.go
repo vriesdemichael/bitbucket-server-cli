@@ -419,7 +419,30 @@ func (service *Service) UpdateRepositoryPullRequestRequiredApproversCount(ctx co
 	if count < 0 {
 		return nil, apperrors.New(apperrors.KindValidation, "required approvers count must be >= 0", nil)
 	}
-	return service.UpdateRepositoryPullRequestSettings(ctx, repo, map[string]any{"requiredApprovers": count})
+
+	// Try object structure first (modern Bitbucket)
+	settings := map[string]any{
+		"requiredApprovers": map[string]any{
+			"enabled": count > 0,
+			"count":   count,
+		},
+	}
+	if count == 0 {
+		settings["requiredApprovers"] = map[string]any{
+			"enabled": false,
+		}
+	}
+
+	result, err := service.UpdateRepositoryPullRequestSettings(ctx, repo, settings)
+	if err != nil {
+		// If it's a validation error (400), try the legacy integer format
+		if apperrors.IsKind(err, apperrors.KindValidation) {
+			return service.UpdateRepositoryPullRequestSettings(ctx, repo, map[string]any{"requiredApprovers": count})
+		}
+		return nil, err
+	}
+
+	return result, nil
 }
 
 func (service *Service) ListRequiredBuildsMergeChecks(ctx context.Context, repo RepositoryRef) (any, error) {
