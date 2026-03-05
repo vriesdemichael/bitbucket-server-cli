@@ -1,40 +1,40 @@
 {
   "version": 2,
   "coverage": {
-    "unit_raw_percent": 10.229264849850875,
-    "unit_scoped_percent": 88.08076847676925,
-    "live_raw_percent": 1.8805437828574074,
-    "live_scoped_percent": 16.08876560332871,
-    "combined_raw_percent": 10.229264849850875,
-    "combined_scoped_percent": 88.08076847676925,
-    "patch_percent": 85.47445255474453,
+    "unit_raw_percent": 10.079127995804164,
+    "unit_scoped_percent": 87.85529715762273,
+    "live_raw_percent": 14.120021341251245,
+    "live_scoped_percent": 54.26964034558971,
+    "combined_raw_percent": 17.87334959979933,
+    "combined_scoped_percent": 88.49135360763267,
+    "patch_percent": 85.6637168141593,
     "unit_statements": {
-      "covered": 4493,
-      "total": 43923
+      "covered": 4420,
+      "total": 43853
     },
     "live_statements": {
-      "covered": 812,
-      "total": 43179
+      "covered": 6087,
+      "total": 43109
     },
     "combined_statements": {
-      "covered": 4493,
-      "total": 43923
+      "covered": 7838,
+      "total": 43853
     },
     "unit_scoped_statements": {
-      "covered": 4493,
-      "total": 5101
+      "covered": 4420,
+      "total": 5031
     },
     "live_scoped_statements": {
-      "covered": 812,
-      "total": 5047
+      "covered": 2701,
+      "total": 4977
     },
     "combined_scoped_statements": {
-      "covered": 4493,
-      "total": 5101
+      "covered": 4452,
+      "total": 5031
     },
     "patch_lines": {
-      "covered": 1171,
-      "total": 1370
+      "covered": 1452,
+      "total": 1695
     },
     "scope": {
       "include_prefixes": [
@@ -48,7 +48,7 @@
     }
   },
   "generated_contracts": {
-    "coverage_percent": 43.15789473684211,
+    "coverage_percent": 43.61702127659575,
     "used_operations": [
       "AddAnnotationsWithResponse",
       "AddBuildStatusWithResponse",
@@ -60,7 +60,6 @@
       "CreatePullRequestConditionWithResponse",
       "CreateRepositoryWithResponse",
       "CreateRequiredBuildsMergeCheckWithBodyWithResponse",
-      "CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse",
       "CreateTagForRepositoryWithResponse",
       "CreateWebhook1WithResponse",
       "DeleteACodeInsightsReportWithResponse",
@@ -195,7 +194,6 @@
       "CreatePullRequestCondition1WithResponse",
       "CreatePullRequestConditionWithResponse",
       "CreateRepositoryWithResponse",
-      "CreateRestrictions1WithApplicationVndAtlBitbucketBulkPlusJSONBodyWithResponse",
       "DeleteBranchWithResponse",
       "DeleteProjectWithResponse",
       "DeletePullRequestCondition1WithResponse",

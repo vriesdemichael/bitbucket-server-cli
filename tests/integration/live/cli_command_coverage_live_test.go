@@ -610,6 +610,8 @@ func asString(value any) string {
 	if typed, ok := value.(string); ok {
 		return typed
 	}
-
-	return ""
+	if value == nil {
+		return ""
+	}
+	return fmt.Sprintf("%v", value)
 }

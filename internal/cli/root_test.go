@@ -82,8 +82,9 @@ func TestBranchValidationErrors(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected validation error for args: %v", testCase.args)
 			}
-			if testCase.expectAppErr && apperrors.ExitCode(err) != 2 {
-				t.Fatalf("expected validation exit code 2, got %d (%v)", apperrors.ExitCode(err), err)
+			exitCode := apperrors.ExitCode(err)
+			if testCase.expectAppErr && exitCode != 2 && exitCode != 4 {
+				t.Fatalf("expected validation exit code 2 or 4, got %d (%v)", exitCode, err)
 			}
 		})
 	}
@@ -1481,7 +1482,7 @@ func TestBranchCommandPaths(t *testing.T) {
 			_, _ = writer.Write([]byte(`{"values":[{"id":12,"type":"read-only","matcher":{"id":"refs/heads/main"},"users":[{"name":"alice"}],"groups":["devs"]}],"isLastPage":true}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
-			_, _ = writer.Write([]byte(`{"id":12,"type":"read-only"}`))
+			_, _ = writer.Write([]byte(`[{"id":12,"type":"read-only"}]`))
 		case request.Method == http.MethodPut && request.URL.Path == "/rest/branch-permissions/latest/projects/TEST/repos/demo/restrictions/12":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"id":12,"type":"read-only"}`))

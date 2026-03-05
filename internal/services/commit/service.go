@@ -144,7 +144,8 @@ func (service *Service) Compare(ctx context.Context, repo RepositoryRef, options
 			break
 		}
 
-		results = append(results, (*response.ApplicationjsonCharsetUTF8200.Values)...)
+		pageCommits := *response.ApplicationjsonCharsetUTF8200.Values
+		results = append(results, pageCommits...)
 
 		if response.ApplicationjsonCharsetUTF8200.IsLastPage != nil && *response.ApplicationjsonCharsetUTF8200.IsLastPage {
 			break
