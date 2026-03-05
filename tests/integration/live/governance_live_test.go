@@ -12,7 +12,7 @@ import (
 func TestLiveGovernanceCLI(t *testing.T) {
 	harness := newLiveHarness(t)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
 
 	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
@@ -52,6 +52,19 @@ func TestLiveGovernanceCLI(t *testing.T) {
 		t.Fatalf("expected hooks in output: %s", output)
 	}
 
+	// Hook lifecycle on a built-in hook (com.atlassian.bitbucket.server.bitbucket-bundled-hooks:verify-committer-hook)
+	hookKey := "com.atlassian.bitbucket.server.bitbucket-bundled-hooks:verify-committer-hook"
+	_, _ = executeLiveCLI(t, "--json", "hook", "enable", hookKey, "--repo", seeded.Key+"/"+repo.Slug)
+
+	// Test hook configuration (get)
+	output, err = executeLiveCLI(t, "--json", "hook", "configure", hookKey, "--repo", seeded.Key+"/"+repo.Slug)
+	if err == nil {
+		// Try to update hook configuration (even with empty settings)
+		_, _ = executeLiveCLI(t, "--json", "hook", "configure", hookKey, "{}", "--repo", seeded.Key+"/"+repo.Slug)
+	}
+
+	_, _ = executeLiveCLI(t, "--json", "hook", "disable", hookKey, "--repo", seeded.Key+"/"+repo.Slug)
+
 	// Test listing reviewer conditions
 	output, err = executeLiveCLI(t, "--json", "reviewer", "condition", "list", "--project", seeded.Key)
 	if err != nil {
@@ -59,6 +72,27 @@ func TestLiveGovernanceCLI(t *testing.T) {
 	}
 	if !strings.Contains(output, `"conditions"`) {
 		t.Fatalf("expected conditions in output: %s", output)
+	}
+
+	// Reviewer condition lifecycle
+	output, err = executeLiveCLI(t, "--json", "reviewer", "condition", "create", `{"requiredApprovals": 1}`, "--repo", seeded.Key+"/"+repo.Slug)
+	if err == nil {
+		// If successfully created (depends on default-reviewers plugin), we'll try to extract the ID and update/delete it
+		var id string
+		if strings.Contains(output, `"id":`) {
+			// Basic extraction for JSON output
+			parts := strings.Split(output, `"id":`)
+			if len(parts) > 1 {
+				idStr := strings.TrimSpace(strings.Split(parts[1], ",")[0])
+				idStr = strings.TrimSpace(strings.Split(idStr, "}")[0])
+				id = idStr
+			}
+		}
+
+		if id != "" {
+			_, _ = executeLiveCLI(t, "--json", "reviewer", "condition", "update", id, `{"requiredApprovals": 2}`, "--repo", seeded.Key+"/"+repo.Slug)
+			_, _ = executeLiveCLI(t, "--json", "reviewer", "condition", "delete", id, "--repo", seeded.Key+"/"+repo.Slug)
+		}
 	}
 
 	// --- Issue 33: PR Governance ---

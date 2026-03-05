@@ -4,9 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"io"
-	"net/http"
 	"strings"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -69,7 +68,7 @@ func (service *Service) ListRepositoryPermissionUsers(ctx context.Context, repo 
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list repository permissions", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -124,7 +123,7 @@ func (service *Service) ListRepositoryPermissionGroups(ctx context.Context, repo
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list repository group permissions", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -178,7 +177,7 @@ func (service *Service) GrantRepositoryUserPermission(ctx context.Context, repo 
 		return apperrors.New(apperrors.KindTransient, "failed to grant repository permission", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) RevokeRepositoryUserPermission(ctx context.Context, repo RepositoryRef, username string) error {
@@ -197,7 +196,7 @@ func (service *Service) RevokeRepositoryUserPermission(ctx context.Context, repo
 		return apperrors.New(apperrors.KindTransient, "failed to revoke repository user permission", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) GrantRepositoryGroupPermission(ctx context.Context, repo RepositoryRef, group string, permission string) error {
@@ -222,7 +221,7 @@ func (service *Service) GrantRepositoryGroupPermission(ctx context.Context, repo
 		return apperrors.New(apperrors.KindTransient, "failed to grant repository group permission", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) RevokeRepositoryGroupPermission(ctx context.Context, repo RepositoryRef, group string) error {
@@ -241,7 +240,7 @@ func (service *Service) RevokeRepositoryGroupPermission(ctx context.Context, rep
 		return apperrors.New(apperrors.KindTransient, "failed to revoke repository group permission", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) ListRepositoryWebhooks(ctx context.Context, repo RepositoryRef) (WebhookList, error) {
@@ -253,7 +252,7 @@ func (service *Service) ListRepositoryWebhooks(ctx context.Context, repo Reposit
 	if err != nil {
 		return WebhookList{}, apperrors.New(apperrors.KindTransient, "failed to list repository webhooks", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return WebhookList{}, err
 	}
 
@@ -313,7 +312,7 @@ func (service *Service) CreateRepositoryWebhook(ctx context.Context, repo Reposi
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to create repository webhook", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return nil, err
 	}
 
@@ -343,7 +342,7 @@ func (service *Service) DeleteRepositoryWebhook(ctx context.Context, repo Reposi
 		return apperrors.New(apperrors.KindTransient, "failed to delete repository webhook", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) GetRepositoryPullRequestSettings(ctx context.Context, repo RepositoryRef) (map[string]any, error) {
@@ -361,7 +360,7 @@ func (service *Service) GetRepositoryPullRequestSettings(ctx context.Context, re
 		return nil, apperrors.New(apperrors.KindTransient, "failed to read pull request settings response", readErr)
 	}
 
-	if err := mapStatusError(response.StatusCode, body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode, body); err != nil {
 		return nil, err
 	}
 	if !json.Valid(body) {
@@ -395,7 +394,7 @@ func (service *Service) UpdateRepositoryPullRequestSettings(ctx context.Context,
 	if readErr != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to read pull request settings update response", readErr)
 	}
-	if err := mapStatusError(response.StatusCode, body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode, body); err != nil {
 		return nil, err
 	}
 
@@ -432,7 +431,7 @@ func (service *Service) ListRequiredBuildsMergeChecks(ctx context.Context, repo 
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to list required builds merge checks", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return nil, err
 	}
 
@@ -462,38 +461,5 @@ func normalizeRepositoryPermission(permission string) (string, error) {
 		return "REPO_ADMIN", nil
 	default:
 		return "", apperrors.New(apperrors.KindValidation, "permission must be one of REPO_READ, REPO_WRITE, REPO_ADMIN", nil)
-	}
-}
-
-func mapStatusError(status int, body []byte) error {
-	if status >= 200 && status < 300 {
-		return nil
-	}
-
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
 	}
 }

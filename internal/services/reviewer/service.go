@@ -3,6 +3,7 @@ package reviewer
 import (
 	"context"
 	"encoding/json"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"strconv"
 	"strings"
 
@@ -27,8 +28,8 @@ func (service *Service) ListProjectConditions(ctx context.Context, projectKey st
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to list project reviewer conditions", err)
 	}
-	if response.StatusCode() != 200 {
-		return nil, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return nil, err
 	}
 
 	if response.JSON200 == nil {
@@ -47,8 +48,8 @@ func (service *Service) ListRepositoryConditions(ctx context.Context, projectKey
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to list repository reviewer conditions", err)
 	}
-	if response.StatusCode() != 200 {
-		return nil, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return nil, err
 	}
 
 	if response.JSON200 == nil {
@@ -67,11 +68,7 @@ func (service *Service) DeleteProjectCondition(ctx context.Context, projectKey s
 	if err != nil {
 		return apperrors.New(apperrors.KindTransient, "failed to delete project reviewer condition", err)
 	}
-	if response.StatusCode() >= 300 {
-		return apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
-	}
-
-	return nil
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) DeleteRepositoryCondition(ctx context.Context, projectKey, repositorySlug string, conditionID string) error {
@@ -88,11 +85,7 @@ func (service *Service) DeleteRepositoryCondition(ctx context.Context, projectKe
 	if err != nil {
 		return apperrors.New(apperrors.KindTransient, "failed to delete repository reviewer condition", err)
 	}
-	if response.StatusCode() >= 300 {
-		return apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
-	}
-
-	return nil
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) CreateProjectCondition(ctx context.Context, projectKey string, condition openapigenerated.RestDefaultReviewersRequest) (openapigenerated.RestPullRequestCondition, error) {
@@ -104,8 +97,8 @@ func (service *Service) CreateProjectCondition(ctx context.Context, projectKey s
 	if err != nil {
 		return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindTransient, "failed to create project reviewer condition", err)
 	}
-	if response.StatusCode() >= 300 {
-		return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return openapigenerated.RestPullRequestCondition{}, err
 	}
 
 	if response.JSON200 != nil {
@@ -114,9 +107,10 @@ func (service *Service) CreateProjectCondition(ctx context.Context, projectKey s
 
 	if response.StatusCode() == 201 {
 		var created openapigenerated.RestPullRequestCondition
-		if err := json.Unmarshal(response.Body, &created); err == nil {
-			return created, nil
+		if err := json.Unmarshal(response.Body, &created); err != nil {
+			return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindPermanent, "failed to decode created condition", err)
 		}
+		return created, nil
 	}
 
 	return openapigenerated.RestPullRequestCondition{}, nil
@@ -131,8 +125,8 @@ func (service *Service) CreateRepositoryCondition(ctx context.Context, projectKe
 	if err != nil {
 		return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindTransient, "failed to create repository reviewer condition", err)
 	}
-	if response.StatusCode() >= 300 {
-		return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return openapigenerated.RestPullRequestCondition{}, err
 	}
 
 	if response.JSON200 != nil {
@@ -141,9 +135,10 @@ func (service *Service) CreateRepositoryCondition(ctx context.Context, projectKe
 
 	if response.StatusCode() == 201 {
 		var created openapigenerated.RestPullRequestCondition
-		if err := json.Unmarshal(response.Body, &created); err == nil {
-			return created, nil
+		if err := json.Unmarshal(response.Body, &created); err != nil {
+			return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindPermanent, "failed to decode created condition", err)
 		}
+		return created, nil
 	}
 
 	return openapigenerated.RestPullRequestCondition{}, nil
@@ -158,8 +153,8 @@ func (service *Service) UpdateProjectCondition(ctx context.Context, projectKey s
 	if err != nil {
 		return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindTransient, "failed to update project reviewer condition", err)
 	}
-	if response.StatusCode() >= 300 {
-		return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return openapigenerated.RestPullRequestCondition{}, err
 	}
 
 	if response.JSON200 != nil {
@@ -178,8 +173,8 @@ func (service *Service) UpdateRepositoryCondition(ctx context.Context, projectKe
 	if err != nil {
 		return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindTransient, "failed to update repository reviewer condition", err)
 	}
-	if response.StatusCode() >= 300 {
-		return openapigenerated.RestPullRequestCondition{}, apperrors.New(apperrors.KindPermanent, "bitbucket API returned error: "+string(response.Body), nil)
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return openapigenerated.RestPullRequestCondition{}, err
 	}
 
 	if response.JSON200 != nil {

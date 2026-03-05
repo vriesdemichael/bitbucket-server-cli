@@ -854,7 +854,29 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 				return err
 			}
 
-			return writeJSON(cmd.OutOrStdout(), map[string]any{"merge_checks": checks})
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"merge_checks": checks})
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), "Configured merge checks:")
+			// Try to handle both object with 'values' and direct array responses
+			if checksMap, ok := checks.(map[string]any); ok {
+				if values, ok := checksMap["values"].([]any); ok {
+					for _, check := range values {
+						fmt.Fprintf(cmd.OutOrStdout(), "- %v\n", check)
+					}
+					return nil
+				}
+			}
+
+			if checksArr, ok := checks.([]any); ok {
+				for _, check := range checksArr {
+					fmt.Fprintf(cmd.OutOrStdout(), "- %v\n", check)
+				}
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "- %v\n", checks)
+			}
+			return nil
 		},
 	}
 	mergeChecksCmd.AddCommand(mergeChecksListCmd)

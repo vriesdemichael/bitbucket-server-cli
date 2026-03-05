@@ -2,8 +2,7 @@ package project
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"strings"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -65,7 +64,7 @@ func (service *Service) List(ctx context.Context, options ListOptions) ([]openap
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list projects", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -97,7 +96,7 @@ func (service *Service) Get(ctx context.Context, key string) (openapigenerated.R
 	if err != nil {
 		return openapigenerated.RestProject{}, apperrors.New(apperrors.KindTransient, "failed to get project", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestProject{}, err
 	}
 
@@ -131,7 +130,7 @@ func (service *Service) Create(ctx context.Context, input CreateInput) (openapig
 	if err != nil {
 		return openapigenerated.RestProject{}, apperrors.New(apperrors.KindTransient, "failed to create project", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestProject{}, err
 	}
 
@@ -160,7 +159,7 @@ func (service *Service) Update(ctx context.Context, key string, input UpdateInpu
 	if err != nil {
 		return openapigenerated.RestProject{}, apperrors.New(apperrors.KindTransient, "failed to update project", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestProject{}, err
 	}
 
@@ -182,42 +181,8 @@ func (service *Service) Delete(ctx context.Context, key string) error {
 		return apperrors.New(apperrors.KindTransient, "failed to delete project", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
-
-func mapStatusError(status int, body []byte) error {
-	if status >= 200 && status < 300 {
-		return nil
-	}
-
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
-	}
-}
-
 func (service *Service) ListProjectPermissionUsers(ctx context.Context, projectKey string, limit int) ([]PermissionUser, error) {
 	if strings.TrimSpace(projectKey) == "" {
 		return nil, apperrors.New(apperrors.KindValidation, "project key is required", nil)
@@ -238,7 +203,7 @@ func (service *Service) ListProjectPermissionUsers(ctx context.Context, projectK
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list project user permissions", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -295,7 +260,7 @@ func (service *Service) GrantProjectUserPermission(ctx context.Context, projectK
 		return apperrors.New(apperrors.KindTransient, "failed to grant project user permission", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) RevokeProjectUserPermission(ctx context.Context, projectKey string, username string) error {
@@ -314,7 +279,7 @@ func (service *Service) RevokeProjectUserPermission(ctx context.Context, project
 		return apperrors.New(apperrors.KindTransient, "failed to revoke project user permission", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) ListProjectPermissionGroups(ctx context.Context, projectKey string, limit int) ([]PermissionGroup, error) {
@@ -337,7 +302,7 @@ func (service *Service) ListProjectPermissionGroups(ctx context.Context, project
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list project group permissions", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -391,7 +356,7 @@ func (service *Service) GrantProjectGroupPermission(ctx context.Context, project
 		return apperrors.New(apperrors.KindTransient, "failed to grant project group permission", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) RevokeProjectGroupPermission(ctx context.Context, projectKey string, group string) error {
@@ -410,7 +375,7 @@ func (service *Service) RevokeProjectGroupPermission(ctx context.Context, projec
 		return apperrors.New(apperrors.KindTransient, "failed to revoke project group permission", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func normalizeProjectPermission(permission string) (string, error) {

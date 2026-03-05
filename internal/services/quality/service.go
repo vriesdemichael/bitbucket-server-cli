@@ -4,8 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
-	"net/http"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"strings"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -93,7 +92,7 @@ func (service *Service) SetBuildStatus(ctx context.Context, commitID string, inp
 		return apperrors.New(apperrors.KindTransient, "failed to set build status", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) GetBuildStatuses(ctx context.Context, commitID string, limit int, orderBy string) ([]openapigenerated.RestBuildStatus, error) {
@@ -120,7 +119,7 @@ func (service *Service) GetBuildStatuses(ctx context.Context, commitID string, l
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to get build statuses", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.JSON200 == nil || response.JSON200.Values == nil {
@@ -153,7 +152,7 @@ func (service *Service) GetBuildStatusStats(ctx context.Context, commitID string
 	if err != nil {
 		return openapigenerated.RestBuildStats{}, apperrors.New(apperrors.KindTransient, "failed to get build status stats", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestBuildStats{}, err
 	}
 
@@ -186,7 +185,7 @@ func (service *Service) ListRequiredBuildChecks(ctx context.Context, repo Reposi
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list required build merge checks", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -228,7 +227,7 @@ func (service *Service) CreateRequiredBuildCheck(ctx context.Context, repo Repos
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to create required build merge check", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return nil, err
 	}
 
@@ -273,7 +272,7 @@ func (service *Service) UpdateRequiredBuildCheck(ctx context.Context, repo Repos
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to update required build merge check", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return nil, err
 	}
 
@@ -307,7 +306,7 @@ func (service *Service) DeleteRequiredBuildCheck(ctx context.Context, repo Repos
 		return apperrors.New(apperrors.KindTransient, "failed to delete required build merge check", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) ListReports(ctx context.Context, repo RepositoryRef, commitID string, limit int) ([]openapigenerated.RestInsightReport, error) {
@@ -337,7 +336,7 @@ func (service *Service) ListReports(ctx context.Context, repo RepositoryRef, com
 		if err != nil {
 			return nil, apperrors.New(apperrors.KindTransient, "failed to list code insights reports", err)
 		}
-		if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+		if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 			return nil, err
 		}
 		if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
@@ -377,7 +376,7 @@ func (service *Service) SetReport(ctx context.Context, repo RepositoryRef, commi
 	if err != nil {
 		return openapigenerated.RestInsightReport{}, apperrors.New(apperrors.KindTransient, "failed to set code insights report", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestInsightReport{}, err
 	}
 
@@ -406,7 +405,7 @@ func (service *Service) GetReport(ctx context.Context, repo RepositoryRef, commi
 	if err != nil {
 		return openapigenerated.RestInsightReport{}, apperrors.New(apperrors.KindTransient, "failed to get code insights report", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return openapigenerated.RestInsightReport{}, err
 	}
 
@@ -436,7 +435,7 @@ func (service *Service) DeleteReport(ctx context.Context, repo RepositoryRef, co
 		return apperrors.New(apperrors.KindTransient, "failed to delete code insights report", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) AddAnnotations(ctx context.Context, repo RepositoryRef, commitID string, key string, annotations []openapigenerated.RestSingleAddInsightAnnotationRequest) error {
@@ -462,7 +461,7 @@ func (service *Service) AddAnnotations(ctx context.Context, repo RepositoryRef, 
 		return apperrors.New(apperrors.KindTransient, "failed to add code insights annotations", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func (service *Service) ListAnnotations(ctx context.Context, repo RepositoryRef, commitID string, key string) ([]openapigenerated.RestInsightAnnotation, error) {
@@ -483,7 +482,7 @@ func (service *Service) ListAnnotations(ctx context.Context, repo RepositoryRef,
 	if err != nil {
 		return nil, apperrors.New(apperrors.KindTransient, "failed to list code insights annotations", err)
 	}
-	if err := mapStatusError(response.StatusCode(), response.Body); err != nil {
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
 		return nil, err
 	}
 	if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Annotations == nil {
@@ -523,7 +522,7 @@ func (service *Service) DeleteAnnotations(ctx context.Context, repo RepositoryRe
 		return apperrors.New(apperrors.KindTransient, "failed to delete code insights annotations", err)
 	}
 
-	return mapStatusError(response.StatusCode(), response.Body)
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
 }
 
 func validateRepositoryRef(repo RepositoryRef) error {
@@ -532,37 +531,4 @@ func validateRepositoryRef(repo RepositoryRef) error {
 	}
 
 	return nil
-}
-
-func mapStatusError(status int, body []byte) error {
-	if status >= 200 && status < 300 {
-		return nil
-	}
-
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
-	}
 }

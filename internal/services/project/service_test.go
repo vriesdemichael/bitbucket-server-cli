@@ -2,6 +2,7 @@ package project
 
 import (
 	"context"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -190,22 +191,22 @@ func TestProjectServiceTransientAndMapping(t *testing.T) {
 }
 
 func testMapStatusErrors(t *testing.T) {
-	if err := mapStatusError(http.StatusBadRequest, nil); err == nil || apperrors.ExitCode(err) != 2 {
+	if err := openapi.MapStatusError(http.StatusBadRequest, nil); err == nil || apperrors.ExitCode(err) != 2 {
 		t.Fatalf("expected validation error")
 	}
-	if err := mapStatusError(http.StatusUnauthorized, nil); err == nil || apperrors.ExitCode(err) != 3 {
+	if err := openapi.MapStatusError(http.StatusUnauthorized, nil); err == nil || apperrors.ExitCode(err) != 3 {
 		t.Fatalf("expected auth error")
 	}
-	if err := mapStatusError(http.StatusNotFound, nil); err == nil || apperrors.ExitCode(err) != 4 {
+	if err := openapi.MapStatusError(http.StatusNotFound, nil); err == nil || apperrors.ExitCode(err) != 4 {
 		t.Fatalf("expected not found error")
 	}
-	if err := mapStatusError(http.StatusConflict, nil); err == nil || apperrors.ExitCode(err) != 5 {
+	if err := openapi.MapStatusError(http.StatusConflict, nil); err == nil || apperrors.ExitCode(err) != 5 {
 		t.Fatalf("expected conflict error")
 	}
-	if err := mapStatusError(http.StatusTooManyRequests, []byte("rate")); err == nil || apperrors.ExitCode(err) != 10 {
+	if err := openapi.MapStatusError(http.StatusTooManyRequests, []byte("rate")); err == nil || apperrors.ExitCode(err) != 10 {
 		t.Fatalf("expected transient rate error")
 	}
-	if err := mapStatusError(http.StatusTeapot, nil); err == nil || apperrors.ExitCode(err) != 1 {
+	if err := openapi.MapStatusError(http.StatusTeapot, nil); err == nil || apperrors.ExitCode(err) != 1 {
 		t.Fatalf("expected permanent error")
 	}
 }

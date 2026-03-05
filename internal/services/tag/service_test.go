@@ -2,6 +2,7 @@ package tag
 
 import (
 	"context"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -149,7 +150,7 @@ func TestTagServiceValidationAndMapStatusHelpers(t *testing.T) {
 		t.Fatal("expected tag name validation error on delete")
 	}
 
-	if err := mapStatusError(http.StatusCreated, nil); err != nil {
+	if err := openapi.MapStatusError(http.StatusCreated, nil); err != nil {
 		t.Fatalf("expected nil for success status, got: %v", err)
 	}
 
@@ -168,7 +169,7 @@ func TestTagServiceValidationAndMapStatusHelpers(t *testing.T) {
 	}
 
 	for _, testCase := range tests {
-		err := mapStatusError(testCase.status, []byte("boom"))
+		err := openapi.MapStatusError(testCase.status, []byte("boom"))
 		if err == nil {
 			t.Fatalf("expected error for status %d", testCase.status)
 		}

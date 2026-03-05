@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -13,6 +12,7 @@ import (
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 )
 
 type Client struct {
@@ -126,7 +126,7 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, qu
 			return nil
 		}
 
-		mappedErr := mapStatusError(response.StatusCode, body)
+		mappedErr := openapi.MapStatusError(response.StatusCode, body)
 		if response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500 {
 			lastErr = mappedErr
 			if attempt < client.retries {
@@ -191,14 +191,14 @@ func (client *Client) Health(ctx context.Context) (HealthStatus, error) {
 				Message:       "Bitbucket reachable but credentials are missing or insufficient",
 			}, nil
 		case response.StatusCode >= 500 || response.StatusCode == http.StatusTooManyRequests:
-			lastErr = mapStatusError(response.StatusCode, nil)
+			lastErr = openapi.MapStatusError(response.StatusCode, nil)
 			if attempt < client.retries {
 				time.Sleep(time.Duration(attempt+1) * 250 * time.Millisecond)
 				continue
 			}
 			return HealthStatus{}, lastErr
 		default:
-			return HealthStatus{}, mapStatusError(response.StatusCode, nil)
+			return HealthStatus{}, openapi.MapStatusError(response.StatusCode, nil)
 		}
 	}
 
@@ -217,34 +217,5 @@ func (client *Client) applyAuth(request *http.Request) {
 
 	if client.username != "" && client.password != "" {
 		request.SetBasicAuth(client.username, client.password)
-	}
-}
-
-func mapStatusError(status int, body []byte) error {
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
 	}
 }

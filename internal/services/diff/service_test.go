@@ -2,6 +2,7 @@ package diff
 
 import (
 	"context"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -283,7 +284,7 @@ func TestDiffHelpers(t *testing.T) {
 }
 
 func TestMapStatusErrorCoverage(t *testing.T) {
-	if err := mapStatusError(http.StatusOK, nil); err != nil {
+	if err := openapi.MapStatusError(http.StatusOK, nil); err != nil {
 		t.Fatalf("expected nil on 2xx, got: %v", err)
 	}
 
@@ -302,7 +303,7 @@ func TestMapStatusErrorCoverage(t *testing.T) {
 	}
 
 	for _, testCase := range tests {
-		err := mapStatusError(testCase.status, []byte("boom"))
+		err := openapi.MapStatusError(testCase.status, []byte("boom"))
 		if err == nil {
 			t.Fatalf("expected error for status %d", testCase.status)
 		}
@@ -596,7 +597,7 @@ func TestDiffValidationAndHelperEdgeBranches(t *testing.T) {
 		t.Fatalf("expected no extracted names from malformed lines, got: %#v", names)
 	}
 
-	err = mapStatusError(http.StatusBadRequest, []byte("   "))
+	err = openapi.MapStatusError(http.StatusBadRequest, []byte("   "))
 	if err == nil {
 		t.Fatal("expected validation error for bad request")
 	}

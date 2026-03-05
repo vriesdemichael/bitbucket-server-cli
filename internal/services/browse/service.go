@@ -2,8 +2,7 @@ package browse
 
 import (
 	"context"
-	"fmt"
-	"net/http"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"strings"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -89,7 +88,7 @@ func (service *Service) Tree(ctx context.Context, repo RepositoryRef, path strin
 			}
 		}
 
-		if err := mapStatusError(responseStatus, responseBody); err != nil {
+		if err := openapi.MapStatusError(responseStatus, responseBody); err != nil {
 			return nil, err
 		}
 
@@ -138,7 +137,7 @@ func (service *Service) Raw(ctx context.Context, repo RepositoryRef, path string
 		return nil, apperrors.New(apperrors.KindTransient, "failed to get raw content", err)
 	}
 
-	if err := mapStatusError(resp.StatusCode(), resp.Body); err != nil {
+	if err := openapi.MapStatusError(resp.StatusCode(), resp.Body); err != nil {
 		return nil, err
 	}
 
@@ -173,7 +172,7 @@ func (service *Service) File(ctx context.Context, repo RepositoryRef, path strin
 		return nil, apperrors.New(apperrors.KindTransient, "failed to get file content", err)
 	}
 
-	if err := mapStatusError(resp.StatusCode(), resp.Body); err != nil {
+	if err := openapi.MapStatusError(resp.StatusCode(), resp.Body); err != nil {
 		return nil, err
 	}
 
@@ -185,37 +184,4 @@ func validateRepositoryRef(repo RepositoryRef) error {
 		return apperrors.New(apperrors.KindValidation, "repository must be specified as project/repo", nil)
 	}
 	return nil
-}
-
-func mapStatusError(status int, body []byte) error {
-	if status >= 200 && status < 300 {
-		return nil
-	}
-
-	message := strings.TrimSpace(string(body))
-	if message == "" {
-		message = http.StatusText(status)
-	}
-
-	baseMessage := fmt.Sprintf("bitbucket API returned %d: %s", status, message)
-
-	switch status {
-	case http.StatusBadRequest:
-		return apperrors.New(apperrors.KindValidation, baseMessage, nil)
-	case http.StatusUnauthorized:
-		return apperrors.New(apperrors.KindAuthentication, baseMessage, nil)
-	case http.StatusForbidden:
-		return apperrors.New(apperrors.KindAuthorization, baseMessage, nil)
-	case http.StatusNotFound:
-		return apperrors.New(apperrors.KindNotFound, baseMessage, nil)
-	case http.StatusConflict:
-		return apperrors.New(apperrors.KindConflict, baseMessage, nil)
-	case http.StatusTooManyRequests:
-		return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-	default:
-		if status >= 500 {
-			return apperrors.New(apperrors.KindTransient, baseMessage, nil)
-		}
-		return apperrors.New(apperrors.KindPermanent, baseMessage, nil)
-	}
 }

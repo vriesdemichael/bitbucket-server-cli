@@ -184,17 +184,26 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			hookKey := args[0]
 
 			var settingsData []byte
-			if len(args) > 1 && args[1] != "-" {
-				settingsData = []byte(args[1])
-			} else if configFile != "" {
+			hasArgSettings := len(args) > 1
+			hasConfigFile := configFile != ""
+
+			if hasArgSettings && hasConfigFile {
+				return fmt.Errorf("cannot provide settings as both an argument and via --config-file; please use only one")
+			}
+
+			if hasArgSettings {
+				if args[1] == "-" {
+					settingsData, err = io.ReadAll(cmd.InOrStdin())
+					if err != nil {
+						return fmt.Errorf("failed to read stdin: %w", err)
+					}
+				} else {
+					settingsData = []byte(args[1])
+				}
+			} else if hasConfigFile {
 				settingsData, err = os.ReadFile(configFile)
 				if err != nil {
 					return fmt.Errorf("failed to read config file: %w", err)
-				}
-			} else if len(args) > 1 && args[1] == "-" {
-				settingsData, err = io.ReadAll(cmd.InOrStdin())
-				if err != nil {
-					return fmt.Errorf("failed to read stdin: %w", err)
 				}
 			} else {
 				// No settings provided, just get current settings
@@ -212,6 +221,9 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 				if projectKey == "" {
 					projectKey = cfg.ProjectKey
 				}
+				if projectKey == "" {
+					return fmt.Errorf("project key is required (use --project or --repo)")
+				}
 				settings, err := service.GetProjectHookSettings(cmd.Context(), projectKey, hookKey)
 				if err != nil {
 					return err
@@ -222,6 +234,9 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			var settings map[string]any
 			if err := json.Unmarshal(settingsData, &settings); err != nil {
 				return fmt.Errorf("invalid settings JSON: %w", err)
+			}
+			if settings == nil {
+				return fmt.Errorf("invalid settings JSON: settings must be a JSON object, not null")
 			}
 
 			if repositorySelector != "" {
@@ -242,6 +257,9 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 
 			if projectKey == "" {
 				projectKey = cfg.ProjectKey
+			}
+			if projectKey == "" {
+				return fmt.Errorf("project key is required (use --project or --repo)")
 			}
 			result, err := service.SetProjectHookSettings(cmd.Context(), projectKey, hookKey, settings)
 			if err != nil {

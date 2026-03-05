@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 )
 
@@ -277,7 +278,7 @@ func TestRepositorySettingsHelperCoverage(t *testing.T) {
 		t.Fatal("expected validation error for invalid permission")
 	}
 
-	if err := mapStatusError(http.StatusCreated, nil); err != nil {
+	if err := openapi.MapStatusError(http.StatusCreated, nil); err != nil {
 		t.Fatalf("expected nil for success status, got: %v", err)
 	}
 
@@ -296,7 +297,7 @@ func TestRepositorySettingsHelperCoverage(t *testing.T) {
 	}
 
 	for _, testCase := range tests {
-		err := mapStatusError(testCase.status, []byte("err"))
+		err := openapi.MapStatusError(testCase.status, []byte("err"))
 		if err == nil {
 			t.Fatalf("expected error for status %d", testCase.status)
 		}

@@ -167,27 +167,6 @@ func TestGetJSONDecodeFailure(t *testing.T) {
 	}
 }
 
-func TestMapStatusErrorCoverage(t *testing.T) {
-	tests := []struct {
-		status   int
-		exitCode int
-	}{
-		{status: http.StatusUnauthorized, exitCode: 3},
-		{status: http.StatusNotFound, exitCode: 4},
-		{status: http.StatusConflict, exitCode: 5},
-		{status: http.StatusBadRequest, exitCode: 2},
-		{status: http.StatusTooManyRequests, exitCode: 10},
-		{status: http.StatusTeapot, exitCode: 1},
-	}
-
-	for _, testCase := range tests {
-		err := mapStatusError(testCase.status, []byte("message"))
-		if apperrors.ExitCode(err) != testCase.exitCode {
-			t.Fatalf("expected exit code %d for status %d, got %d", testCase.exitCode, testCase.status, apperrors.ExitCode(err))
-		}
-	}
-}
-
 func TestApplyAuthUsesBasicCredentials(t *testing.T) {
 	client := NewFromConfig(config.AppConfig{BitbucketURL: "http://example.local", BitbucketUsername: "alice", BitbucketPassword: "secret"})
 	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, "http://example.local/test", nil)
