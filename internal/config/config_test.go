@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 )
@@ -13,6 +14,11 @@ func TestLoadFromEnvDefaults(t *testing.T) {
 	t.Setenv("BITBUCKET_URL", "")
 	t.Setenv("BITBUCKET_VERSION_TARGET", "")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "")
+	t.Setenv("BBSC_CA_FILE", "")
+	t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
+	t.Setenv("BBSC_REQUEST_TIMEOUT", "")
+	t.Setenv("BBSC_RETRY_COUNT", "")
+	t.Setenv("BBSC_RETRY_BACKOFF", "")
 
 	config, err := LoadFromEnv()
 	if err != nil {
@@ -22,6 +28,106 @@ func TestLoadFromEnvDefaults(t *testing.T) {
 	if config.BitbucketURL != defaultBitbucketURL {
 		t.Fatalf("expected default url %q, got %q", defaultBitbucketURL, config.BitbucketURL)
 	}
+	if config.RequestTimeout != defaultRequestTimeout {
+		t.Fatalf("expected default timeout %s, got %s", defaultRequestTimeout, config.RequestTimeout)
+	}
+	if config.RetryCount != defaultRetryCount {
+		t.Fatalf("expected default retry count %d, got %d", defaultRetryCount, config.RetryCount)
+	}
+	if config.RetryBackoff != defaultRetryBackoff {
+		t.Fatalf("expected default retry backoff %s, got %s", defaultRetryBackoff, config.RetryBackoff)
+	}
+}
+
+func TestLoadFromEnvTransportOverrides(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "true")
+	t.Setenv("BBSC_REQUEST_TIMEOUT", "45s")
+	t.Setenv("BBSC_RETRY_COUNT", "5")
+	t.Setenv("BBSC_RETRY_BACKOFF", "900ms")
+
+	caFile := filepath.Join(t.TempDir(), "ca.pem")
+	if err := os.WriteFile(caFile, []byte("-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"), 0o600); err != nil {
+		t.Fatalf("write ca file: %v", err)
+	}
+	t.Setenv("BBSC_CA_FILE", caFile)
+
+	loaded, err := LoadFromEnv()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if !loaded.InsecureSkipVerify {
+		t.Fatal("expected insecure skip verify to be true")
+	}
+	if loaded.RequestTimeout != 45*time.Second {
+		t.Fatalf("unexpected request timeout: %s", loaded.RequestTimeout)
+	}
+	if loaded.RetryCount != 5 {
+		t.Fatalf("unexpected retry count: %d", loaded.RetryCount)
+	}
+	if loaded.RetryBackoff != 900*time.Millisecond {
+		t.Fatalf("unexpected retry backoff: %s", loaded.RetryBackoff)
+	}
+	if loaded.CAFile != caFile {
+		t.Fatalf("unexpected ca file: %q", loaded.CAFile)
+	}
+}
+
+func TestLoadFromEnvTransportOverrideValidation(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BBSC_CA_FILE", "")
+
+	t.Run("invalid bool", func(t *testing.T) {
+		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "maybe")
+		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
+		t.Setenv("BBSC_RETRY_COUNT", "")
+		t.Setenv("BBSC_RETRY_BACKOFF", "")
+		if _, err := LoadFromEnv(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("invalid timeout", func(t *testing.T) {
+		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BBSC_REQUEST_TIMEOUT", "soon")
+		t.Setenv("BBSC_RETRY_COUNT", "")
+		t.Setenv("BBSC_RETRY_BACKOFF", "")
+		if _, err := LoadFromEnv(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("invalid retry count", func(t *testing.T) {
+		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
+		t.Setenv("BBSC_RETRY_COUNT", "-2")
+		t.Setenv("BBSC_RETRY_BACKOFF", "")
+		if _, err := LoadFromEnv(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("invalid retry backoff", func(t *testing.T) {
+		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
+		t.Setenv("BBSC_RETRY_COUNT", "")
+		t.Setenv("BBSC_RETRY_BACKOFF", "0s")
+		if _, err := LoadFromEnv(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("invalid ca path", func(t *testing.T) {
+		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
+		t.Setenv("BBSC_RETRY_COUNT", "")
+		t.Setenv("BBSC_RETRY_BACKOFF", "")
+		t.Setenv("BBSC_CA_FILE", filepath.Join(t.TempDir(), "missing.pem"))
+		if _, err := LoadFromEnv(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
 }
 
 func TestLoadFromEnvInvalidURL(t *testing.T) {
@@ -303,9 +409,84 @@ func TestValidateAndHostKeyBranches(t *testing.T) {
 		t.Fatal("expected username/password pairing validation error")
 	}
 
+	if err := (AppConfig{BitbucketURL: "http://localhost:7990", ProjectKey: "TEST", RequestTimeout: 0, RetryCount: 0, RetryBackoff: time.Second}).Validate(); err == nil {
+		t.Fatal("expected request timeout validation error")
+	}
+
+	if err := (AppConfig{BitbucketURL: "http://localhost:7990", ProjectKey: "TEST", RequestTimeout: time.Second, RetryCount: -1, RetryBackoff: time.Second}).Validate(); err == nil {
+		t.Fatal("expected retry count validation error")
+	}
+
+	if err := (AppConfig{BitbucketURL: "http://localhost:7990", ProjectKey: "TEST", RequestTimeout: time.Second, RetryCount: 0, RetryBackoff: 0}).Validate(); err == nil {
+		t.Fatal("expected retry backoff validation error")
+	}
+
+	if err := (AppConfig{BitbucketURL: "http://localhost:7990", ProjectKey: "TEST", RequestTimeout: time.Second, RetryCount: 0, RetryBackoff: time.Second, CAFile: t.TempDir()}).Validate(); err == nil {
+		t.Fatal("expected CA file path validation error for directory")
+	}
+
 	if hostKey("://bad") == "" {
 		t.Fatal("expected hostKey fallback value for invalid URL")
 	}
+}
+
+func TestConfigEnvParsingHelpers(t *testing.T) {
+	t.Run("env bool helper", func(t *testing.T) {
+		t.Setenv("BBSC_PARSE_BOOL", "")
+		value, err := envBoolOrDefault("BBSC_PARSE_BOOL", true)
+		if err != nil || !value {
+			t.Fatalf("expected fallback true, got value=%v err=%v", value, err)
+		}
+
+		t.Setenv("BBSC_PARSE_BOOL", "false")
+		value, err = envBoolOrDefault("BBSC_PARSE_BOOL", true)
+		if err != nil || value {
+			t.Fatalf("expected parsed false, got value=%v err=%v", value, err)
+		}
+
+		t.Setenv("BBSC_PARSE_BOOL", "not-bool")
+		if _, err = envBoolOrDefault("BBSC_PARSE_BOOL", false); err == nil {
+			t.Fatal("expected parse error")
+		}
+	})
+
+	t.Run("env int helper", func(t *testing.T) {
+		t.Setenv("BBSC_PARSE_INT", "")
+		value, err := envIntOrDefault("BBSC_PARSE_INT", 7)
+		if err != nil || value != 7 {
+			t.Fatalf("expected fallback 7, got value=%d err=%v", value, err)
+		}
+
+		t.Setenv("BBSC_PARSE_INT", "12")
+		value, err = envIntOrDefault("BBSC_PARSE_INT", 7)
+		if err != nil || value != 12 {
+			t.Fatalf("expected parsed 12, got value=%d err=%v", value, err)
+		}
+
+		t.Setenv("BBSC_PARSE_INT", "12x")
+		if _, err = envIntOrDefault("BBSC_PARSE_INT", 7); err == nil {
+			t.Fatal("expected parse error")
+		}
+	})
+
+	t.Run("env duration helper", func(t *testing.T) {
+		t.Setenv("BBSC_PARSE_DUR", "")
+		value, err := envDurationOrDefault("BBSC_PARSE_DUR", 2*time.Second)
+		if err != nil || value != 2*time.Second {
+			t.Fatalf("expected fallback 2s, got value=%s err=%v", value, err)
+		}
+
+		t.Setenv("BBSC_PARSE_DUR", "350ms")
+		value, err = envDurationOrDefault("BBSC_PARSE_DUR", 2*time.Second)
+		if err != nil || value != 350*time.Millisecond {
+			t.Fatalf("expected parsed 350ms, got value=%s err=%v", value, err)
+		}
+
+		t.Setenv("BBSC_PARSE_DUR", "later")
+		if _, err = envDurationOrDefault("BBSC_PARSE_DUR", time.Second); err == nil {
+			t.Fatal("expected parse error")
+		}
+	})
 }
 
 func TestLoadFromEnvUsesStoredTokenBranch(t *testing.T) {

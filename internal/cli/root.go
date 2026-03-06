@@ -7,8 +7,10 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
@@ -32,9 +34,17 @@ func NewRootCommand() *cobra.Command {
 		Short:         "Bitbucket Server CLI (live-behavior first)",
 		SilenceErrors: true,
 		SilenceUsage:  true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			return applyRuntimeFlagOverrides(cmd)
+		},
 	}
 
 	rootCmd.PersistentFlags().BoolVar(&options.JSON, "json", false, "Output as JSON")
+	rootCmd.PersistentFlags().String("ca-file", "", "Path to PEM CA bundle for TLS trust")
+	rootCmd.PersistentFlags().Bool("insecure-skip-verify", false, "Disable TLS certificate verification (unsafe; local/dev only)")
+	rootCmd.PersistentFlags().String("request-timeout", "", "HTTP request timeout (Go duration, e.g. 20s)")
+	rootCmd.PersistentFlags().Int("retry-count", -1, "HTTP retry attempts for transient errors")
+	rootCmd.PersistentFlags().String("retry-backoff", "", "Base retry backoff duration (e.g. 250ms)")
 
 	rootCmd.AddCommand(newAuthCommand(options))
 	rootCmd.AddCommand(newRepoCommand(options))
@@ -59,7 +69,77 @@ type rootOptions struct {
 }
 
 func loadConfig() (config.AppConfig, error) {
-	return config.LoadFromEnv()
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return config.AppConfig{}, err
+	}
+
+	if cfg.InsecureSkipVerify {
+		insecureTLSWarningOnce.Do(func() {
+			fmt.Fprintln(os.Stderr, "Warning: TLS certificate verification is disabled (--insecure-skip-verify / BBSC_INSECURE_SKIP_VERIFY); use only for local or development environments")
+		})
+	}
+
+	return cfg, nil
+}
+
+var insecureTLSWarningOnce sync.Once
+
+func applyRuntimeFlagOverrides(cmd *cobra.Command) error {
+	if cmd == nil {
+		return nil
+	}
+
+	lookupFlag := func(flagName string) *pflag.Flag {
+		if flag := cmd.Flags().Lookup(flagName); flag != nil {
+			return flag
+		}
+		return cmd.PersistentFlags().Lookup(flagName)
+	}
+
+	setIfChanged := func(flagName, envKey string) error {
+		flag := lookupFlag(flagName)
+		if flag == nil || !flag.Changed {
+			return nil
+		}
+
+		value := strings.TrimSpace(flag.Value.String())
+
+		if value == "" {
+			if err := os.Unsetenv(envKey); err != nil {
+				return apperrors.New(apperrors.KindInternal, "failed to clear runtime override", err)
+			}
+			return nil
+		}
+
+		if err := os.Setenv(envKey, value); err != nil {
+			return apperrors.New(apperrors.KindInternal, "failed to set runtime override", err)
+		}
+
+		return nil
+	}
+
+	if err := setIfChanged("ca-file", "BBSC_CA_FILE"); err != nil {
+		return err
+	}
+
+	if err := setIfChanged("insecure-skip-verify", "BBSC_INSECURE_SKIP_VERIFY"); err != nil {
+		return err
+	}
+
+	if err := setIfChanged("request-timeout", "BBSC_REQUEST_TIMEOUT"); err != nil {
+		return err
+	}
+
+	if err := setIfChanged("retry-count", "BBSC_RETRY_COUNT"); err != nil {
+		return err
+	}
+
+	if err := setIfChanged("retry-backoff", "BBSC_RETRY_BACKOFF"); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func loadConfigAndClient() (config.AppConfig, *openapigenerated.ClientWithResponses, error) {

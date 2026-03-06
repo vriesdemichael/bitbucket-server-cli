@@ -1,6 +1,8 @@
 package network
 
 import (
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
 	"net/http"
 	"os"
@@ -32,4 +34,47 @@ func NewSafeClient(timeout string) *http.Client {
 	return &http.Client{
 		Transport: &SafeTransport{},
 	}
+}
+
+type TLSOptions struct {
+	CAFile             string
+	InsecureSkipVerify bool
+}
+
+func NewSafeTransport(options TLSOptions) (http.RoundTripper, error) {
+	base, ok := http.DefaultTransport.(*http.Transport)
+	if !ok {
+		return &SafeTransport{}, nil
+	}
+
+	transport := base.Clone()
+	tlsConfig := transport.TLSClientConfig
+	if tlsConfig != nil {
+		tlsConfig = tlsConfig.Clone()
+	} else {
+		tlsConfig = &tls.Config{MinVersion: tls.VersionTLS12}
+	}
+
+	tlsConfig.InsecureSkipVerify = options.InsecureSkipVerify
+
+	if options.CAFile != "" {
+		pemData, err := os.ReadFile(options.CAFile)
+		if err != nil {
+			return nil, fmt.Errorf("read CA bundle: %w", err)
+		}
+
+		rootCAs, err := x509.SystemCertPool()
+		if err != nil || rootCAs == nil {
+			rootCAs = x509.NewCertPool()
+		}
+
+		if ok := rootCAs.AppendCertsFromPEM(pemData); !ok {
+			return nil, fmt.Errorf("parse CA bundle: no certificates found")
+		}
+
+		tlsConfig.RootCAs = rootCAs
+	}
+
+	transport.TLSClientConfig = tlsConfig
+	return &SafeTransport{Base: transport}, nil
 }

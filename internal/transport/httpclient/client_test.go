@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -37,6 +38,25 @@ func TestHealthAuthenticated(t *testing.T) {
 
 	if !health.Healthy || !health.Authenticated {
 		t.Fatalf("expected healthy authenticated state, got: %+v", health)
+	}
+}
+
+func TestNewFromConfigTransportOptions(t *testing.T) {
+	client := NewFromConfig(config.AppConfig{
+		BitbucketURL:   "http://example.local",
+		RequestTimeout: 42 * time.Second,
+		RetryCount:     7,
+		RetryBackoff:   333 * time.Millisecond,
+	})
+
+	if client.http.Timeout != 42*time.Second {
+		t.Fatalf("expected timeout 42s, got %s", client.http.Timeout)
+	}
+	if client.retries != 7 {
+		t.Fatalf("expected retries 7, got %d", client.retries)
+	}
+	if client.backoff != 333*time.Millisecond {
+		t.Fatalf("expected backoff 333ms, got %s", client.backoff)
 	}
 }
 
@@ -345,5 +365,23 @@ func TestApplyAuthPrefersTokenOverBasic(t *testing.T) {
 	client.applyAuth(req)
 	if req.Header.Get("Authorization") != "Bearer tok" {
 		t.Fatalf("expected bearer auth, got %q", req.Header.Get("Authorization"))
+	}
+}
+
+func TestClientInitErrorFromInvalidCA(t *testing.T) {
+	client := NewFromConfig(config.AppConfig{
+		BitbucketURL:   "http://localhost:7990",
+		CAFile:         "/definitely/missing/ca.pem",
+		RequestTimeout: time.Second,
+		RetryCount:     1,
+		RetryBackoff:   time.Millisecond,
+	})
+
+	if err := client.GetJSON(context.Background(), "/rest/api/latest/test", nil, nil); err == nil {
+		t.Fatal("expected initialization validation error")
+	}
+
+	if _, err := client.Health(context.Background()); err == nil {
+		t.Fatal("expected health initialization validation error")
 	}
 }
