@@ -30,6 +30,10 @@ func TestCommitServiceCoreCommands(t *testing.T) {
 		w.Header().Set("Content-Type", "application/json")
 		switch {
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits":
+			if r.URL.Query().Get("since") == "v1.0" && r.URL.Query().Get("until") == "main" && r.URL.Query().Get("merges") == "exclude" {
+				_, _ = w.Write([]byte(`{"isLastPage":true,"values":[{"id":"abc","displayId":"abc","message":"init"}]}`))
+				return
+			}
 			_, _ = w.Write([]byte(`{"isLastPage":true,"values":[{"id":"abc","displayId":"abc","message":"init"}]}`))
 		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc":
 			_, _ = w.Write([]byte(`{"id":"abc","displayId":"abc","message":"init"}`))
@@ -49,6 +53,16 @@ func TestCommitServiceCoreCommands(t *testing.T) {
 	commits, err := service.List(context.Background(), repo, ListOptions{Limit: 25})
 	if err != nil || len(commits) != 1 {
 		t.Fatalf("expected commit list success, len=%d err=%v", len(commits), err)
+	}
+
+	commitsWithOptions, err := service.List(context.Background(), repo, ListOptions{
+		Limit:  25,
+		Since:  "v1.0",
+		Until:  "main",
+		Merges: "exclude",
+	})
+	if err != nil || len(commitsWithOptions) != 1 {
+		t.Fatalf("expected commit list with options success, len=%d err=%v", len(commitsWithOptions), err)
 	}
 
 	commit, err := service.Get(context.Background(), repo, "abc")

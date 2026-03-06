@@ -25,19 +25,20 @@ type ListOptions struct {
 }
 
 type PullRequest struct {
-	ID           int64      `json:"id"`
-	Title        string     `json:"title"`
-	Description  string     `json:"description,omitempty"`
-	State        string     `json:"state"`
-	Open         bool       `json:"open"`
-	Closed       bool       `json:"closed"`
-	Version      int        `json:"version,omitempty"`
-	Author       string     `json:"author,omitempty"`
-	SourceBranch string     `json:"source_branch,omitempty"`
-	TargetBranch string     `json:"target_branch,omitempty"`
-	CreatedDate  int64      `json:"created_date,omitempty"`
-	UpdatedDate  int64      `json:"updated_date,omitempty"`
-	Reviewers    []Reviewer `json:"reviewers,omitempty"`
+	ID           int64          `json:"id"`
+	Title        string         `json:"title"`
+	Description  string         `json:"description,omitempty"`
+	State        string         `json:"state"`
+	Open         bool           `json:"open"`
+	Closed       bool           `json:"closed"`
+	Repository   *RepositoryRef `json:"repository,omitempty"`
+	Version      int            `json:"version,omitempty"`
+	Author       string         `json:"author,omitempty"`
+	SourceBranch string         `json:"source_branch,omitempty"`
+	TargetBranch string         `json:"target_branch,omitempty"`
+	CreatedDate  int64          `json:"created_date,omitempty"`
+	UpdatedDate  int64          `json:"updated_date,omitempty"`
+	Reviewers    []Reviewer     `json:"reviewers,omitempty"`
 }
 
 type Reviewer struct {
@@ -88,6 +89,71 @@ func NewService(client *httpclient.Client) *Service {
 	return &Service{client: client}
 }
 
+type DashboardListOptions struct {
+	State string
+	Role  string
+	Limit int
+	Start int
+}
+
+func (service *Service) ListDashboard(ctx context.Context, options DashboardListOptions) ([]PullRequest, error) {
+	normalizedState, err := normalizeState(options.State)
+	if err != nil {
+		return nil, err
+	}
+
+	if options.Limit <= 0 {
+		options.Limit = 25
+	}
+	if options.Start < 0 {
+		return nil, apperrors.New(apperrors.KindValidation, "start must be greater than or equal to 0", nil)
+	}
+
+	path := "/rest/api/1.0/dashboard/pull-requests"
+	results := make([]PullRequest, 0)
+	start := options.Start
+
+	for {
+		query := map[string]string{
+			"limit": strconv.Itoa(options.Limit),
+			"start": strconv.Itoa(start),
+		}
+		if normalizedState != "" {
+			if normalizedState == "open" {
+				query["state"] = "OPEN"
+			} else if normalizedState != "all" {
+				query["state"] = strings.ToUpper(normalizedState)
+			}
+		}
+
+		if options.Role != "" {
+			query["role"] = strings.ToUpper(options.Role)
+		}
+
+		var response pagedPullRequestResponse
+		if err := service.client.GetJSON(ctx, path, query, &response); err != nil {
+			return nil, err
+		}
+
+		for _, value := range response.Values {
+			mapped := mapPullRequest(value)
+			results = append(results, mapped)
+		}
+
+		if response.IsLastPage {
+			break
+		}
+
+		if response.NextPageStart == start {
+			break
+		}
+
+		start = response.NextPageStart
+	}
+
+	return results, nil
+}
+
 func (service *Service) List(ctx context.Context, repository RepositoryRef, options ListOptions) ([]PullRequest, error) {
 	if strings.TrimSpace(repository.ProjectKey) == "" || strings.TrimSpace(repository.Slug) == "" {
 		return nil, apperrors.New(apperrors.KindValidation, "repository must be specified as project/repo", nil)
@@ -116,6 +182,8 @@ func (service *Service) List(ctx context.Context, repository RepositoryRef, opti
 		}
 		if normalizedState == "open" {
 			query["state"] = "OPEN"
+		} else if normalizedState != "all" {
+			query["state"] = strings.ToUpper(normalizedState)
 		} else {
 			query["state"] = "ALL"
 		}
@@ -474,7 +542,7 @@ func mapPullRequest(raw pullRequestValue) PullRequest {
 		}
 	}
 
-	return PullRequest{
+	pr := PullRequest{
 		ID:           raw.ID,
 		Title:        raw.Title,
 		Description:  strings.TrimSpace(raw.Description),
@@ -489,6 +557,15 @@ func mapPullRequest(raw pullRequestValue) PullRequest {
 		UpdatedDate:  raw.UpdatedDate,
 		Reviewers:    mapReviewers(raw.Participants),
 	}
+
+	if raw.ToRef != nil && raw.ToRef.Repository != nil {
+		pr.Repository = &RepositoryRef{
+			ProjectKey: raw.ToRef.Repository.Project.Key,
+			Slug:       raw.ToRef.Repository.Slug,
+		}
+	}
+
+	return pr
 }
 
 func mapReviewers(participants []pullRequestParticipant) []Reviewer {
@@ -793,8 +870,18 @@ type pullRequestUserIdentity struct {
 }
 
 type pullRequestRef struct {
-	ID        string `json:"id"`
-	DisplayID string `json:"displayId"`
+	ID         string                 `json:"id"`
+	DisplayID  string                 `json:"displayId"`
+	Repository *pullRequestRepository `json:"repository"`
+}
+
+type pullRequestRepository struct {
+	Slug    string             `json:"slug"`
+	Project pullRequestProject `json:"project"`
+}
+
+type pullRequestProject struct {
+	Key string `json:"key"`
 }
 
 type pagedTaskResponse struct {

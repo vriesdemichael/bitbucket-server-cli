@@ -60,6 +60,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newProjectCommand(options))
 	rootCmd.AddCommand(newReviewerCommand(options))
 	rootCmd.AddCommand(newHookCommand(options))
+	rootCmd.AddCommand(newSearchCommand(options))
 
 	return rootCmd
 }
@@ -316,7 +317,7 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 			client := httpclient.NewFromConfig(cfg)
 			service := repository.NewService(client)
 
-			repos, err := service.List(cmd.Context(), limit)
+			repos, err := service.List(cmd.Context(), repository.ListOptions{Limit: limit})
 			if err != nil {
 				return err
 			}
