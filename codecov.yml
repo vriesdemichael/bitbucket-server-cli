@@ -1,0 +1,44 @@
+codecov:
+  require_ci_to_pass: true
+
+coverage:
+  precision: 2
+  round: down
+  range: "70...100"
+  status:
+    project:
+      combined_raw:
+        flags:
+          - combined_raw
+        target: auto
+      combined_scoped:
+        flags:
+          - combined_scoped
+        target: auto
+    patch:
+      combined_raw:
+        flags:
+          - combined_raw
+        target: auto
+      combined_scoped:
+        flags:
+          - combined_scoped
+        target: auto
+
+flags:
+  combined_raw:
+    carryforward: false
+    paths:
+      - cmd/
+      - internal/
+      - tools/
+  combined_scoped:
+    carryforward: false
+    paths:
+      - cmd/
+      - internal/
+
+ignore:
+  - docs/**
+  - docker/**
+  - tests/**

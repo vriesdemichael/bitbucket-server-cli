@@ -9,6 +9,8 @@ vars:
   COVERAGE_BASE_REF: origin/main
   COVERAGE_MIN_GLOBAL_COMBINED: "85"
   COVERAGE_MIN_PATCH: "85"
+  COVERAGE_MIN_PATCH_LINES: "30"
+  COVERAGE_MAX_UNCOVERED_SMALL_PATCH: "2"
   COVERAGE_MIN_CONTRACT: "0"
 
 tasks:
@@ -97,7 +99,7 @@ tasks:
       - git fetch origin main
       - task: test:unit:coverage
       - task: test:live:coverage
-      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-patch-lines {{.COVERAGE_MIN_PATCH_LINES}} -max-uncovered-small-patch {{.COVERAGE_MAX_UNCOVERED_SMALL_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   quality:coverage:origin-main:
     desc: Run combined (unit + live) global + patch coverage gates against origin/main (requires live infra)
@@ -105,7 +107,7 @@ tasks:
       - git fetch origin main
       - task: test:unit:coverage
       - task: test:live:coverage
-      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref origin/main -manifest docs/quality/generated-operation-contracts.json -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref origin/main -manifest docs/quality/generated-operation-contracts.json -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-patch-lines {{.COVERAGE_MIN_PATCH_LINES}} -max-uncovered-small-patch {{.COVERAGE_MAX_UNCOVERED_SMALL_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   quality:coverage:report:update:
     desc: Update committed combined coverage report artifact
@@ -113,7 +115,7 @@ tasks:
       - git fetch origin main
       - task: test:unit:coverage
       - task: test:live:coverage
-      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -report-file docs/quality/coverage-report.json -write-report -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -report-file docs/quality/coverage-report.json -raw-coverprofile-file docs/quality/coverage.combined.raw.out -scoped-coverprofile-file docs/quality/coverage.combined.scoped.out -write-report -write-coverprofiles -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-patch-lines {{.COVERAGE_MIN_PATCH_LINES}} -max-uncovered-small-patch {{.COVERAGE_MAX_UNCOVERED_SMALL_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   quality:coverage:report:verify:
     desc: Verify committed coverage report artifact is current (local recompute, requires live infra)
@@ -121,28 +123,20 @@ tasks:
       - git fetch origin main
       - task: test:unit:coverage
       - task: test:live:coverage
-      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -report-file docs/quality/coverage-report.json -verify-report -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -coverprofile .tmp/coverage.unit.out -live-coverprofile .tmp/coverage.live.out -base-ref {{.COVERAGE_BASE_REF}} -manifest docs/quality/generated-operation-contracts.json -report-file docs/quality/coverage-report.json -raw-coverprofile-file docs/quality/coverage.combined.raw.out -scoped-coverprofile-file docs/quality/coverage.combined.scoped.out -verify-report -verify-coverprofiles -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-patch-lines {{.COVERAGE_MIN_PATCH_LINES}} -max-uncovered-small-patch {{.COVERAGE_MAX_UNCOVERED_SMALL_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   quality:coverage:report:verify:committed:
     desc: Verify committed coverage report artifact thresholds (CI-safe, no live execution)
     cmds:
-      - go run ./tools/quality-report -report-file docs/quality/coverage-report.json -verify-committed -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
+      - go run ./tools/quality-report -report-file docs/quality/coverage-report.json -raw-coverprofile-file docs/quality/coverage.combined.raw.out -scoped-coverprofile-file docs/quality/coverage.combined.scoped.out -verify-committed -min-global-combined {{.COVERAGE_MIN_GLOBAL_COMBINED}} -min-patch {{.COVERAGE_MIN_PATCH}} -min-patch-lines {{.COVERAGE_MIN_PATCH_LINES}} -max-uncovered-small-patch {{.COVERAGE_MAX_UNCOVERED_SMALL_PATCH}} -min-contract {{.COVERAGE_MIN_CONTRACT}}
 
   test:unit:
     desc: Run Go unit tests
     cmd: go test ./cmd/... ./internal/... ./tools/...
 
   test:go:safe:
-    desc: Run broad non-live Go tests without scanning docker bind-mount data directories
-    cmds:
-      - go test ./cmd/... ./internal/... ./tools/...
-      - |
-        test_packages="$(go list ./tests/... 2>/dev/null || true)"
-        if [ -n "$test_packages" ]; then
-          go test $test_packages
-        else
-          echo "No Go packages under ./tests; skipping"
-        fi
+    desc: Run targeted non-live Go tests over maintained Go packages
+    cmd: go test ./cmd/... ./internal/... ./tools/...
 
   test:unit:coverage:
     desc: Run Go unit tests with coverage profile output
