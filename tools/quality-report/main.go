@@ -93,12 +93,18 @@ func main() {
 	excludePrefixes := flag.String("scope-exclude", "internal/openapi/generated/,internal/models/generated/", "Comma-separated exclude path prefixes for scoped coverage")
 	manifestPath := flag.String("manifest", "docs/quality/generated-operation-contracts.json", "Path to generated-operation contract manifest")
 	reportPath := flag.String("report-file", "docs/quality/coverage-report.json", "Path to coverage report file")
+	rawCoverProfilePath := flag.String("raw-coverprofile-file", "", "Path to committed combined raw coverprofile artifact")
+	scopedCoverProfilePath := flag.String("scoped-coverprofile-file", "", "Path to committed combined scoped coverprofile artifact")
 	writeReport := flag.Bool("write-report", false, "Write report file")
 	verifyReport := flag.Bool("verify-report", false, "Verify report file matches generated output (recomputed from coverage profiles)")
 	verifyCommitted := flag.Bool("verify-committed", false, "Verify committed report file against thresholds without recomputing coverage")
+	writeCoverProfiles := flag.Bool("write-coverprofiles", false, "Write committed raw/scoped coverprofile artifacts when paths are provided")
+	verifyCoverProfiles := flag.Bool("verify-coverprofiles", false, "Verify committed raw/scoped coverprofile artifacts match recomputed output when paths are provided")
 	minGlobalCombined := flag.Float64("min-global-combined", 85.0, "Minimum required global combined coverage percentage")
 	minScoped := flag.Float64("min-scoped", -1.0, "Deprecated alias for --min-global-combined")
 	minPatch := flag.Float64("min-patch", 85.0, "Minimum required patch coverage percentage")
+	minPatchLines := flag.Int("min-patch-lines", 30, "Minimum coverable patch lines required before applying percentage-based patch gate")
+	maxUncoveredSmallPatch := flag.Int("max-uncovered-small-patch", 2, "Maximum uncovered patch lines allowed when coverable patch lines are below --min-patch-lines")
 	minContract := flag.Float64("min-contract", 0.0, "Minimum required used generated operation contract coverage percentage")
 	flag.Parse()
 
@@ -112,9 +118,33 @@ func main() {
 		if err != nil {
 			fail("failed to read committed report: %v", err)
 		}
+
+		if *rawCoverProfilePath != "" || *scopedCoverProfilePath != "" {
+			modulePath, err := readModulePath("go.mod")
+			if err != nil {
+				fail("failed to read module path: %v", err)
+			}
+			if *rawCoverProfilePath != "" {
+				if _, err := parseCoverageProfile(*rawCoverProfilePath, modulePath); err != nil {
+					fail("failed to parse committed raw coverprofile: %v", err)
+				}
+			}
+			if *scopedCoverProfilePath != "" {
+				if _, err := parseCoverageProfile(*scopedCoverProfilePath, modulePath); err != nil {
+					fail("failed to parse committed scoped coverprofile: %v", err)
+				}
+			}
+		}
+
 		printCoverageSummary(reportData)
-		enforceThresholds(reportData, resolvedMinGlobalCombined, *minPatch, *minContract)
+		enforceThresholds(reportData, resolvedMinGlobalCombined, *minPatch, *minPatchLines, *maxUncoveredSmallPatch, *minContract)
 		fmt.Printf("Verified committed report: %s\n", *reportPath)
+		if *rawCoverProfilePath != "" {
+			fmt.Printf("Verified committed raw coverprofile: %s\n", *rawCoverProfilePath)
+		}
+		if *scopedCoverProfilePath != "" {
+			fmt.Printf("Verified committed scoped coverprofile: %s\n", *scopedCoverProfilePath)
+		}
 		return
 	}
 
@@ -145,7 +175,7 @@ func main() {
 	unitScopedCovered, unitScopedTotal := calculateScopedCoverage(unitProfile, includes, excludes)
 	liveScopedCovered, liveScopedTotal := calculateScopedCoverage(liveProfile, includes, excludes)
 	combinedScopedCovered, combinedScopedTotal := calculateScopedCoverage(combinedProfile, includes, excludes)
-	patch := calculatePatchCoverage(changedLines, combinedProfile)
+	patch := calculatePatchCoverage(changedLines, combinedProfile, includes, excludes)
 
 	usedOperations, err := discoverUsedGeneratedOperations("internal/services")
 	if err != nil {
@@ -190,6 +220,10 @@ func main() {
 	}
 	encoded = append(encoded, '\n')
 
+	rawCoverProfileEncoded := encodeCoverageProfile(combinedProfile, modulePath)
+	scopedProfile := filterCoverageProfile(combinedProfile, includes, excludes)
+	scopedCoverProfileEncoded := encodeCoverageProfile(scopedProfile, modulePath)
+
 	printCoverageSummary(reportData)
 	if patch.coverableLines == 0 {
 		fmt.Println("Patch coverage: 100.00% (no coverable changed lines)")
@@ -219,7 +253,51 @@ func main() {
 		fmt.Printf("Verified report: %s\n", *reportPath)
 	}
 
-	enforceThresholds(reportData, resolvedMinGlobalCombined, *minPatch, *minContract)
+	if *rawCoverProfilePath != "" {
+		if *writeCoverProfiles {
+			if err := os.MkdirAll(filepath.Dir(*rawCoverProfilePath), 0o755); err != nil {
+				fail("failed to create raw coverprofile directory: %v", err)
+			}
+			if err := os.WriteFile(*rawCoverProfilePath, rawCoverProfileEncoded, 0o644); err != nil {
+				fail("failed to write raw coverprofile: %v", err)
+			}
+			fmt.Printf("Wrote raw coverprofile: %s\n", *rawCoverProfilePath)
+		}
+		if *verifyCoverProfiles {
+			existing, err := os.ReadFile(*rawCoverProfilePath)
+			if err != nil {
+				fail("failed to read raw coverprofile for verification: %v", err)
+			}
+			if !bytes.Equal(bytes.TrimSpace(existing), bytes.TrimSpace(rawCoverProfileEncoded)) {
+				fail("raw coverprofile is out of date: run quality:coverage:report:update and commit %s", *rawCoverProfilePath)
+			}
+			fmt.Printf("Verified raw coverprofile: %s\n", *rawCoverProfilePath)
+		}
+	}
+
+	if *scopedCoverProfilePath != "" {
+		if *writeCoverProfiles {
+			if err := os.MkdirAll(filepath.Dir(*scopedCoverProfilePath), 0o755); err != nil {
+				fail("failed to create scoped coverprofile directory: %v", err)
+			}
+			if err := os.WriteFile(*scopedCoverProfilePath, scopedCoverProfileEncoded, 0o644); err != nil {
+				fail("failed to write scoped coverprofile: %v", err)
+			}
+			fmt.Printf("Wrote scoped coverprofile: %s\n", *scopedCoverProfilePath)
+		}
+		if *verifyCoverProfiles {
+			existing, err := os.ReadFile(*scopedCoverProfilePath)
+			if err != nil {
+				fail("failed to read scoped coverprofile for verification: %v", err)
+			}
+			if !bytes.Equal(bytes.TrimSpace(existing), bytes.TrimSpace(scopedCoverProfileEncoded)) {
+				fail("scoped coverprofile is out of date: run quality:coverage:report:update and commit %s", *scopedCoverProfilePath)
+			}
+			fmt.Printf("Verified scoped coverprofile: %s\n", *scopedCoverProfilePath)
+		}
+	}
+
+	enforceThresholds(reportData, resolvedMinGlobalCombined, *minPatch, *minPatchLines, *maxUncoveredSmallPatch, *minContract)
 }
 
 func printCoverageSummary(reportData report) {
@@ -229,15 +307,23 @@ func printCoverageSummary(reportData report) {
 	fmt.Printf("Combined scoped coverage: %.2f%% (%d/%d statements)\n", reportData.Coverage.CombinedScopedPercent, reportData.Coverage.CombinedScopedStatements.Covered, reportData.Coverage.CombinedScopedStatements.Total)
 }
 
-func enforceThresholds(reportData report, minGlobalCombined, minPatch, minContract float64) {
+func enforceThresholds(reportData report, minGlobalCombined, minPatch float64, minPatchLines int, maxUncoveredSmallPatch int, minContract float64) {
 	var failed bool
 	globalCombinedPercent := reportData.Coverage.CombinedScopedPercent
 	if globalCombinedPercent < minGlobalCombined {
 		fmt.Printf("FAIL: global combined coverage %.2f%% is below required %.2f%%\n", globalCombinedPercent, minGlobalCombined)
 		failed = true
 	}
-	if reportData.Coverage.PatchPercent < minPatch {
-		fmt.Printf("FAIL: patch coverage %.2f%% is below required %.2f%%\n", reportData.Coverage.PatchPercent, minPatch)
+	patchTotal := reportData.Coverage.PatchLines.Total
+	patchCovered := reportData.Coverage.PatchLines.Covered
+	patchUncovered := patchTotal - patchCovered
+	if patchTotal < minPatchLines {
+		if patchUncovered > maxUncoveredSmallPatch {
+			fmt.Printf("FAIL: uncovered patch lines %d exceed allowed %d for small patch (%d coverable lines < %d)\n", patchUncovered, maxUncoveredSmallPatch, patchTotal, minPatchLines)
+			failed = true
+		}
+	} else if reportData.Coverage.PatchPercent < minPatch {
+		fmt.Printf("FAIL: patch coverage %.2f%% is below required %.2f%% (%d coverable lines >= %d)\n", reportData.Coverage.PatchPercent, minPatch, patchTotal, minPatchLines)
 		failed = true
 	}
 	if reportData.GeneratedContracts.CoveragePercent < minContract {
@@ -438,6 +524,53 @@ func calculateScopedCoverage(profile coverageProfile, includePrefixes, excludePr
 	return covered, total
 }
 
+func filterCoverageProfile(profile coverageProfile, includePrefixes, excludePrefixes []string) coverageProfile {
+	filtered := coverageProfile{byRelativePath: map[string][]coverageSegment{}}
+	for relPath, segments := range profile.byRelativePath {
+		if !pathIncluded(relPath, includePrefixes, excludePrefixes) {
+			continue
+		}
+		copied := make([]coverageSegment, len(segments))
+		copy(copied, segments)
+		filtered.byRelativePath[relPath] = copied
+		for _, segment := range copied {
+			filtered.totalStatements += segment.numStmt
+			if segment.covered {
+				filtered.coveredStatements += segment.numStmt
+			}
+		}
+	}
+	return filtered
+}
+
+func encodeCoverageProfile(profile coverageProfile, modulePath string) []byte {
+	var builder strings.Builder
+	builder.WriteString("mode: count\n")
+
+	paths := make([]string, 0, len(profile.byRelativePath))
+	for relPath := range profile.byRelativePath {
+		paths = append(paths, relPath)
+	}
+	sort.Strings(paths)
+
+	for _, relPath := range paths {
+		segments := profile.byRelativePath[relPath]
+		qualifiedPath := relPath
+		if modulePath != "" && !strings.HasPrefix(relPath, modulePath+"/") {
+			qualifiedPath = modulePath + "/" + relPath
+		}
+		for _, segment := range segments {
+			count := 0
+			if segment.covered {
+				count = 1
+			}
+			fmt.Fprintf(&builder, "%s:%d.1,%d.1 %d %d\n", qualifiedPath, segment.startLine, segment.endLine, segment.numStmt, count)
+		}
+	}
+
+	return []byte(builder.String())
+}
+
 func pathIncluded(path string, includes, excludes []string) bool {
 	for _, excluded := range excludes {
 		if strings.HasPrefix(path, excluded) {
@@ -536,9 +669,12 @@ func parseUnifiedDiffChangedLines(diff string) map[string]map[int]struct{} {
 	return changed
 }
 
-func calculatePatchCoverage(changed map[string]map[int]struct{}, profile coverageProfile) patchCoverage {
+func calculatePatchCoverage(changed map[string]map[int]struct{}, profile coverageProfile, includePrefixes, excludePrefixes []string) patchCoverage {
 	result := patchCoverage{}
 	for filePath, lineSet := range changed {
+		if !pathIncluded(filePath, includePrefixes, excludePrefixes) {
+			continue
+		}
 		segments := profile.byRelativePath[filePath]
 		if len(segments) == 0 {
 			continue

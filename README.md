@@ -1,5 +1,7 @@
 # bitbucket-server-cli
 
+[![codecov](https://codecov.io/gh/vriesdemichael/bitbucket-server-cli/branch/main/graph/badge.svg)](https://codecov.io/gh/vriesdemichael/bitbucket-server-cli)
+
 Go CLI and client for Bitbucket Server/Data Center automation with **live-behavior testing** against Atlassian Bitbucket `9.4.16`.
 
 ## Current state
@@ -36,7 +38,9 @@ Common commands:
 Coverage/reporting workflow:
 
 - combined metric source is unit + live coverage merged into one report
-- coverage gates: global combined coverage >= 85% (maintained source scope) and combined patch coverage >= 85%
+- coverage gates: global combined coverage >= 85% (maintained source scope)
+- patch gate applies to maintained source scope (`cmd/` + `internal/`, generated excluded)
+- patch gate policy: >=85% when coverable patch lines >= 30, otherwise allow up to 2 uncovered changed lines
 - patch baseline: compare against up-to-date `origin/main`
 - pre-commit hook gate: `task quality:coverage:origin-main` (runs live tests and enforces both thresholds)
 - local report update (commit this artifact): `task quality:coverage:report:update`
@@ -44,14 +48,20 @@ Coverage/reporting workflow:
 - CI verification (committed artifact only): `task quality:coverage:report:verify:committed`
 - committed report file: `docs/quality/coverage-report.json`
 - generated operation contract manifest: `docs/quality/generated-operation-contracts.json`
+- Codecov upload sources in CI are committed combined profiles: `docs/quality/coverage.combined.raw.out` and `docs/quality/coverage.combined.scoped.out`
+- Codecov reports two combined views via flags in `codecov.yml`: `combined_raw` and `combined_scoped`
+- Live + combined metrics remain enforced by committed artifacts generated locally via Task hooks/workflow
+- CI threshold configuration is code-based via `.github/coverage-thresholds.env` (`CI_COVERAGE_MIN_GLOBAL_COMBINED`, `CI_COVERAGE_MIN_PATCH`, `CI_COVERAGE_MIN_PATCH_LINES`, `CI_COVERAGE_MAX_UNCOVERED_SMALL_PATCH`, `CI_COVERAGE_MIN_CONTRACT`)
+- CI ADR floors are enforced even when variables are configured: global >= 85 and patch >= 85
 
 ## GitHub Actions
 
 - CI workflow: `.github/workflows/ci.yml`
 	- Runs on pull requests to `main` and pushes to `main`
 	- Executes `task quality:validate-decisions`
-	- Executes `task test:unit`
-	- Executes `task quality:coverage:report:verify:committed`
+	- Executes `task test:go:safe` (targeted non-live package scope: `cmd/...`, `internal/...`, `tools/...`)
+	- Uploads committed combined raw/scoped coverage profiles to Codecov
+	- Executes `task quality:coverage:report:verify:committed` with configurable CI thresholds (subject to ADR floor minimums)
 	- Publishes a final aggregate check named `CI Complete` (recommended PR required check)
 	- Does not run `test:live` because live integration tests require Bitbucket/Postgres infrastructure
 - Release workflow: `.github/workflows/release.yml`
