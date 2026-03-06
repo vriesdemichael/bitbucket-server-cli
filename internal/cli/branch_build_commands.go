@@ -1,0 +1,821 @@
+package cli
+
+import (
+	"encoding/json"
+	"fmt"
+	"strconv"
+
+	"github.com/spf13/cobra"
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	branchservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/branch"
+	qualityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/quality"
+)
+
+func newBranchCommand(options *rootOptions) *cobra.Command {
+	var repositorySelector string
+	var limit int
+
+	branchCmd := &cobra.Command{
+		Use:   "branch",
+		Short: "Repository branch and branch restriction commands",
+	}
+
+	branchCmd.PersistentFlags().StringVar(&repositorySelector, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	branchCmd.PersistentFlags().IntVar(&limit, "limit", 25, "Page size for list operations")
+
+	var orderBy string
+	var filterText string
+	var base string
+	var details bool
+	listCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List repository branches",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			var detailsFilter *bool
+			if cmd.Flags().Changed("details") {
+				detailsFilter = &details
+			}
+
+			service := branchservice.NewService(client)
+			branches, err := service.List(cmd.Context(), repo, branchservice.ListOptions{
+				Limit:      limit,
+				OrderBy:    orderBy,
+				FilterText: filterText,
+				Base:       base,
+				Details:    detailsFilter,
+			})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{
+					"repository": repo,
+					"branches":   branches,
+				})
+			}
+
+			if len(branches) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No branches found")
+				return nil
+			}
+
+			for _, branch := range branches {
+				fmt.Fprintf(
+					cmd.OutOrStdout(),
+					"%s\t%s\t%s\tdefault=%t\n",
+					safeString(branch.DisplayId),
+					safeString(branch.Id),
+					safeString(branch.LatestCommit),
+					branch.Default != nil && *branch.Default,
+				)
+			}
+
+			return nil
+		},
+	}
+	listCmd.Flags().StringVar(&orderBy, "order-by", "", "Branch ordering: ALPHABETICAL or MODIFICATION")
+	listCmd.Flags().StringVar(&filterText, "filter", "", "Filter text for branch names")
+	listCmd.Flags().StringVar(&base, "base", "", "Base ref filter")
+	listCmd.Flags().BoolVar(&details, "details", false, "Include branch details from Bitbucket")
+	branchCmd.AddCommand(listCmd)
+
+	var createStartPoint string
+	createCmd := &cobra.Command{
+		Use:   "create <name>",
+		Short: "Create repository branch",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			created, err := service.Create(cmd.Context(), repo, args[0], createStartPoint)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "branch": created})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Created branch %s\n", safeString(created.DisplayId))
+			return nil
+		},
+	}
+	createCmd.Flags().StringVar(&createStartPoint, "start-point", "", "Commit ID or ref to branch from")
+	_ = createCmd.MarkFlagRequired("start-point")
+	branchCmd.AddCommand(createCmd)
+
+	var deleteEndPoint string
+	var deleteDryRun bool
+	deleteCmd := &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete repository branch",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			if err := service.Delete(cmd.Context(), repo, args[0], deleteEndPoint, deleteDryRun); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "branch": args[0], "dry_run": deleteDryRun})
+			}
+
+			if deleteDryRun {
+				fmt.Fprintf(cmd.OutOrStdout(), "Dry-run delete completed for %s\n", args[0])
+				return nil
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch %s\n", args[0])
+			return nil
+		},
+	}
+	deleteCmd.Flags().StringVar(&deleteEndPoint, "end-point", "", "Expected commit at branch tip")
+	deleteCmd.Flags().BoolVar(&deleteDryRun, "dry-run", false, "Validate branch delete without performing it")
+	branchCmd.AddCommand(deleteCmd)
+
+	defaultCmd := &cobra.Command{Use: "default", Short: "Get or set repository default branch"}
+
+	defaultGetCmd := &cobra.Command{
+		Use:   "get",
+		Short: "Get repository default branch",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			defaultBranch, err := service.GetDefault(cmd.Context(), repo)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "default_branch": defaultBranch})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", safeString(defaultBranch.DisplayId), safeString(defaultBranch.Id))
+			return nil
+		},
+	}
+	defaultCmd.AddCommand(defaultGetCmd)
+
+	defaultSetCmd := &cobra.Command{
+		Use:   "set <name>",
+		Short: "Set repository default branch",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			if err := service.SetDefault(cmd.Context(), repo, args[0]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "default_branch": args[0]})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Default branch set to %s\n", args[0])
+			return nil
+		},
+	}
+	defaultCmd.AddCommand(defaultSetCmd)
+	branchCmd.AddCommand(defaultCmd)
+
+	modelCmd := &cobra.Command{Use: "model", Short: "Inspect and update branch model-related settings"}
+
+	modelInspectCmd := &cobra.Command{
+		Use:   "inspect <commit>",
+		Short: "Inspect branch refs that contain a commit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			refs, err := service.FindByCommit(cmd.Context(), repo, args[0], limit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "commit": args[0], "refs": refs})
+			}
+
+			if len(refs) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No matching refs found")
+				return nil
+			}
+
+			for _, ref := range refs {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", safeString(ref.DisplayId), safeString(ref.Id))
+			}
+
+			return nil
+		},
+	}
+	modelCmd.AddCommand(modelInspectCmd)
+
+	modelUpdateCmd := &cobra.Command{
+		Use:   "update <default-branch>",
+		Short: "Update repository default branch used by branch model settings",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			if err := service.SetDefault(cmd.Context(), repo, args[0]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "default_branch": args[0]})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Branch model default updated to %s\n", args[0])
+			return nil
+		},
+	}
+	modelCmd.AddCommand(modelUpdateCmd)
+	branchCmd.AddCommand(modelCmd)
+
+	restrictionCmd := &cobra.Command{Use: "restriction", Short: "Manage repository branch restrictions"}
+
+	var restrictionType string
+	var matcherType string
+	var matcherID string
+	restrictionListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List branch restrictions",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			restrictions, err := service.ListRestrictions(cmd.Context(), repo, branchservice.RestrictionListOptions{
+				Limit:       limit,
+				Type:        restrictionType,
+				MatcherType: matcherType,
+				MatcherID:   matcherID,
+			})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "restrictions": restrictions})
+			}
+
+			if len(restrictions) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No restrictions found")
+				return nil
+			}
+
+			for _, restriction := range restrictions {
+				matcher := ""
+				if restriction.Matcher != nil && restriction.Matcher.DisplayId != nil {
+					matcher = *restriction.Matcher.DisplayId
+				} else if restriction.Matcher != nil && restriction.Matcher.Id != nil {
+					matcher = *restriction.Matcher.Id
+				}
+
+				fmt.Fprintf(
+					cmd.OutOrStdout(),
+					"%d\t%s\t%s\tusers=%d\tgroups=%d\n",
+					safeInt32(restriction.Id),
+					safeString(restriction.Type),
+					matcher,
+					len(safeUsers(restriction.Users)),
+					len(safeStringSlice(restriction.Groups)),
+				)
+			}
+
+			return nil
+		},
+	}
+	restrictionListCmd.Flags().StringVar(&restrictionType, "type", "", "Restriction type (read-only, no-deletes, fast-forward-only, pull-request-only, no-creates)")
+	restrictionListCmd.Flags().StringVar(&matcherType, "matcher-type", "", "Matcher type (BRANCH, MODEL_BRANCH, MODEL_CATEGORY, PATTERN)")
+	restrictionListCmd.Flags().StringVar(&matcherID, "matcher-id", "", "Matcher id value")
+	restrictionCmd.AddCommand(restrictionListCmd)
+
+	restrictionGetCmd := &cobra.Command{
+		Use:   "get <id>",
+		Short: "Get branch restriction by id",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			restriction, err := service.GetRestriction(cmd.Context(), repo, args[0])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "restriction": restriction})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "id=%d\ttype=%s\n", safeInt32(restriction.Id), safeString(restriction.Type))
+			return nil
+		},
+	}
+	restrictionCmd.AddCommand(restrictionGetCmd)
+
+	var createRestrictionType string
+	var createMatcherType string
+	var createMatcherID string
+	var createMatcherDisplay string
+	var createUsers []string
+	var createGroups []string
+	var createAccessKeyIDs []int
+	restrictionCreateCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create branch restriction",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			accessKeyIDs, err := normalizeAccessKeyIDs(createAccessKeyIDs)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			created, err := service.CreateRestriction(cmd.Context(), repo, branchservice.RestrictionUpsertInput{
+				Type:           createRestrictionType,
+				MatcherType:    createMatcherType,
+				MatcherID:      createMatcherID,
+				MatcherDisplay: createMatcherDisplay,
+				Users:          createUsers,
+				Groups:         createGroups,
+				AccessKeyIDs:   accessKeyIDs,
+			})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "restriction": created})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Created restriction %d\n", safeInt32(created.Id))
+			return nil
+		},
+	}
+	restrictionCreateCmd.Flags().StringVar(&createRestrictionType, "type", "", "Restriction type")
+	restrictionCreateCmd.Flags().StringVar(&createMatcherType, "matcher-type", "BRANCH", "Matcher type")
+	restrictionCreateCmd.Flags().StringVar(&createMatcherID, "matcher-id", "", "Matcher id value")
+	restrictionCreateCmd.Flags().StringVar(&createMatcherDisplay, "matcher-display", "", "Matcher display value")
+	restrictionCreateCmd.Flags().StringSliceVar(&createUsers, "user", nil, "User slug allowed by restriction (repeatable)")
+	restrictionCreateCmd.Flags().StringSliceVar(&createGroups, "group", nil, "Group name allowed by restriction (repeatable)")
+	restrictionCreateCmd.Flags().IntSliceVar(&createAccessKeyIDs, "access-key-id", nil, "SSH access key id allowed by restriction (repeatable)")
+	_ = restrictionCreateCmd.MarkFlagRequired("type")
+	_ = restrictionCreateCmd.MarkFlagRequired("matcher-id")
+	restrictionCmd.AddCommand(restrictionCreateCmd)
+
+	var updateRestrictionType string
+	var updateMatcherType string
+	var updateMatcherID string
+	var updateMatcherDisplay string
+	var updateUsers []string
+	var updateGroups []string
+	var updateAccessKeyIDs []int
+	restrictionUpdateCmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update branch restriction",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			accessKeyIDs, err := normalizeAccessKeyIDs(updateAccessKeyIDs)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			updated, err := service.UpdateRestriction(cmd.Context(), repo, args[0], branchservice.RestrictionUpsertInput{
+				Type:           updateRestrictionType,
+				MatcherType:    updateMatcherType,
+				MatcherID:      updateMatcherID,
+				MatcherDisplay: updateMatcherDisplay,
+				Users:          updateUsers,
+				Groups:         updateGroups,
+				AccessKeyIDs:   accessKeyIDs,
+			})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "restriction": updated})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Updated restriction %d\n", safeInt32(updated.Id))
+			return nil
+		},
+	}
+	restrictionUpdateCmd.Flags().StringVar(&updateRestrictionType, "type", "", "Restriction type")
+	restrictionUpdateCmd.Flags().StringVar(&updateMatcherType, "matcher-type", "BRANCH", "Matcher type")
+	restrictionUpdateCmd.Flags().StringVar(&updateMatcherID, "matcher-id", "", "Matcher id value")
+	restrictionUpdateCmd.Flags().StringVar(&updateMatcherDisplay, "matcher-display", "", "Matcher display value")
+	restrictionUpdateCmd.Flags().StringSliceVar(&updateUsers, "user", nil, "User slug allowed by restriction (repeatable)")
+	restrictionUpdateCmd.Flags().StringSliceVar(&updateGroups, "group", nil, "Group name allowed by restriction (repeatable)")
+	restrictionUpdateCmd.Flags().IntSliceVar(&updateAccessKeyIDs, "access-key-id", nil, "SSH access key id allowed by restriction (repeatable)")
+	_ = restrictionUpdateCmd.MarkFlagRequired("type")
+	_ = restrictionUpdateCmd.MarkFlagRequired("matcher-id")
+	restrictionCmd.AddCommand(restrictionUpdateCmd)
+
+	restrictionDeleteCmd := &cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete branch restriction",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveBranchRepositoryReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := branchservice.NewService(client)
+			if err := service.DeleteRestriction(cmd.Context(), repo, args[0]); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "restriction_id": args[0]})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted restriction %s\n", args[0])
+			return nil
+		},
+	}
+	restrictionCmd.AddCommand(restrictionDeleteCmd)
+
+	branchCmd.AddCommand(restrictionCmd)
+
+	return branchCmd
+}
+
+func newBuildCommand(options *rootOptions) *cobra.Command {
+	var repositorySelector string
+
+	buildCmd := &cobra.Command{
+		Use:   "build",
+		Short: "Build status and required merge-check commands",
+	}
+
+	statusCmd := &cobra.Command{
+		Use:   "status",
+		Short: "Build status commands by commit",
+	}
+
+	var setKey string
+	var setState string
+	var setURL string
+	var setName string
+	var setDescription string
+	var setRef string
+	var setParent string
+	var setBuildNumber string
+	var setDuration int64
+	setCmd := &cobra.Command{
+		Use:   "set <commit>",
+		Short: "Set build status for a commit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			service := qualityservice.NewService(client)
+			if err := service.SetBuildStatus(cmd.Context(), args[0], qualityservice.BuildStatusSetInput{
+				Key:         setKey,
+				State:       setState,
+				URL:         setURL,
+				Name:        setName,
+				Description: setDescription,
+				Ref:         setRef,
+				Parent:      setParent,
+				BuildNumber: setBuildNumber,
+				DurationMS:  setDuration,
+			}); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok", "commit": args[0], "key": setKey})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Build status %s set on %s\n", setKey, args[0])
+			return nil
+		},
+	}
+	setCmd.Flags().StringVar(&setKey, "key", "", "Build status key")
+	setCmd.Flags().StringVar(&setState, "state", "", "Build state (SUCCESSFUL, FAILED, INPROGRESS, UNKNOWN)")
+	setCmd.Flags().StringVar(&setURL, "url", "", "Build URL")
+	setCmd.Flags().StringVar(&setName, "name", "", "Build display name")
+	setCmd.Flags().StringVar(&setDescription, "description", "", "Build description")
+	setCmd.Flags().StringVar(&setRef, "ref", "", "Build ref")
+	setCmd.Flags().StringVar(&setParent, "parent", "", "Build parent key")
+	setCmd.Flags().StringVar(&setBuildNumber, "build-number", "", "Build number")
+	setCmd.Flags().Int64Var(&setDuration, "duration-ms", 0, "Duration in milliseconds")
+	_ = setCmd.MarkFlagRequired("key")
+	_ = setCmd.MarkFlagRequired("state")
+	_ = setCmd.MarkFlagRequired("url")
+	statusCmd.AddCommand(setCmd)
+
+	var getLimit int
+	var getOrderBy string
+	statusCmd.AddCommand(&cobra.Command{
+		Use:   "get <commit>",
+		Short: "Get build statuses for a commit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			service := qualityservice.NewService(client)
+			statuses, err := service.GetBuildStatuses(cmd.Context(), args[0], getLimit, getOrderBy)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), statuses)
+			}
+
+			if len(statuses) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No build statuses found")
+				return nil
+			}
+
+			for _, status := range statuses {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", safeString(status.Key), safeStringFromBuildState(status.State), safeString(status.Url))
+			}
+
+			return nil
+		},
+	})
+	statusCmd.PersistentFlags().IntVar(&getLimit, "limit", 25, "Page size for list operations")
+	statusCmd.PersistentFlags().StringVar(&getOrderBy, "order-by", "", "Order by NEWEST, OLDEST, or STATUS")
+
+	var includeUnique bool
+	statusCmd.AddCommand(&cobra.Command{
+		Use:   "stats <commit>",
+		Short: "Get build status summary counts for a commit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			service := qualityservice.NewService(client)
+			stats, err := service.GetBuildStatusStats(cmd.Context(), args[0], includeUnique)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), stats)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Successful: %d\n", safeInt32(stats.Successful))
+			fmt.Fprintf(cmd.OutOrStdout(), "Failed: %d\n", safeInt32(stats.Failed))
+			fmt.Fprintf(cmd.OutOrStdout(), "In Progress: %d\n", safeInt32(stats.InProgress))
+			fmt.Fprintf(cmd.OutOrStdout(), "Unknown: %d\n", safeInt32(stats.Unknown))
+			fmt.Fprintf(cmd.OutOrStdout(), "Cancelled: %d\n", safeInt32(stats.Cancelled))
+			return nil
+		},
+	})
+	statusCmd.PersistentFlags().BoolVar(&includeUnique, "include-unique", false, "Include unique result details when available")
+
+	requiredCmd := &cobra.Command{
+		Use:   "required",
+		Short: "Required build merge-check management",
+	}
+	requiredCmd.PersistentFlags().StringVar(&repositorySelector, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+
+	var requiredLimit int
+	requiredCmd.PersistentFlags().IntVar(&requiredLimit, "limit", 25, "Page size for list operations")
+
+	requiredCmd.AddCommand(&cobra.Command{
+		Use:   "list",
+		Short: "List required build merge checks",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			if err != nil {
+				return err
+			}
+
+			checks, err := service.ListRequiredBuildChecks(cmd.Context(), repo, requiredLimit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), checks)
+			}
+
+			if len(checks) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No required build merge checks found")
+				return nil
+			}
+
+			for _, check := range checks {
+				fmt.Fprintf(cmd.OutOrStdout(), "id=%d buildParentKeys=%v\n", safeInt64(check.Id), safeStringSlice(check.BuildParentKeys))
+			}
+
+			return nil
+		},
+	})
+
+	var createBody string
+	createRequiredCmd := &cobra.Command{
+		Use:   "create",
+		Short: "Create required build merge check",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			if err != nil {
+				return err
+			}
+
+			payload := map[string]any{}
+			if err := json.Unmarshal([]byte(createBody), &payload); err != nil {
+				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
+			}
+
+			created, err := service.CreateRequiredBuildCheck(cmd.Context(), repo, payload)
+			if err != nil {
+				return err
+			}
+
+			return writeJSON(cmd.OutOrStdout(), created)
+		},
+	}
+	createRequiredCmd.Flags().StringVar(&createBody, "body", "", "Raw JSON payload for required build merge check")
+	_ = createRequiredCmd.MarkFlagRequired("body")
+	requiredCmd.AddCommand(createRequiredCmd)
+
+	var updateBody string
+	updateRequiredCmd := &cobra.Command{
+		Use:   "update <id>",
+		Short: "Update required build merge check",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			if err != nil {
+				return err
+			}
+
+			id, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil {
+				return apperrors.New(apperrors.KindValidation, "merge check id must be a valid integer", err)
+			}
+
+			payload := map[string]any{}
+			if err := json.Unmarshal([]byte(updateBody), &payload); err != nil {
+				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
+			}
+
+			updated, err := service.UpdateRequiredBuildCheck(cmd.Context(), repo, id, payload)
+			if err != nil {
+				return err
+			}
+
+			return writeJSON(cmd.OutOrStdout(), updated)
+		},
+	}
+	updateRequiredCmd.Flags().StringVar(&updateBody, "body", "", "Raw JSON payload for required build merge check")
+	_ = updateRequiredCmd.MarkFlagRequired("body")
+	requiredCmd.AddCommand(updateRequiredCmd)
+
+	requiredCmd.AddCommand(&cobra.Command{
+		Use:   "delete <id>",
+		Short: "Delete required build merge check",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			if err != nil {
+				return err
+			}
+
+			id, err := strconv.ParseInt(args[0], 10, 64)
+			if err != nil {
+				return apperrors.New(apperrors.KindValidation, "merge check id must be a valid integer", err)
+			}
+
+			if err := service.DeleteRequiredBuildCheck(cmd.Context(), repo, id); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "id": id})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Deleted required build merge check %d\n", id)
+			return nil
+		},
+	})
+
+	buildCmd.AddCommand(statusCmd)
+	buildCmd.AddCommand(requiredCmd)
+
+	return buildCmd
+}
