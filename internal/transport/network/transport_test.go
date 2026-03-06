@@ -3,6 +3,7 @@ package network
 import (
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
@@ -48,7 +49,7 @@ func TestSafeTransport(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			os.Setenv("BBSC_BLOCK_EXTERNAL_NETWORK", tt.blockEnv)
-			
+
 			// Use a dummy transport for the success cases to avoid real network calls
 			// if the URL is actually reachable.
 			base := &mockTransport{
@@ -56,10 +57,10 @@ func TestSafeTransport(t *testing.T) {
 					return &http.Response{StatusCode: 200}, nil
 				},
 			}
-			
+
 			transport := &SafeTransport{Base: base}
 			req, _ := http.NewRequest(http.MethodGet, tt.url, nil)
-			
+
 			_, err := transport.RoundTrip(req)
 			if (err != nil) != tt.wantError {
 				t.Errorf("SafeTransport.RoundTrip() error = %v, wantError %v", err, tt.wantError)
@@ -84,4 +85,46 @@ func TestNewSafeClient(t *testing.T) {
 	if _, ok := client.Transport.(*SafeTransport); !ok {
 		t.Errorf("expected SafeTransport, got %T", client.Transport)
 	}
+}
+
+func TestNewSafeTransport(t *testing.T) {
+	t.Run("insecure mode enabled", func(t *testing.T) {
+		roundTripper, err := NewSafeTransport(TLSOptions{InsecureSkipVerify: true})
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+
+		safe, ok := roundTripper.(*SafeTransport)
+		if !ok {
+			t.Fatalf("expected SafeTransport, got %T", roundTripper)
+		}
+
+		base, ok := safe.Base.(*http.Transport)
+		if !ok {
+			t.Fatalf("expected *http.Transport base, got %T", safe.Base)
+		}
+
+		if base.TLSClientConfig == nil || !base.TLSClientConfig.InsecureSkipVerify {
+			t.Fatal("expected InsecureSkipVerify to be true")
+		}
+	})
+
+	t.Run("missing ca file", func(t *testing.T) {
+		_, err := NewSafeTransport(TLSOptions{CAFile: filepath.Join(t.TempDir(), "missing.pem")})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("invalid ca file", func(t *testing.T) {
+		caFile := filepath.Join(t.TempDir(), "bad.pem")
+		if err := os.WriteFile(caFile, []byte("not-a-cert"), 0o600); err != nil {
+			t.Fatalf("write ca file: %v", err)
+		}
+
+		_, err := NewSafeTransport(TLSOptions{CAFile: caFile})
+		if err == nil {
+			t.Fatal("expected parse error")
+		}
+	})
 }

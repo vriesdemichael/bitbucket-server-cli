@@ -321,6 +321,67 @@ func TestAuthStatusJSON(t *testing.T) {
 	}
 }
 
+func TestRootTransportFlagsOverrideEnvironment(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+	t.Setenv("BBSC_REQUEST_TIMEOUT", "not-a-duration")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--request-timeout", "1s", "auth", "status"})
+
+	err := command.Execute()
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+}
+
+func TestApplyRuntimeFlagOverridesBranches(t *testing.T) {
+	if err := applyRuntimeFlagOverrides(nil); err != nil {
+		t.Fatalf("expected nil command to be a no-op, got: %v", err)
+	}
+
+	command := NewRootCommand()
+	if err := command.PersistentFlags().Set("ca-file", " "); err != nil {
+		t.Fatalf("set ca-file: %v", err)
+	}
+	if err := command.PersistentFlags().Set("insecure-skip-verify", "true"); err != nil {
+		t.Fatalf("set insecure-skip-verify: %v", err)
+	}
+	if err := command.PersistentFlags().Set("request-timeout", "30s"); err != nil {
+		t.Fatalf("set request-timeout: %v", err)
+	}
+	if err := command.PersistentFlags().Set("retry-count", "4"); err != nil {
+		t.Fatalf("set retry-count: %v", err)
+	}
+	if err := command.PersistentFlags().Set("retry-backoff", "500ms"); err != nil {
+		t.Fatalf("set retry-backoff: %v", err)
+	}
+
+	t.Setenv("BBSC_CA_FILE", "/tmp/keep")
+	if err := applyRuntimeFlagOverrides(command); err != nil {
+		t.Fatalf("expected runtime overrides to apply, got: %v", err)
+	}
+
+	if value := os.Getenv("BBSC_CA_FILE"); value != "" {
+		t.Fatalf("expected BBSC_CA_FILE to be unset by blank flag value, got %q", value)
+	}
+	if value := os.Getenv("BBSC_INSECURE_SKIP_VERIFY"); value != "true" {
+		t.Fatalf("unexpected BBSC_INSECURE_SKIP_VERIFY value: %q", value)
+	}
+	if value := os.Getenv("BBSC_REQUEST_TIMEOUT"); value != "30s" {
+		t.Fatalf("unexpected BBSC_REQUEST_TIMEOUT value: %q", value)
+	}
+	if value := os.Getenv("BBSC_RETRY_COUNT"); value != "4" {
+		t.Fatalf("unexpected BBSC_RETRY_COUNT value: %q", value)
+	}
+	if value := os.Getenv("BBSC_RETRY_BACKOFF"); value != "500ms" {
+		t.Fatalf("unexpected BBSC_RETRY_BACKOFF value: %q", value)
+	}
+}
+
 func TestAdminHealthSmoke(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {

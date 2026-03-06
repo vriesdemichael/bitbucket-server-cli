@@ -23,6 +23,8 @@ type Client struct {
 	username string
 	password string
 	retries  int
+	backoff  time.Duration
+	initErr  error
 }
 
 type HealthStatus struct {
@@ -33,16 +35,26 @@ type HealthStatus struct {
 }
 
 func NewFromConfig(cfg config.AppConfig) *Client {
+	transport, err := network.NewSafeTransport(network.TLSOptions{
+		CAFile:             cfg.CAFile,
+		InsecureSkipVerify: cfg.InsecureSkipVerify,
+	})
+	if err != nil {
+		transport = &network.SafeTransport{}
+	}
+
 	return &Client{
 		baseURL: strings.TrimRight(cfg.BitbucketURL, "/"),
 		http: &http.Client{
-			Timeout:   20 * time.Second,
-			Transport: &network.SafeTransport{},
+			Timeout:   cfg.RequestTimeout,
+			Transport: transport,
 		},
 		token:    cfg.BitbucketToken,
 		username: cfg.BitbucketUsername,
 		password: cfg.BitbucketPassword,
-		retries:  2,
+		retries:  cfg.RetryCount,
+		backoff:  cfg.RetryBackoff,
+		initErr:  err,
 	}
 }
 
@@ -63,6 +75,10 @@ func (client *Client) DeleteJSON(ctx context.Context, path string, query map[str
 }
 
 func (client *Client) doJSON(ctx context.Context, method string, path string, query map[string]string, in any, out any) error {
+	if client.initErr != nil {
+		return apperrors.New(apperrors.KindValidation, "failed to initialize HTTP transport", client.initErr)
+	}
+
 	requestURL, err := url.Parse(client.baseURL + path)
 	if err != nil {
 		return apperrors.New(apperrors.KindValidation, "invalid request URL", err)
@@ -105,7 +121,7 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, qu
 		if err != nil {
 			lastErr = apperrors.New(apperrors.KindTransient, "request failed", err)
 			if attempt < client.retries {
-				time.Sleep(time.Duration(attempt+1) * 250 * time.Millisecond)
+				time.Sleep(time.Duration(attempt+1) * client.backoff)
 				continue
 			}
 			return lastErr
@@ -132,7 +148,7 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, qu
 		if response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500 {
 			lastErr = mappedErr
 			if attempt < client.retries {
-				time.Sleep(time.Duration(attempt+1) * 250 * time.Millisecond)
+				time.Sleep(time.Duration(attempt+1) * client.backoff)
 				continue
 			}
 			return lastErr
@@ -149,6 +165,10 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, qu
 }
 
 func (client *Client) Health(ctx context.Context) (HealthStatus, error) {
+	if client.initErr != nil {
+		return HealthStatus{}, apperrors.New(apperrors.KindValidation, "failed to initialize HTTP transport", client.initErr)
+	}
+
 	requestURL, err := url.Parse(client.baseURL + "/rest/api/1.0/projects?limit=1")
 	if err != nil {
 		return HealthStatus{}, apperrors.New(apperrors.KindValidation, "invalid health probe URL", err)
@@ -168,7 +188,7 @@ func (client *Client) Health(ctx context.Context) (HealthStatus, error) {
 		if err != nil {
 			lastErr = apperrors.New(apperrors.KindTransient, "health probe failed", err)
 			if attempt < client.retries {
-				time.Sleep(time.Duration(attempt+1) * 250 * time.Millisecond)
+				time.Sleep(time.Duration(attempt+1) * client.backoff)
 				continue
 			}
 			return HealthStatus{}, lastErr
@@ -195,7 +215,7 @@ func (client *Client) Health(ctx context.Context) (HealthStatus, error) {
 		case response.StatusCode >= 500 || response.StatusCode == http.StatusTooManyRequests:
 			lastErr = openapi.MapStatusError(response.StatusCode, nil)
 			if attempt < client.retries {
-				time.Sleep(time.Duration(attempt+1) * 250 * time.Millisecond)
+				time.Sleep(time.Duration(attempt+1) * client.backoff)
 				continue
 			}
 			return HealthStatus{}, lastErr

@@ -106,11 +106,25 @@ Runtime environment variables:
 - `BITBUCKET_TOKEN` (optional)
 - `BITBUCKET_USERNAME` + `BITBUCKET_PASSWORD` (optional basic auth; `BITBUCKET_USER` is accepted as alias for username)
 - `ADMIN_USER` + `ADMIN_PASSWORD` fallback for local setup compatibility
+- `BBSC_CA_FILE` (optional path to PEM CA bundle for custom trust chains)
+- `BBSC_INSECURE_SKIP_VERIFY` (optional bool, default `false`; disables TLS cert verification for local/dev only)
+- `BBSC_REQUEST_TIMEOUT` (optional Go duration, default `20s`)
+- `BBSC_RETRY_COUNT` (optional non-negative integer, default `2`)
+- `BBSC_RETRY_BACKOFF` (optional Go duration, default `250ms`)
+
+Equivalent global CLI flags (highest precedence):
+
+- `--ca-file`
+- `--insecure-skip-verify`
+- `--request-timeout`
+- `--retry-count`
+- `--retry-backoff`
 
 Authentication workflow:
 
 - `go run ./cmd/bbsc auth login --host http://localhost:7990 --username admin --password admin`
 - `go run ./cmd/bbsc auth status`
+- `go run ./cmd/bbsc --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
 - `go run ./cmd/bbsc auth logout`
 - `go run ./cmd/bbsc diff refs main feature --repo TEST/my-repo`
 - `go run ./cmd/bbsc diff pr 123 --repo TEST/my-repo --patch`

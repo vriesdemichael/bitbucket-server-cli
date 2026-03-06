@@ -5,7 +5,9 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/joho/godotenv"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -17,6 +19,9 @@ const (
 	defaultBitbucketURL           = "http://localhost:7990"
 	defaultBitbucketVersionTarget = "9.4.16"
 	defaultProjectKey             = "TEST"
+	defaultRequestTimeout         = 20 * time.Second
+	defaultRetryCount             = 2
+	defaultRetryBackoff           = 250 * time.Millisecond
 	keyringServiceName            = "bbsc"
 )
 
@@ -27,6 +32,11 @@ type AppConfig struct {
 	BitbucketToken         string
 	BitbucketUsername      string
 	BitbucketPassword      string
+	CAFile                 string
+	InsecureSkipVerify     bool
+	RequestTimeout         time.Duration
+	RetryCount             int
+	RetryBackoff           time.Duration
 	AuthSource             string
 }
 
@@ -65,6 +75,26 @@ func LoadFromEnv() (AppConfig, error) {
 	_ = godotenv.Load(".env")
 	storedConfig, _ := LoadStoredConfig()
 
+	insecureSkipVerify, err := envBoolOrDefault("BBSC_INSECURE_SKIP_VERIFY", false)
+	if err != nil {
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_INSECURE_SKIP_VERIFY must be a boolean", err)
+	}
+
+	requestTimeout, err := envDurationOrDefault("BBSC_REQUEST_TIMEOUT", defaultRequestTimeout)
+	if err != nil {
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_REQUEST_TIMEOUT must be a valid duration (example: 20s)", err)
+	}
+
+	retryCount, err := envIntOrDefault("BBSC_RETRY_COUNT", defaultRetryCount)
+	if err != nil {
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_RETRY_COUNT must be a non-negative integer", err)
+	}
+
+	retryBackoff, err := envDurationOrDefault("BBSC_RETRY_BACKOFF", defaultRetryBackoff)
+	if err != nil {
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_RETRY_BACKOFF must be a valid duration (example: 250ms)", err)
+	}
+
 	envHost := strings.TrimSpace(os.Getenv("BITBUCKET_URL"))
 	resolvedURL := ""
 	if envHost != "" {
@@ -85,6 +115,11 @@ func LoadFromEnv() (AppConfig, error) {
 		BitbucketToken:         envOrDefault("BITBUCKET_TOKEN", ""),
 		BitbucketUsername:      envOrDefault("BITBUCKET_USERNAME", envOrDefault("BITBUCKET_USER", envOrDefault("ADMIN_USER", ""))),
 		BitbucketPassword:      envOrDefault("BITBUCKET_PASSWORD", envOrDefault("ADMIN_PASSWORD", "")),
+		CAFile:                 strings.TrimSpace(os.Getenv("BBSC_CA_FILE")),
+		InsecureSkipVerify:     insecureSkipVerify,
+		RequestTimeout:         requestTimeout,
+		RetryCount:             retryCount,
+		RetryBackoff:           retryBackoff,
 		AuthSource:             "env/default",
 	}
 
@@ -332,6 +367,28 @@ func (config AppConfig) Validate() error {
 		return apperrors.New(apperrors.KindValidation, "BITBUCKET_PROJECT_KEY cannot exceed 20 characters", nil)
 	}
 
+	if config.RequestTimeout <= 0 {
+		return apperrors.New(apperrors.KindValidation, "BBSC_REQUEST_TIMEOUT must be greater than 0", nil)
+	}
+
+	if config.RetryCount < 0 {
+		return apperrors.New(apperrors.KindValidation, "BBSC_RETRY_COUNT must be greater than or equal to 0", nil)
+	}
+
+	if config.RetryBackoff <= 0 {
+		return apperrors.New(apperrors.KindValidation, "BBSC_RETRY_BACKOFF must be greater than 0", nil)
+	}
+
+	if config.CAFile != "" {
+		info, err := os.Stat(config.CAFile)
+		if err != nil {
+			return apperrors.New(apperrors.KindValidation, fmt.Sprintf("BBSC_CA_FILE is invalid: %q", config.CAFile), err)
+		}
+		if info.IsDir() {
+			return apperrors.New(apperrors.KindValidation, "BBSC_CA_FILE must be a file path", nil)
+		}
+	}
+
 	if (config.BitbucketUsername == "") != (config.BitbucketPassword == "") {
 		return apperrors.New(
 			apperrors.KindValidation,
@@ -384,4 +441,46 @@ func hostKey(hostURL string) string {
 	}
 
 	return strings.ToLower(parsed.Scheme + "://" + parsed.Host)
+}
+
+func envBoolOrDefault(key string, fallback bool) (bool, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := strconv.ParseBool(value)
+	if err != nil {
+		return false, err
+	}
+
+	return parsed, nil
+}
+
+func envIntOrDefault(key string, fallback int) (int, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := strconv.Atoi(value)
+	if err != nil {
+		return 0, err
+	}
+
+	return parsed, nil
+}
+
+func envDurationOrDefault(key string, fallback time.Duration) (time.Duration, error) {
+	value := strings.TrimSpace(os.Getenv(key))
+	if value == "" {
+		return fallback, nil
+	}
+
+	parsed, err := time.ParseDuration(value)
+	if err != nil {
+		return 0, err
+	}
+
+	return parsed, nil
 }
