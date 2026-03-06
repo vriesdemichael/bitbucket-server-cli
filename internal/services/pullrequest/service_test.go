@@ -53,6 +53,62 @@ func TestListPullRequestsWithPaginationAndFilters(t *testing.T) {
 	}
 }
 
+func TestListPullRequestsDashboard(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/api/1.0/dashboard/pull-requests" {
+			http.NotFound(w, request)
+			return
+		}
+
+		start := request.URL.Query().Get("start")
+		if start == "" || start == "0" {
+			_, _ = fmt.Fprint(w, `{"values":[{"id":1,"title":"Dashboard PR","state":"OPEN","open":true,"closed":false,"toRef":{"repository":{"slug":"demo","project":{"key":"TEST"}}}}],"isLastPage":false,"nextPageStart":1}`)
+			return
+		}
+
+		_, _ = fmt.Fprint(w, `{"values":[{"id":2,"title":"Dashboard PR 2","state":"MERGED","open":false,"closed":true,"toRef":{"repository":{"slug":"demo","project":{"key":"TEST"}}}}],"isLastPage":true,"nextPageStart":2}`)
+	}))
+	defer server.Close()
+
+	cfg := config.AppConfig{BitbucketURL: server.URL}
+	service := NewService(httpclient.NewFromConfig(cfg))
+
+	results, err := service.ListDashboard(context.Background(), DashboardListOptions{State: "all", Role: "author", Limit: 10})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(results) != 2 {
+		t.Fatalf("expected 2 dashboard pull requests, got %d", len(results))
+	}
+	if results[0].ID != 1 || results[1].ID != 2 {
+		t.Fatalf("unexpected mapped dashboard pull requests: %#v", results)
+	}
+
+	// Test state filter specific branch logic
+	_, err = service.ListDashboard(context.Background(), DashboardListOptions{State: "open", Limit: 10})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	_, err = service.ListDashboard(context.Background(), DashboardListOptions{State: "closed", Limit: 10})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	_, err = service.ListDashboard(context.Background(), DashboardListOptions{State: "invalid"})
+	if err == nil {
+		t.Fatalf("expected error for invalid state")
+	}
+
+	_, err = service.ListDashboard(context.Background(), DashboardListOptions{Start: -1})
+	if err == nil || apperrors.ExitCode(err) != 2 {
+		t.Fatalf("expected start validation error exit code 2, got: %v", err)
+	}
+
+	_, err = service.ListDashboard(context.Background(), DashboardListOptions{State: "invalid"})
+	if err == nil || apperrors.ExitCode(err) != 2 {
+		t.Fatalf("expected state validation error exit code 2, got: %v", err)
+	}
+}
+
 func TestListPullRequestsValidationAndAuthError(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)

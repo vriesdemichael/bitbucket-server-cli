@@ -43,7 +43,7 @@ func TestListRepositoriesAcrossPages(t *testing.T) {
 	client := httpclient.NewFromConfig(cfg)
 	service := NewService(client)
 
-	repos, err := service.List(context.Background(), 1)
+	repos, err := service.List(context.Background(), ListOptions{Limit: 1})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -75,13 +75,54 @@ func TestListRepositoriesAuthError(t *testing.T) {
 	client := httpclient.NewFromConfig(cfg)
 	service := NewService(client)
 
-	_, err = service.List(context.Background(), 10)
+	_, err = service.List(context.Background(), ListOptions{Limit: 10})
 	if err == nil {
 		t.Fatal("expected auth error")
 	}
 
 	if apperrors.ExitCode(err) != 3 {
 		t.Fatalf("expected auth exit code 3, got %d (%v)", apperrors.ExitCode(err), err)
+	}
+}
+
+func TestListRepositoriesWithOptions(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		name := request.URL.Query().Get("name")
+		if name == "special" {
+			_, _ = fmt.Fprint(w, `{"values":[{"slug":"special-repo","name":"Special Repo","public":false,"project":{"key":"PRJ"}}],"isLastPage":true}`)
+			return
+		}
+
+		projectName := request.URL.Query().Get("projectname")
+		if projectName == "MyProject" {
+			_, _ = fmt.Fprint(w, `{"values":[{"slug":"repo","name":"Repo","public":false,"project":{"key":"PRJ"}}],"isLastPage":true}`)
+			return
+		}
+
+		http.NotFound(w, request)
+	}))
+	defer server.Close()
+
+	cfg := config.AppConfig{BitbucketURL: server.URL}
+	client := httpclient.NewFromConfig(cfg)
+	service := NewService(client)
+
+	// Test name filter
+	repos, err := service.List(context.Background(), ListOptions{Name: "special"})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(repos) != 1 || repos[0].Slug != "special-repo" {
+		t.Fatalf("unexpected repo results: %#v", repos)
+	}
+
+	// Test projectName filter
+	repos, err = service.List(context.Background(), ListOptions{ProjectName: "MyProject"})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if len(repos) != 1 || repos[0].Slug != "repo" {
+		t.Fatalf("unexpected repo results: %#v", repos)
 	}
 }
 
@@ -107,7 +148,7 @@ func TestListRepositoriesByProject(t *testing.T) {
 	client := httpclient.NewFromConfig(cfg)
 	service := NewService(client)
 
-	repos, err := service.ListByProject(context.Background(), "TEST", 10)
+	repos, err := service.ListByProject(context.Background(), "TEST", ListOptions{Limit: 10})
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}

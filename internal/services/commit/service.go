@@ -15,8 +15,12 @@ type RepositoryRef struct {
 }
 
 type ListOptions struct {
-	Limit int
-	Path  string
+	Limit  int
+	Start  int
+	Path   string
+	Since  string
+	Until  string
+	Merges string
 }
 
 type CompareOptions struct {
@@ -42,7 +46,7 @@ func (service *Service) List(ctx context.Context, repo RepositoryRef, options Li
 		options.Limit = 25
 	}
 
-	start := float32(0)
+	start := float32(options.Start)
 	pageLimit := float32(options.Limit)
 	results := make([]openapigenerated.RestCommit, 0)
 
@@ -51,6 +55,18 @@ func (service *Service) List(ctx context.Context, repo RepositoryRef, options Li
 		if strings.TrimSpace(options.Path) != "" {
 			path := strings.TrimSpace(options.Path)
 			params.Path = &path
+		}
+		if strings.TrimSpace(options.Since) != "" {
+			since := strings.TrimSpace(options.Since)
+			params.Since = &since
+		}
+		if strings.TrimSpace(options.Until) != "" {
+			until := strings.TrimSpace(options.Until)
+			params.Until = &until
+		}
+		if strings.TrimSpace(options.Merges) != "" {
+			merges := strings.TrimSpace(options.Merges)
+			params.Merges = &merges
 		}
 
 		response, err := service.client.GetCommitsWithResponse(ctx, repo.ProjectKey, repo.Slug, params)

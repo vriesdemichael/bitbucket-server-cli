@@ -23,32 +23,51 @@ func NewService(client *httpclient.Client) *Service {
 	return &Service{client: client}
 }
 
-func (service *Service) List(ctx context.Context, limit int) ([]Repository, error) {
-	return service.listPaged(ctx, "/rest/api/1.0/repos", limit)
+type ListOptions struct {
+	Limit       int
+	Start       int
+	Name        string
+	ProjectName string
 }
 
-func (service *Service) ListByProject(ctx context.Context, projectKey string, limit int) ([]Repository, error) {
+func (service *Service) List(ctx context.Context, opts ListOptions) ([]Repository, error) {
+	return service.listPaged(ctx, "/rest/api/1.0/repos", opts)
+}
+
+func (service *Service) ListByProject(ctx context.Context, projectKey string, opts ListOptions) ([]Repository, error) {
 	if projectKey == "" {
 		return nil, fmt.Errorf("project key is required")
 	}
 
-	return service.listPaged(ctx, "/rest/api/1.0/projects/"+projectKey+"/repos", limit)
+	return service.listPaged(ctx, "/rest/api/1.0/projects/"+projectKey+"/repos", opts)
 }
 
-func (service *Service) listPaged(ctx context.Context, path string, limit int) ([]Repository, error) {
-	if limit <= 0 {
-		limit = 25
+func (service *Service) listPaged(ctx context.Context, path string, opts ListOptions) ([]Repository, error) {
+	if opts.Limit <= 0 {
+		opts.Limit = 25
 	}
 
 	results := []Repository{}
-	start := 0
+	start := opts.Start
 
 	for {
 		var response pagedRepoResponse
+
+		queryParams := map[string]string{
+			"limit": strconv.Itoa(opts.Limit),
+			"start": strconv.Itoa(start),
+		}
+		if opts.Name != "" {
+			queryParams["name"] = opts.Name
+		}
+		if opts.ProjectName != "" {
+			queryParams["projectname"] = opts.ProjectName
+		}
+
 		err := service.client.GetJSON(
 			ctx,
 			path,
-			map[string]string{"limit": strconv.Itoa(limit), "start": strconv.Itoa(start)},
+			queryParams,
 			&response,
 		)
 		if err != nil {
