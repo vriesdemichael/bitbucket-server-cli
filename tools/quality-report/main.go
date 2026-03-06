@@ -564,7 +564,12 @@ func encodeCoverageProfile(profile coverageProfile, modulePath string) []byte {
 			if segment.covered {
 				count = 1
 			}
-			fmt.Fprintf(&builder, "%s:%d.1,%d.1 %d %d\n", qualifiedPath, segment.startLine, segment.endLine, segment.numStmt, count)
+			startCol := 1
+			endCol := 1
+			if segment.startLine == segment.endLine {
+				endCol = startCol + 1
+			}
+			fmt.Fprintf(&builder, "%s:%d.%d,%d.%d %d %d\n", qualifiedPath, segment.startLine, startCol, segment.endLine, endCol, segment.numStmt, count)
 		}
 	}
 
