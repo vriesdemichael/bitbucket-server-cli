@@ -18,6 +18,18 @@ type Dependencies struct {
 }
 
 func New(deps Dependencies) *cobra.Command {
+	if deps.LoadConfig == nil {
+		deps.LoadConfig = func() (config.AppConfig, error) {
+			return config.AppConfig{}, apperrors.New(apperrors.KindInternal, "auth command dependency LoadConfig is not configured", nil)
+		}
+	}
+
+	if deps.WriteJSON == nil {
+		deps.WriteJSON = func(io.Writer, any) error {
+			return apperrors.New(apperrors.KindInternal, "auth command dependency WriteJSON is not configured", nil)
+		}
+	}
+
 	authCmd := &cobra.Command{
 		Use:   "auth",
 		Short: "Authentication commands",
