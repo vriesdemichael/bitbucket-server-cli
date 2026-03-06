@@ -59,3 +59,16 @@ func TestStatusJSONUsesHostOverride(t *testing.T) {
 		t.Fatalf("expected auth_mode none, got %q", parsed["auth_mode"])
 	}
 }
+
+func TestStatusMissingDependenciesReturnError(t *testing.T) {
+	cmd := New(Dependencies{})
+	buffer := &bytes.Buffer{}
+	cmd.SetOut(buffer)
+	cmd.SetErr(buffer)
+	cmd.SetArgs([]string{"status"})
+
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when dependencies are missing")
+	}
+}
