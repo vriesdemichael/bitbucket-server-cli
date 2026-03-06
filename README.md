@@ -50,6 +50,7 @@ Coverage/reporting workflow:
 - generated operation contract manifest: `docs/quality/generated-operation-contracts.json`
 - Codecov upload sources in CI are committed combined profiles: `docs/quality/coverage.combined.raw.out` and `docs/quality/coverage.combined.scoped.out`
 - Codecov reports two combined views via flags in `codecov.yml`: `combined_raw` and `combined_scoped`
+- Codecov components in `codecov.yml` split coverage views by `generated-client`, `internal-api`, `cmd`, and `tools`
 - Live + combined metrics remain enforced by committed artifacts generated locally via Task hooks/workflow
 - CI threshold configuration is code-based via `.github/coverage-thresholds.env` (`CI_COVERAGE_MIN_GLOBAL_COMBINED`, `CI_COVERAGE_MIN_PATCH`, `CI_COVERAGE_MIN_PATCH_LINES`, `CI_COVERAGE_MAX_UNCOVERED_SMALL_PATCH`, `CI_COVERAGE_MIN_CONTRACT`)
 - CI ADR floors are enforced even when variables are configured: global >= 85 and patch >= 85

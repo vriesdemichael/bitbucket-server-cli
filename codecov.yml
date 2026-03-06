@@ -1,6 +1,33 @@
 codecov:
   require_ci_to_pass: true
 
+component_management:
+  individual_components:
+    - component_id: generated_client
+      name: generated-client
+      paths:
+        - internal/openapi/generated/**
+        - internal/models/generated/**
+
+    - component_id: internal_api
+      name: internal-api
+      flag_regexes:
+        - ^combined_scoped$
+      paths:
+        - internal/**
+
+    - component_id: cmd
+      name: cmd
+      flag_regexes:
+        - ^combined_scoped$
+      paths:
+        - cmd/**
+
+    - component_id: tools
+      name: tools
+      paths:
+        - tools/**
+
 coverage:
   precision: 2
   round: down
@@ -11,10 +38,9 @@ coverage:
         flags:
           - combined_scoped
         paths:
-          - cmd/**
           - internal/**
           - "!internal/openapi/generated/**"
-          - "!internal/models/generated/bitbucket_types.gen.go"
+          - "!internal/models/generated/**"
         target: auto
       combined_raw:
         flags:
@@ -30,17 +56,16 @@ coverage:
           - cmd/**
           - internal/**
           - "!internal/openapi/generated/**"
-          - "!internal/models/generated/bitbucket_types.gen.go"
+          - "!internal/models/generated/**"
         target: auto
     patch:
       default:
         flags:
           - combined_scoped
         paths:
-          - cmd/**
           - internal/**
           - "!internal/openapi/generated/**"
-          - "!internal/models/generated/bitbucket_types.gen.go"
+          - "!internal/models/generated/**"
         target: auto
       combined_raw:
         flags:
@@ -56,7 +81,7 @@ coverage:
           - cmd/**
           - internal/**
           - "!internal/openapi/generated/**"
-          - "!internal/models/generated/bitbucket_types.gen.go"
+          - "!internal/models/generated/**"
         target: auto
 
 ignore:
