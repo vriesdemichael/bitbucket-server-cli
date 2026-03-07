@@ -112,6 +112,8 @@ Runtime environment variables:
 - `BBSC_REQUEST_TIMEOUT` (optional Go duration, default `20s`)
 - `BBSC_RETRY_COUNT` (optional non-negative integer, default `2`)
 - `BBSC_RETRY_BACKOFF` (optional Go duration, default `250ms`)
+- `BBSC_LOG_LEVEL` (optional: `error|warn|info|debug`, default `error`)
+- `BBSC_LOG_FORMAT` (optional: `text|jsonl`, default `text`)
 
 Equivalent global CLI flags (highest precedence):
 
@@ -120,12 +122,23 @@ Equivalent global CLI flags (highest precedence):
 - `--request-timeout`
 - `--retry-count`
 - `--retry-backoff`
+- `--log-level`
+- `--log-format`
 
 Authentication workflow:
 
 - `go run ./cmd/bbsc auth login --host http://localhost:7990 --username admin --password admin`
 - `go run ./cmd/bbsc auth status`
 - `go run ./cmd/bbsc --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
+- `go run ./cmd/bbsc --log-level debug auth status`
+- `go run ./cmd/bbsc --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl`
+
+Diagnostics and supportability notes:
+
+- Diagnostics are emitted to `stderr` so command result output contracts on `stdout` remain unchanged.
+- Use `--log-format jsonl` for machine-filterable CI logs and support attachments.
+- Request diagnostics include endpoint path, HTTP status, retry count, and duration.
+- Sensitive values are redacted (token/password/secret/auth credentials and sensitive URL query values).
 - `go run ./cmd/bbsc auth logout`
 - `go run ./cmd/bbsc diff refs main feature --repo TEST/my-repo`
 - `go run ./cmd/bbsc diff pr 123 --repo TEST/my-repo --patch`

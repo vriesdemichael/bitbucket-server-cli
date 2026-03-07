@@ -1,8 +1,10 @@
 package httpclient
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -383,5 +385,17 @@ func TestClientInitErrorFromInvalidCA(t *testing.T) {
 
 	if _, err := client.Health(context.Background()); err == nil {
 		t.Fatal("expected health initialization validation error")
+	}
+}
+
+func TestDiagnosticsWriter(t *testing.T) {
+	buffer := &bytes.Buffer{}
+
+	if writer := diagnosticsWriter(true, buffer); writer != buffer {
+		t.Fatalf("expected configured writer when enabled, got %T", writer)
+	}
+
+	if writer := diagnosticsWriter(false, buffer); writer != io.Discard {
+		t.Fatalf("expected discard writer when disabled, got %T", writer)
 	}
 }
