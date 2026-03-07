@@ -1,6 +1,7 @@
 package openapi
 
 import (
+	"bytes"
 	"errors"
 	"io"
 	"net/http"
@@ -210,5 +211,17 @@ func TestNewClientWithResponsesFromConfigInvalidCA(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected transport initialization error")
+	}
+}
+
+func TestDiagnosticsWriter(t *testing.T) {
+	buffer := &bytes.Buffer{}
+
+	if writer := diagnosticsWriter(true, buffer); writer != buffer {
+		t.Fatalf("expected configured writer when enabled, got %T", writer)
+	}
+
+	if writer := diagnosticsWriter(false, buffer); writer != io.Discard {
+		t.Fatalf("expected discard writer when disabled, got %T", writer)
 	}
 }

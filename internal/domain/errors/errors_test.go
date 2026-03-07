@@ -64,3 +64,17 @@ func TestExitCodeDefaults(t *testing.T) {
 		t.Fatal("expected authorization exit code 3")
 	}
 }
+
+func TestKindOf(t *testing.T) {
+	if got := KindOf(nil); got != "" {
+		t.Fatalf("expected empty kind for nil error, got %q", got)
+	}
+
+	if got := KindOf(New(KindValidation, "bad", nil)); got != KindValidation {
+		t.Fatalf("expected validation kind, got %q", got)
+	}
+
+	if got := KindOf(errors.New("plain")); got != KindInternal {
+		t.Fatalf("expected internal kind for plain error, got %q", got)
+	}
+}

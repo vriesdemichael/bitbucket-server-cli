@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/diagnostics"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/zalando/go-keyring"
 	"gopkg.in/yaml.v3"
@@ -22,6 +23,8 @@ const (
 	defaultRequestTimeout         = 20 * time.Second
 	defaultRetryCount             = 2
 	defaultRetryBackoff           = 250 * time.Millisecond
+	defaultLogLevel               = string(diagnostics.LevelError)
+	defaultLogFormat              = string(diagnostics.FormatText)
 	keyringServiceName            = "bbsc"
 )
 
@@ -37,6 +40,9 @@ type AppConfig struct {
 	RequestTimeout         time.Duration
 	RetryCount             int
 	RetryBackoff           time.Duration
+	LogLevel               string
+	LogFormat              string
+	DiagnosticsEnabled     bool
 	AuthSource             string
 }
 
@@ -95,6 +101,20 @@ func LoadFromEnv() (AppConfig, error) {
 		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_RETRY_BACKOFF must be a valid duration (example: 250ms)", err)
 	}
 
+	rawLogLevel := strings.TrimSpace(os.Getenv("BBSC_LOG_LEVEL"))
+	rawLogFormat := strings.TrimSpace(os.Getenv("BBSC_LOG_FORMAT"))
+	diagnosticsEnabled := rawLogLevel != "" || rawLogFormat != ""
+
+	logLevel := envOrDefault("BBSC_LOG_LEVEL", defaultLogLevel)
+	if _, err := diagnostics.ParseLevel(logLevel); err != nil {
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_LOG_LEVEL must be one of: error,warn,info,debug", err)
+	}
+
+	logFormat := envOrDefault("BBSC_LOG_FORMAT", defaultLogFormat)
+	if _, err := diagnostics.ParseFormat(logFormat); err != nil {
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_LOG_FORMAT must be one of: text,jsonl", err)
+	}
+
 	envHost := strings.TrimSpace(os.Getenv("BITBUCKET_URL"))
 	resolvedURL := ""
 	if envHost != "" {
@@ -120,6 +140,9 @@ func LoadFromEnv() (AppConfig, error) {
 		RequestTimeout:         requestTimeout,
 		RetryCount:             retryCount,
 		RetryBackoff:           retryBackoff,
+		LogLevel:               strings.ToLower(strings.TrimSpace(logLevel)),
+		LogFormat:              strings.ToLower(strings.TrimSpace(logFormat)),
+		DiagnosticsEnabled:     diagnosticsEnabled,
 		AuthSource:             "env/default",
 	}
 
@@ -377,6 +400,14 @@ func (config AppConfig) Validate() error {
 
 	if config.RetryBackoff <= 0 {
 		return apperrors.New(apperrors.KindValidation, "BBSC_RETRY_BACKOFF must be greater than 0", nil)
+	}
+
+	if _, err := diagnostics.ParseLevel(config.LogLevel); err != nil {
+		return apperrors.New(apperrors.KindValidation, "BBSC_LOG_LEVEL must be one of: error,warn,info,debug", err)
+	}
+
+	if _, err := diagnostics.ParseFormat(config.LogFormat); err != nil {
+		return apperrors.New(apperrors.KindValidation, "BBSC_LOG_FORMAT must be one of: text,jsonl", err)
 	}
 
 	if config.CAFile != "" {

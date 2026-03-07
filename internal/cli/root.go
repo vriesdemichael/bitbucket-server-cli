@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/pflag"
 	authcmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/auth"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/diagnostics"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
@@ -27,6 +28,7 @@ func NewRootCommand() *cobra.Command {
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			diagnostics.SetOutputWriter(cmd.ErrOrStderr())
 			return applyRuntimeFlagOverrides(cmd)
 		},
 	}
@@ -37,6 +39,8 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().String("request-timeout", "", "HTTP request timeout (Go duration, e.g. 20s)")
 	rootCmd.PersistentFlags().Int("retry-count", -1, "HTTP retry attempts for transient errors")
 	rootCmd.PersistentFlags().String("retry-backoff", "", "Base retry backoff duration (e.g. 250ms)")
+	rootCmd.PersistentFlags().String("log-level", "", "Diagnostics verbosity: error, warn, info, debug")
+	rootCmd.PersistentFlags().String("log-format", "", "Diagnostics format: text or jsonl")
 
 	rootCmd.AddCommand(authcmd.New(authcmd.Dependencies{
 		JSONEnabled: func() bool { return options.JSON },
@@ -133,6 +137,14 @@ func applyRuntimeFlagOverrides(cmd *cobra.Command) error {
 	}
 
 	if err := setIfChanged("retry-backoff", "BBSC_RETRY_BACKOFF"); err != nil {
+		return err
+	}
+
+	if err := setIfChanged("log-level", "BBSC_LOG_LEVEL"); err != nil {
+		return err
+	}
+
+	if err := setIfChanged("log-format", "BBSC_LOG_FORMAT"); err != nil {
 		return err
 	}
 
