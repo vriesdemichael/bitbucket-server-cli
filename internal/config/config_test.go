@@ -19,6 +19,8 @@ func TestLoadFromEnvDefaults(t *testing.T) {
 	t.Setenv("BBSC_REQUEST_TIMEOUT", "")
 	t.Setenv("BBSC_RETRY_COUNT", "")
 	t.Setenv("BBSC_RETRY_BACKOFF", "")
+	t.Setenv("BBSC_LOG_LEVEL", "")
+	t.Setenv("BBSC_LOG_FORMAT", "")
 
 	config, err := LoadFromEnv()
 	if err != nil {
@@ -37,6 +39,15 @@ func TestLoadFromEnvDefaults(t *testing.T) {
 	if config.RetryBackoff != defaultRetryBackoff {
 		t.Fatalf("expected default retry backoff %s, got %s", defaultRetryBackoff, config.RetryBackoff)
 	}
+	if config.LogLevel != defaultLogLevel {
+		t.Fatalf("expected default log level %q, got %q", defaultLogLevel, config.LogLevel)
+	}
+	if config.LogFormat != defaultLogFormat {
+		t.Fatalf("expected default log format %q, got %q", defaultLogFormat, config.LogFormat)
+	}
+	if config.DiagnosticsEnabled {
+		t.Fatal("expected diagnostics to be disabled by default")
+	}
 }
 
 func TestLoadFromEnvTransportOverrides(t *testing.T) {
@@ -45,6 +56,8 @@ func TestLoadFromEnvTransportOverrides(t *testing.T) {
 	t.Setenv("BBSC_REQUEST_TIMEOUT", "45s")
 	t.Setenv("BBSC_RETRY_COUNT", "5")
 	t.Setenv("BBSC_RETRY_BACKOFF", "900ms")
+	t.Setenv("BBSC_LOG_LEVEL", "debug")
+	t.Setenv("BBSC_LOG_FORMAT", "jsonl")
 
 	caFile := filepath.Join(t.TempDir(), "ca.pem")
 	if err := os.WriteFile(caFile, []byte("-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"), 0o600); err != nil {
@@ -72,11 +85,22 @@ func TestLoadFromEnvTransportOverrides(t *testing.T) {
 	if loaded.CAFile != caFile {
 		t.Fatalf("unexpected ca file: %q", loaded.CAFile)
 	}
+	if loaded.LogLevel != "debug" {
+		t.Fatalf("unexpected log level: %q", loaded.LogLevel)
+	}
+	if loaded.LogFormat != "jsonl" {
+		t.Fatalf("unexpected log format: %q", loaded.LogFormat)
+	}
+	if !loaded.DiagnosticsEnabled {
+		t.Fatal("expected diagnostics to be enabled when logging env is configured")
+	}
 }
 
 func TestLoadFromEnvTransportOverrideValidation(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BBSC_CA_FILE", "")
+	t.Setenv("BBSC_LOG_LEVEL", "")
+	t.Setenv("BBSC_LOG_FORMAT", "")
 
 	t.Run("invalid bool", func(t *testing.T) {
 		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "maybe")
@@ -124,6 +148,32 @@ func TestLoadFromEnvTransportOverrideValidation(t *testing.T) {
 		t.Setenv("BBSC_RETRY_COUNT", "")
 		t.Setenv("BBSC_RETRY_BACKOFF", "")
 		t.Setenv("BBSC_CA_FILE", filepath.Join(t.TempDir(), "missing.pem"))
+		if _, err := LoadFromEnv(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("invalid log level", func(t *testing.T) {
+		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
+		t.Setenv("BBSC_RETRY_COUNT", "")
+		t.Setenv("BBSC_RETRY_BACKOFF", "")
+		t.Setenv("BBSC_CA_FILE", "")
+		t.Setenv("BBSC_LOG_LEVEL", "trace")
+		t.Setenv("BBSC_LOG_FORMAT", "")
+		if _, err := LoadFromEnv(); err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("invalid log format", func(t *testing.T) {
+		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
+		t.Setenv("BBSC_RETRY_COUNT", "")
+		t.Setenv("BBSC_RETRY_BACKOFF", "")
+		t.Setenv("BBSC_CA_FILE", "")
+		t.Setenv("BBSC_LOG_LEVEL", "")
+		t.Setenv("BBSC_LOG_FORMAT", "structured")
 		if _, err := LoadFromEnv(); err == nil {
 			t.Fatal("expected validation error")
 		}

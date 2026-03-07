@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/diagnostics"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/network"
@@ -24,6 +25,7 @@ type Client struct {
 	password string
 	retries  int
 	backoff  time.Duration
+	logger   *diagnostics.Logger
 	initErr  error
 }
 
@@ -54,7 +56,11 @@ func NewFromConfig(cfg config.AppConfig) *Client {
 		password: cfg.BitbucketPassword,
 		retries:  cfg.RetryCount,
 		backoff:  cfg.RetryBackoff,
-		initErr:  err,
+		logger: diagnostics.NewLogger(diagnostics.Config{
+			Level:  diagnostics.Level(cfg.LogLevel),
+			Format: diagnostics.Format(cfg.LogFormat),
+		}, diagnosticsWriter(cfg.DiagnosticsEnabled, diagnostics.OutputWriter())),
+		initErr: err,
 	}
 }
 
@@ -101,6 +107,7 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, qu
 
 	var lastErr error
 	for attempt := 0; attempt <= client.retries; attempt++ {
+		started := time.Now()
 		var bodyReader io.Reader
 		if payload != nil {
 			bodyReader = bytes.NewReader(payload)
@@ -119,11 +126,21 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, qu
 
 		response, err := client.http.Do(request)
 		if err != nil {
+			fields := map[string]any{
+				"method":      method,
+				"endpoint":    requestURL.Path,
+				"attempt":     attempt + 1,
+				"retry_count": client.retries,
+				"duration_ms": time.Since(started).Milliseconds(),
+				"error":       err.Error(),
+			}
 			lastErr = apperrors.New(apperrors.KindTransient, "request failed", err)
 			if attempt < client.retries {
+				client.logger.Warn("http request failed", fields)
 				time.Sleep(time.Duration(attempt+1) * client.backoff)
 				continue
 			}
+			client.logger.Error("http request failed", fields)
 			return lastErr
 		}
 
@@ -134,6 +151,14 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, qu
 		}
 
 		if response.StatusCode >= 200 && response.StatusCode < 300 {
+			client.logger.Debug("http request completed", map[string]any{
+				"method":      method,
+				"endpoint":    requestURL.Path,
+				"status":      response.StatusCode,
+				"attempt":     attempt + 1,
+				"retry_count": client.retries,
+				"duration_ms": time.Since(started).Milliseconds(),
+			})
 			if out == nil || len(bytes.TrimSpace(body)) == 0 {
 				return nil
 			}
@@ -145,14 +170,27 @@ func (client *Client) doJSON(ctx context.Context, method string, path string, qu
 		}
 
 		mappedErr := openapi.MapStatusError(response.StatusCode, body)
+		fields := map[string]any{
+			"method":      method,
+			"endpoint":    requestURL.Path,
+			"status":      response.StatusCode,
+			"attempt":     attempt + 1,
+			"retry_count": client.retries,
+			"duration_ms": time.Since(started).Milliseconds(),
+			"error":       mappedErr.Error(),
+		}
 		if response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500 {
 			lastErr = mappedErr
 			if attempt < client.retries {
+				client.logger.Warn("http request returned error status", fields)
 				time.Sleep(time.Duration(attempt+1) * client.backoff)
 				continue
 			}
+			client.logger.Error("http request returned error status", fields)
 			return lastErr
 		}
+
+		client.logger.Error("http request returned error status", fields)
 
 		return mappedErr
 	}
@@ -176,6 +214,7 @@ func (client *Client) Health(ctx context.Context) (HealthStatus, error) {
 
 	var lastErr error
 	for attempt := 0; attempt <= client.retries; attempt++ {
+		started := time.Now()
 		request, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL.String(), nil)
 		if err != nil {
 			return HealthStatus{}, apperrors.New(apperrors.KindInternal, "failed to build health request", err)
@@ -186,11 +225,21 @@ func (client *Client) Health(ctx context.Context) (HealthStatus, error) {
 
 		response, err := client.http.Do(request)
 		if err != nil {
+			fields := map[string]any{
+				"method":      http.MethodGet,
+				"endpoint":    requestURL.Path,
+				"attempt":     attempt + 1,
+				"retry_count": client.retries,
+				"duration_ms": time.Since(started).Milliseconds(),
+				"error":       err.Error(),
+			}
 			lastErr = apperrors.New(apperrors.KindTransient, "health probe failed", err)
 			if attempt < client.retries {
+				client.logger.Warn("health probe failed", fields)
 				time.Sleep(time.Duration(attempt+1) * client.backoff)
 				continue
 			}
+			client.logger.Error("health probe failed", fields)
 			return HealthStatus{}, lastErr
 		}
 
@@ -199,6 +248,13 @@ func (client *Client) Health(ctx context.Context) (HealthStatus, error) {
 
 		switch {
 		case response.StatusCode >= 200 && response.StatusCode < 300:
+			client.logger.Debug("health probe completed", map[string]any{
+				"status":      response.StatusCode,
+				"endpoint":    requestURL.Path,
+				"attempt":     attempt + 1,
+				"retry_count": client.retries,
+				"duration_ms": time.Since(started).Milliseconds(),
+			})
 			return HealthStatus{
 				Healthy:       true,
 				StatusCode:    response.StatusCode,
@@ -206,6 +262,13 @@ func (client *Client) Health(ctx context.Context) (HealthStatus, error) {
 				Message:       "Bitbucket API reachable and authenticated",
 			}, nil
 		case response.StatusCode == http.StatusUnauthorized || response.StatusCode == http.StatusForbidden || response.StatusCode >= 300 && response.StatusCode < 400:
+			client.logger.Info("health probe unauthenticated", map[string]any{
+				"status":      response.StatusCode,
+				"endpoint":    requestURL.Path,
+				"attempt":     attempt + 1,
+				"retry_count": client.retries,
+				"duration_ms": time.Since(started).Milliseconds(),
+			})
 			return HealthStatus{
 				Healthy:       true,
 				StatusCode:    response.StatusCode,
@@ -240,4 +303,12 @@ func (client *Client) applyAuth(request *http.Request) {
 	if client.username != "" && client.password != "" {
 		request.SetBasicAuth(client.username, client.password)
 	}
+}
+
+func diagnosticsWriter(enabled bool, writer io.Writer) io.Writer {
+	if enabled {
+		return writer
+	}
+
+	return io.Discard
 }

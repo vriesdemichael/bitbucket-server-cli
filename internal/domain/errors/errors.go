@@ -53,6 +53,19 @@ func IsKind(err error, kind Kind) bool {
 	return false
 }
 
+func KindOf(err error) Kind {
+	var appError *AppError
+	if errors.As(err, &appError) {
+		return appError.Kind
+	}
+
+	if err == nil {
+		return ""
+	}
+
+	return KindInternal
+}
+
 func ExitCode(err error) int {
 	if err == nil {
 		return 0
