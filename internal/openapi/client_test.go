@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/diagnostics"
 )
 
 type retryRoundTripperFunc func(*http.Request) (*http.Response, error)
@@ -217,11 +218,11 @@ func TestNewClientWithResponsesFromConfigInvalidCA(t *testing.T) {
 func TestDiagnosticsWriter(t *testing.T) {
 	buffer := &bytes.Buffer{}
 
-	if writer := diagnosticsWriter(true, buffer); writer != buffer {
+	if writer := diagnostics.EnabledWriter(true, buffer); writer != buffer {
 		t.Fatalf("expected configured writer when enabled, got %T", writer)
 	}
 
-	if writer := diagnosticsWriter(false, buffer); writer != io.Discard {
+	if writer := diagnostics.EnabledWriter(false, buffer); writer != io.Discard {
 		t.Fatalf("expected discard writer when disabled, got %T", writer)
 	}
 }

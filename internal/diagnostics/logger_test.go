@@ -55,7 +55,7 @@ func TestLoggerJSONLAndLevelFiltering(t *testing.T) {
 	logger := NewLogger(Config{Level: LevelWarn, Format: FormatJSONL}, buffer)
 
 	logger.Info("ignored", map[string]any{"status": 200})
-	logger.Warn("request retry", map[string]any{"retry_count": 1, "token": "abc"})
+	logger.Warn("request retry", map[string]any{"retry_count": 1, "token": "abc", "message": "override"})
 
 	lines := strings.Split(strings.TrimSpace(buffer.String()), "\n")
 	if len(lines) != 1 {
@@ -69,6 +69,9 @@ func TestLoggerJSONLAndLevelFiltering(t *testing.T) {
 
 	if payload["level"] != "warn" {
 		t.Fatalf("expected warn level, got: %v", payload["level"])
+	}
+	if payload["message"] != "request retry" {
+		t.Fatalf("expected reserved message key not to be overwritten, got: %v", payload["message"])
 	}
 	if payload["token"] != "[REDACTED]" {
 		t.Fatalf("expected token redaction, got: %v", payload["token"])
@@ -85,5 +88,17 @@ func TestOutputWriterSetterGetter(t *testing.T) {
 	SetOutputWriter(buffer)
 	if writer := OutputWriter(); writer != buffer {
 		t.Fatalf("expected configured writer, got %T", writer)
+	}
+}
+
+func TestEnabledWriter(t *testing.T) {
+	buffer := &bytes.Buffer{}
+
+	if writer := EnabledWriter(true, buffer); writer != buffer {
+		t.Fatalf("expected configured writer when enabled, got %T", writer)
+	}
+
+	if writer := EnabledWriter(false, buffer); writer != io.Discard {
+		t.Fatalf("expected discard writer when disabled, got %T", writer)
 	}
 }

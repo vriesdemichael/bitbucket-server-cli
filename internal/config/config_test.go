@@ -447,6 +447,10 @@ func TestLoadStoredConfigInvalidYAML(t *testing.T) {
 }
 
 func TestValidateAndHostKeyBranches(t *testing.T) {
+	if err := (AppConfig{BitbucketURL: "http://localhost:7990", ProjectKey: "TEST", RequestTimeout: time.Second, RetryCount: 0, RetryBackoff: time.Second}).Validate(); err != nil {
+		t.Fatalf("expected empty log level/format to validate with defaults, got: %v", err)
+	}
+
 	if err := (AppConfig{BitbucketURL: "http://localhost:7990", ProjectKey: ""}).Validate(); err == nil {
 		t.Fatal("expected empty project key validation error")
 	}
