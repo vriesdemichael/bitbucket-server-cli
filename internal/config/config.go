@@ -402,11 +402,19 @@ func (config AppConfig) Validate() error {
 		return apperrors.New(apperrors.KindValidation, "BBSC_RETRY_BACKOFF must be greater than 0", nil)
 	}
 
-	if _, err := diagnostics.ParseLevel(config.LogLevel); err != nil {
+	levelToValidate := strings.TrimSpace(config.LogLevel)
+	if levelToValidate == "" {
+		levelToValidate = defaultLogLevel
+	}
+	if _, err := diagnostics.ParseLevel(levelToValidate); err != nil {
 		return apperrors.New(apperrors.KindValidation, "BBSC_LOG_LEVEL must be one of: error,warn,info,debug", err)
 	}
 
-	if _, err := diagnostics.ParseFormat(config.LogFormat); err != nil {
+	formatToValidate := strings.TrimSpace(config.LogFormat)
+	if formatToValidate == "" {
+		formatToValidate = defaultLogFormat
+	}
+	if _, err := diagnostics.ParseFormat(formatToValidate); err != nil {
 		return apperrors.New(apperrors.KindValidation, "BBSC_LOG_FORMAT must be one of: text,jsonl", err)
 	}
 

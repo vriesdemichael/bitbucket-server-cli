@@ -61,6 +61,14 @@ func OutputWriter() io.Writer {
 	return outputWriter
 }
 
+func EnabledWriter(enabled bool, writer io.Writer) io.Writer {
+	if enabled {
+		return writer
+	}
+
+	return io.Discard
+}
+
 func ParseLevel(value string) (Level, error) {
 	trimmed := strings.TrimSpace(strings.ToLower(value))
 	switch Level(trimmed) {
@@ -136,6 +144,9 @@ func (logger *Logger) log(level Level, message string, fields map[string]any) {
 			"message":   message,
 		}
 		for key, value := range sanitized {
+			if key == "timestamp" || key == "level" || key == "message" {
+				continue
+			}
 			event[key] = value
 		}
 		encoded, err := json.Marshal(event)

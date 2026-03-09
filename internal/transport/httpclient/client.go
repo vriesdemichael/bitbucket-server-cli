@@ -59,7 +59,7 @@ func NewFromConfig(cfg config.AppConfig) *Client {
 		logger: diagnostics.NewLogger(diagnostics.Config{
 			Level:  diagnostics.Level(cfg.LogLevel),
 			Format: diagnostics.Format(cfg.LogFormat),
-		}, diagnosticsWriter(cfg.DiagnosticsEnabled, diagnostics.OutputWriter())),
+		}, diagnostics.EnabledWriter(cfg.DiagnosticsEnabled, diagnostics.OutputWriter())),
 		initErr: err,
 	}
 }
@@ -276,11 +276,20 @@ func (client *Client) Health(ctx context.Context) (HealthStatus, error) {
 				Message:       "Bitbucket reachable but credentials are missing or insufficient",
 			}, nil
 		case response.StatusCode >= 500 || response.StatusCode == http.StatusTooManyRequests:
+			fields := map[string]any{
+				"status":      response.StatusCode,
+				"endpoint":    requestURL.Path,
+				"attempt":     attempt + 1,
+				"retry_count": client.retries,
+				"duration_ms": time.Since(started).Milliseconds(),
+			}
 			lastErr = openapi.MapStatusError(response.StatusCode, nil)
 			if attempt < client.retries {
+				client.logger.Warn("health probe returned retriable status", fields)
 				time.Sleep(time.Duration(attempt+1) * client.backoff)
 				continue
 			}
+			client.logger.Error("health probe returned retriable status", fields)
 			return HealthStatus{}, lastErr
 		default:
 			return HealthStatus{}, openapi.MapStatusError(response.StatusCode, nil)
@@ -303,12 +312,4 @@ func (client *Client) applyAuth(request *http.Request) {
 	if client.username != "" && client.password != "" {
 		request.SetBasicAuth(client.username, client.password)
 	}
-}
-
-func diagnosticsWriter(enabled bool, writer io.Writer) io.Writer {
-	if enabled {
-		return writer
-	}
-
-	return io.Discard
 }

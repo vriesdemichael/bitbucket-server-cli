@@ -33,7 +33,7 @@ func NewClientWithResponsesFromConfig(cfg config.AppConfig) (*openapigenerated.C
 			logger: diagnostics.NewLogger(diagnostics.Config{
 				Level:  diagnostics.Level(cfg.LogLevel),
 				Format: diagnostics.Format(cfg.LogFormat),
-			}, diagnosticsWriter(cfg.DiagnosticsEnabled, diagnostics.OutputWriter())),
+			}, diagnostics.EnabledWriter(cfg.DiagnosticsEnabled, diagnostics.OutputWriter())),
 		},
 	}
 
@@ -145,12 +145,4 @@ func (transport *retryTransport) RoundTrip(request *http.Request) (*http.Respons
 	}
 
 	return nil, lastError
-}
-
-func diagnosticsWriter(enabled bool, writer io.Writer) io.Writer {
-	if enabled {
-		return writer
-	}
-
-	return io.Discard
 }

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/diagnostics"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 )
 
@@ -355,6 +356,31 @@ func TestHealthTransportAndPermanentErrorBranches(t *testing.T) {
 			t.Fatalf("expected permanent exit code 1, got %d (%v)", apperrors.ExitCode(err), err)
 		}
 	})
+
+	t.Run("retriable status emits diagnostics", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		diagnostics.SetOutputWriter(buffer)
+		t.Cleanup(func() {
+			diagnostics.SetOutputWriter(io.Discard)
+		})
+
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			writer.WriteHeader(http.StatusServiceUnavailable)
+		}))
+		defer server.Close()
+
+		client := NewFromConfig(config.AppConfig{BitbucketURL: server.URL, DiagnosticsEnabled: true, LogLevel: "warn", LogFormat: "jsonl"})
+		client.retries = 1
+
+		_, err := client.Health(context.Background())
+		if err == nil {
+			t.Fatal("expected transient status error")
+		}
+
+		if !strings.Contains(buffer.String(), "health probe returned retriable status") {
+			t.Fatalf("expected retriable health diagnostics output, got: %s", buffer.String())
+		}
+	})
 }
 
 func TestApplyAuthPrefersTokenOverBasic(t *testing.T) {
@@ -391,11 +417,11 @@ func TestClientInitErrorFromInvalidCA(t *testing.T) {
 func TestDiagnosticsWriter(t *testing.T) {
 	buffer := &bytes.Buffer{}
 
-	if writer := diagnosticsWriter(true, buffer); writer != buffer {
+	if writer := diagnostics.EnabledWriter(true, buffer); writer != buffer {
 		t.Fatalf("expected configured writer when enabled, got %T", writer)
 	}
 
-	if writer := diagnosticsWriter(false, buffer); writer != io.Discard {
+	if writer := diagnostics.EnabledWriter(false, buffer); writer != io.Discard {
 		t.Fatalf("expected discard writer when disabled, got %T", writer)
 	}
 }
