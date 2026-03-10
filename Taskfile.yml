@@ -59,6 +59,10 @@ tasks:
     desc: Validate ADR decision records with Go validator
     cmd: go run ./tools/adr-validator --validate
 
+  docs:export-bulk-schemas:
+    desc: Export JSON Schemas for bulk policy artifacts
+    cmd: go run ./tools/bulk-schema-export -out docs/reference/schemas
+
   quality:git:ensure-linear:
     desc: Fail when branch contains merge commits relative to origin/main
     cmds:

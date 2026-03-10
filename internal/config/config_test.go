@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 	"time"
 
@@ -47,6 +48,93 @@ func TestLoadFromEnvDefaults(t *testing.T) {
 	}
 	if config.DiagnosticsEnabled {
 		t.Fatal("expected diagnostics to be disabled by default")
+	}
+}
+
+func TestDotenvCandidatesWalkToRepositoryRoot(t *testing.T) {
+	packageDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(packageDir, "..", ".."))
+
+	nested := packageDir
+	if err := os.Chdir(nested); err != nil {
+		t.Fatalf("chdir nested: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(repoRoot)
+	})
+
+	candidates := dotenvCandidates()
+	if len(candidates) < 2 {
+		t.Fatalf("expected multiple dotenv candidates, got %#v", candidates)
+	}
+	expectedPrefix := []string{
+		filepath.Join(nested, ".env"),
+		filepath.Join(filepath.Dir(nested), ".env"),
+		filepath.Join(repoRoot, ".env"),
+	}
+	if !reflect.DeepEqual(candidates[:len(expectedPrefix)], expectedPrefix) {
+		t.Fatalf("unexpected dotenv candidates prefix: got %#v want %#v", candidates[:len(expectedPrefix)], expectedPrefix)
+	}
+}
+
+func TestLoadFromEnvFindsRepositoryDotenvFromNestedWorkingDirectory(t *testing.T) {
+	packageDir, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	repoRoot := filepath.Clean(filepath.Join(packageDir, "..", ".."))
+
+	nested := packageDir
+	if err := os.Chdir(nested); err != nil {
+		t.Fatalf("chdir nested: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(repoRoot)
+	})
+
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	unsetEnvKeys(t,
+		"BITBUCKET_USERNAME",
+		"BITBUCKET_PASSWORD",
+		"BITBUCKET_USER",
+		"ADMIN_USER",
+		"ADMIN_PASSWORD",
+		"BITBUCKET_TOKEN",
+		"BITBUCKET_URL",
+		"BBSC_REQUEST_TIMEOUT",
+		"BBSC_RETRY_COUNT",
+		"BBSC_RETRY_BACKOFF",
+		"BBSC_LOG_LEVEL",
+		"BBSC_LOG_FORMAT",
+	)
+
+	loaded, err := LoadFromEnv()
+	if err != nil {
+		t.Fatalf("load from env: %v", err)
+	}
+	if loaded.BitbucketUsername != "admin" || loaded.BitbucketPassword != "admin" {
+		t.Fatalf("expected credentials from repository .env, got username=%q password=%q", loaded.BitbucketUsername, loaded.BitbucketPassword)
+	}
+}
+
+func unsetEnvKeys(t *testing.T, keys ...string) {
+	t.Helper()
+
+	for _, key := range keys {
+		value, found := os.LookupEnv(key)
+		if err := os.Unsetenv(key); err != nil {
+			t.Fatalf("unsetenv %s: %v", key, err)
+		}
+		t.Cleanup(func() {
+			if found {
+				_ = os.Setenv(key, value)
+				return
+			}
+			_ = os.Unsetenv(key)
+		})
 	}
 }
 

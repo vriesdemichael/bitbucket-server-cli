@@ -159,6 +159,20 @@ Diagnostics and supportability notes:
 - `go run ./cmd/bbsc insights report set <sha> lint --repo TEST/my-repo --body '{"title":"Lint","result":"PASS","data":[{"title":"warnings","type":"NUMBER","value":{"value":0}}]}'`
 - `go run ./cmd/bbsc insights report get <sha> lint --repo TEST/my-repo`
 - `go run ./cmd/bbsc insights annotation add <sha> lint --repo TEST/my-repo --body '[{"externalId":"lint-1","message":"Fix warning","severity":"MEDIUM","path":"seed.txt","line":1}]'`
+- `go run ./cmd/bbsc bulk plan -f docs/examples/bulk-policy.yaml -o .tmp/bulk-plan.json`
+- `go run ./cmd/bbsc bulk apply --from-plan .tmp/bulk-plan.json`
+- `go run ./cmd/bbsc bulk status <operation-id>`
+- Bulk JSON Schemas: `docs/reference/schemas/bulk-policy.schema.json`, `docs/reference/schemas/bulk-plan.schema.json`, `docs/reference/schemas/bulk-apply-status.schema.json`
+
+Bulk policy workflow:
+
+- Policy schema fields: `apiVersion`, `selector`, `operations`
+- Selector support: `projectKey`, `repoPattern`, and explicit `repositories`
+- Initial operation types: `repo.permission.user.grant`, `repo.permission.group.grant`, `repo.webhook.create`, `repo.pull-request-settings.required-all-tasks-complete`, `repo.pull-request-settings.required-approvers-count`, `build.required.create`
+- `bulk plan` performs no writes and emits a deterministic reviewed plan artifact with a `planHash`
+- `bulk apply` executes only operations embedded in the reviewed plan and persists result status under the local BBSC config directory (override with `BBSC_BULK_STATUS_DIR`)
+- Example policy: `docs/examples/bulk-policy.yaml`
+- Schema export command: `go run ./tools/bulk-schema-export -out docs/reference/schemas`
 
 Runtime config precedence:
 
