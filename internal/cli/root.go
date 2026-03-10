@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	authcmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/auth"
+	bulkcmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/bulk"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/diagnostics"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -43,6 +44,11 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.PersistentFlags().String("log-format", "", "Diagnostics format: text or jsonl")
 
 	rootCmd.AddCommand(authcmd.New(authcmd.Dependencies{
+		JSONEnabled: func() bool { return options.JSON },
+		LoadConfig:  loadConfig,
+		WriteJSON:   writeJSON,
+	}))
+	rootCmd.AddCommand(bulkcmd.New(bulkcmd.Dependencies{
 		JSONEnabled: func() bool { return options.JSON },
 		LoadConfig:  loadConfig,
 		WriteJSON:   writeJSON,

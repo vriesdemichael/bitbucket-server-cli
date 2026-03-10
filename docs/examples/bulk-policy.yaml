@@ -1,0 +1,18 @@
+apiVersion: bbsc.io/v1alpha1
+selector:
+  projectKey: TEST
+  repoPattern: service-*
+  repositories:
+    - TEST/special-repo
+operations:
+  - type: repo.permission.user.grant
+    username: ci-bot
+    permission: REPO_WRITE
+  - type: repo.pull-request-settings.required-all-tasks-complete
+    requiredAllTasksComplete: true
+  - type: build.required.create
+    payload:
+      buildParentKeys:
+        - ci
+      refMatcher:
+        id: refs/heads/master

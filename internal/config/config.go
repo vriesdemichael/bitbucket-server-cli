@@ -78,7 +78,7 @@ type LoginResult struct {
 }
 
 func LoadFromEnv() (AppConfig, error) {
-	_ = godotenv.Load(".env")
+	loadDotEnv()
 	storedConfig, _ := LoadStoredConfig()
 
 	insecureSkipVerify, err := envBoolOrDefault("BBSC_INSECURE_SKIP_VERIFY", false)
@@ -173,6 +173,40 @@ func LoadFromEnv() (AppConfig, error) {
 	}
 
 	return config, nil
+}
+
+func loadDotEnv() {
+	for _, candidate := range dotenvCandidates() {
+		info, err := os.Stat(candidate)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		_ = godotenv.Load(candidate)
+	}
+}
+
+func dotenvCandidates() []string {
+	cwd, err := os.Getwd()
+	if err != nil {
+		return []string{".env"}
+	}
+
+	candidates := make([]string, 0)
+	seen := map[string]struct{}{}
+	for directory := cwd; ; directory = filepath.Dir(directory) {
+		candidate := filepath.Join(directory, ".env")
+		if _, ok := seen[candidate]; !ok {
+			seen[candidate] = struct{}{}
+			candidates = append(candidates, candidate)
+		}
+
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			break
+		}
+	}
+
+	return candidates
 }
 
 func SaveLogin(input LoginInput) (LoginResult, error) {

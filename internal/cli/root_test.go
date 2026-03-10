@@ -1044,6 +1044,21 @@ func TestPRListAndIssueCommandUnavailable(t *testing.T) {
 	}
 }
 
+func TestBulkCommandAvailableFromRoot(t *testing.T) {
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"bulk", "--help"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected bulk help to succeed, got: %v", err)
+	}
+	if !strings.Contains(buffer.String(), "plan") || !strings.Contains(buffer.String(), "apply") || !strings.Contains(buffer.String(), "status") {
+		t.Fatalf("expected bulk subcommands in help output, got: %s", buffer.String())
+	}
+}
+
 func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
