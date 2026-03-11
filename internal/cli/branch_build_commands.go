@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -125,7 +126,6 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 	branchCmd.AddCommand(createCmd)
 
 	var deleteEndPoint string
-	var deleteDryRun bool
 	deleteCmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete repository branch",
@@ -142,15 +142,39 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := branchservice.NewService(client)
-			if err := service.Delete(cmd.Context(), repo, args[0], deleteEndPoint, deleteDryRun); err != nil {
+			if err := service.Delete(cmd.Context(), repo, args[0], deleteEndPoint, options.DryRun); err != nil {
 				return err
 			}
 
 			if options.JSON {
-				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "branch": args[0], "dry_run": deleteDryRun})
+				if options.DryRun {
+					reason := "validated through Bitbucket branch delete dry-run endpoint"
+					if strings.TrimSpace(deleteEndPoint) != "" {
+						reason = "validated through Bitbucket branch delete dry-run endpoint with end-point precondition"
+					}
+					return writeJSON(cmd.OutOrStdout(), dryRunPreview{
+						DryRun:       true,
+						PlanningMode: planningModeStateful,
+						Capability:   capabilityFull,
+						Items: []dryRunItem{{
+							Intent: "branch.delete",
+							Target: map[string]any{
+								"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug),
+								"branch":     args[0],
+								"end_point":  strings.TrimSpace(deleteEndPoint),
+							},
+							Action:    "delete",
+							Supported: true,
+							Reason:    reason,
+						}},
+						Summary: dryRunSummary{Total: 1, Supported: 1, DeleteCount: 1},
+					})
+				}
+
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "branch": args[0]})
 			}
 
-			if deleteDryRun {
+			if options.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "Dry-run delete completed for %s\n", args[0])
 				return nil
 			}
@@ -160,7 +184,6 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 		},
 	}
 	deleteCmd.Flags().StringVar(&deleteEndPoint, "end-point", "", "Expected commit at branch tip")
-	deleteCmd.Flags().BoolVar(&deleteDryRun, "dry-run", false, "Validate branch delete without performing it")
 	branchCmd.AddCommand(deleteCmd)
 
 	defaultCmd := &cobra.Command{Use: "default", Short: "Get or set repository default branch"}

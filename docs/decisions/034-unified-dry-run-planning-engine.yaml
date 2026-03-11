@@ -1,0 +1,24 @@
+number: 34
+title: Unified dry-run planning engine for server mutating commands
+category: architecture
+status: accepted
+decision: >
+  Use one planning engine for dry-run behavior across both single-command mutation flows and
+  bulk workflows. Introduce a global --dry-run flag for server-mutating commands, defaulting
+  to stateful planning when command support is available and falling back to static planning
+  previews otherwise.
+agent_instructions: >
+  Implement dry-run behavior through shared planning abstractions rather than per-command ad-hoc
+  flags. Keep dry-run scoped to server-mutating commands only. Ensure dry-run output explicitly
+  reports planning mode and capability signaling for each operation path.
+rationale: >
+  A single planning model reduces divergence between bulk and single-command mutation previews,
+  improves operator trust, and keeps output behavior consistent across automation and interactive
+  usage. Defaulting to stateful planning where available improves preview quality without forcing
+  full stateful support for all commands in one step.
+rejected_alternatives:
+  - alternative: Keep dry-run command-local and independent from bulk planning
+    reason: Creates semantic drift, duplicated logic, and inconsistent output contracts.
+  - alternative: Static-only dry-run globally
+    reason: Misses opportunities to provide stronger preflight confidence where API/state checks exist.
+provenance: human

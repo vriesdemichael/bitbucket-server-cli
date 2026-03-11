@@ -2140,8 +2140,26 @@ func TestBranchCommandPaths(t *testing.T) {
 	if err := jsonDeleteDryRunCommand.Execute(); err != nil {
 		t.Fatalf("branch delete dry-run json failed: %v", err)
 	}
-	if !strings.Contains(jsonDeleteDryRunBuffer.String(), `"dry_run": true`) {
-		t.Fatalf("expected dry_run flag in output, got: %s", jsonDeleteDryRunBuffer.String())
+	if !strings.Contains(jsonDeleteDryRunBuffer.String(), `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful planning mode in output, got: %s", jsonDeleteDryRunBuffer.String())
+	}
+	if !strings.Contains(jsonDeleteDryRunBuffer.String(), `"intent": "branch.delete"`) {
+		t.Fatalf("expected branch.delete intent in output, got: %s", jsonDeleteDryRunBuffer.String())
+	}
+
+	jsonDeleteDryRunEndpointCommand := NewRootCommand()
+	jsonDeleteDryRunEndpointBuffer := &bytes.Buffer{}
+	jsonDeleteDryRunEndpointCommand.SetOut(jsonDeleteDryRunEndpointBuffer)
+	jsonDeleteDryRunEndpointCommand.SetErr(jsonDeleteDryRunEndpointBuffer)
+	jsonDeleteDryRunEndpointCommand.SetArgs([]string{"--json", "--dry-run", "branch", "delete", "feature/demo", "--end-point", "abc123"})
+	if err := jsonDeleteDryRunEndpointCommand.Execute(); err != nil {
+		t.Fatalf("branch delete dry-run with endpoint json failed: %v", err)
+	}
+	if !strings.Contains(jsonDeleteDryRunEndpointBuffer.String(), `"end_point": "abc123"`) {
+		t.Fatalf("expected end_point in output, got: %s", jsonDeleteDryRunEndpointBuffer.String())
+	}
+	if !strings.Contains(jsonDeleteDryRunEndpointBuffer.String(), `end-point precondition`) {
+		t.Fatalf("expected endpoint reason in output, got: %s", jsonDeleteDryRunEndpointBuffer.String())
 	}
 
 	jsonDefaultSetCommand := NewRootCommand()

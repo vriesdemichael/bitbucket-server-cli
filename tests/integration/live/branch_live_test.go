@@ -161,3 +161,47 @@ func TestLiveCLIBranchRestrictionLifecycle(t *testing.T) {
 		t.Fatalf("expected delete status ok, got: %s", deleteOutput)
 	}
 }
+
+func TestLiveCLIBranchDeleteDryRunHasNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	branchName := "feature/live-dry-run-delete"
+	startPoint := repo.CommitIDs[0]
+
+	createOutput, err := executeLiveCLI(t, "--json", "branch", "create", branchName, "--start-point", startPoint)
+	if err != nil {
+		t.Fatalf("branch create failed: %v\noutput: %s", err, createOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "branch", "delete", branchName)
+	if err != nil {
+		t.Fatalf("branch delete dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful dry-run output, got: %s", dryRunOutput)
+	}
+
+	listOutput, err := executeLiveCLI(t, "--json", "branch", "list")
+	if err != nil {
+		t.Fatalf("branch list failed: %v\noutput: %s", err, listOutput)
+	}
+	if !strings.Contains(listOutput, branchName) {
+		t.Fatalf("expected branch %s to remain after dry-run delete, got: %s", branchName, listOutput)
+	}
+
+	deleteOutput, err := executeLiveCLI(t, "branch", "delete", branchName)
+	if err != nil {
+		t.Fatalf("branch delete cleanup failed: %v\noutput: %s", err, deleteOutput)
+	}
+}
