@@ -60,13 +60,15 @@ func TestDotenvCandidatesWalkToRepositoryRoot(t *testing.T) {
 		_ = os.Chdir(originalWD)
 	})
 
-	packageDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
+	repoRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoRoot, "go.mod"), []byte("module example.com/testrepo\n\ngo 1.24\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
 	}
-	repoRoot := filepath.Clean(filepath.Join(packageDir, "..", ".."))
 
-	nested := packageDir
+	nested := filepath.Join(repoRoot, "internal", "config")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
 	if err := os.Chdir(nested); err != nil {
 		t.Fatalf("chdir nested: %v", err)
 	}
@@ -100,12 +102,18 @@ func TestLoadFromEnvFindsRepositoryDotenvFromNestedWorkingDirectory(t *testing.T
 		_ = os.Chdir(originalWD)
 	})
 
-	packageDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("getwd: %v", err)
+	repoRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoRoot, "go.mod"), []byte("module example.com/testrepo\n\ngo 1.24\n"), 0o600); err != nil {
+		t.Fatalf("write go.mod: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(repoRoot, ".env"), []byte("BITBUCKET_USERNAME=test-user\nBITBUCKET_PASSWORD=test-pass\n"), 0o600); err != nil {
+		t.Fatalf("write .env: %v", err)
 	}
 
-	nested := packageDir
+	nested := filepath.Join(repoRoot, "internal", "config")
+	if err := os.MkdirAll(nested, 0o755); err != nil {
+		t.Fatalf("mkdir nested: %v", err)
+	}
 	if err := os.Chdir(nested); err != nil {
 		t.Fatalf("chdir nested: %v", err)
 	}
@@ -130,7 +138,7 @@ func TestLoadFromEnvFindsRepositoryDotenvFromNestedWorkingDirectory(t *testing.T
 	if err != nil {
 		t.Fatalf("load from env: %v", err)
 	}
-	if loaded.BitbucketUsername != "admin" || loaded.BitbucketPassword != "admin" {
+	if loaded.BitbucketUsername != "test-user" || loaded.BitbucketPassword != "test-pass" {
 		t.Fatalf("expected credentials from repository .env, got username=%q password=%q", loaded.BitbucketUsername, loaded.BitbucketPassword)
 	}
 }
