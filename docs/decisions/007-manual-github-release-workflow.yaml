@@ -1,7 +1,8 @@
 number: 7
 title: Manual GitHub release workflow
 category: development
-status: accepted
+status: superseded
+superseded_by: 33
 decision: >
   Use a manually triggered GitHub Actions release workflow for tagging, changelog generation,
   and publishing release artifacts. Do not auto-release on every push.

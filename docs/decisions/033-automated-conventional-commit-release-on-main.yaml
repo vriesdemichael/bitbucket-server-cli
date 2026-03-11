@@ -1,0 +1,35 @@
+number: 33
+title: Automated Conventional Commit release on main
+category: development
+status: accepted
+supersedes: 7
+decision: >
+  Automate releases from GitHub Actions on push events to main (including PR merges)
+  using deterministic Semantic Versioning derived from Conventional Commits.
+  The release workflow computes the next version, skips publication when no releasable
+  Conventional Commit exists, builds cross-platform artifacts, generates checksums and
+  provenance attestations, creates or updates the tag/release, and publishes both
+  markdown release notes and a machine-readable changelog artifact.
+agent_instructions: >
+  Treat .github/workflows/release.yml as an automated post-merge release pipeline for
+  main. Version bump rules are: major for breaking changes ("!" or BREAKING CHANGE
+  footer), minor for feat, patch for other valid Conventional Commit types. Preserve
+  deterministic behavior (no interactive/manual release decisions in normal flow), keep
+  idempotent handling for existing tags/releases, and maintain dual changelog outputs
+  (human markdown plus machine-readable JSON). Manual workflow_dispatch version input is
+  allowed only as an explicit override for controlled backfills/hotfixes.
+rationale: >
+  The project already enforces Conventional Commits and CI gates, making deterministic
+  post-merge release automation predictable and auditable without introducing external
+  release orchestration complexity. This reduces operator toil and release timing
+  ambiguity while preserving safety through branch protection and required checks on PRs
+  before merge. Idempotent publication and explicit fallback override keep operations
+  robust when retries or exceptional release corrections are needed.
+rejected_alternatives:
+  - alternative: Keep release workflow manual-only via workflow_dispatch
+    reason: Adds avoidable operator overhead and inconsistent release timing after merge.
+  - alternative: Use external release orchestration tooling (for example release-please)
+    reason: Increased debugging complexity and lower operational predictability for this repository's preferred setup.
+  - alternative: Publish on every push regardless of commit semantics
+    reason: Violates Conventional Commit version intent and increases accidental/noise releases.
+provenance: guided-ai
