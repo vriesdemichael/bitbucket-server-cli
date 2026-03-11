@@ -129,9 +129,19 @@ Authentication workflow:
 
 - `go run ./cmd/bbsc auth login --host http://localhost:7990 --username admin --password admin`
 - `go run ./cmd/bbsc auth status`
+- `go run ./cmd/bbsc auth server list`
+- `go run ./cmd/bbsc auth server use --host http://localhost:7990`
 - `go run ./cmd/bbsc --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
 - `go run ./cmd/bbsc --log-level debug auth status`
 - `go run ./cmd/bbsc --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl`
+
+Repository context behavior:
+
+- `--repo PROJECT/slug` always has highest precedence.
+- When `--repo` is omitted, bbsc tries to infer repository context from local git remotes that match an authenticated host profile.
+- Inference also populates the `--repo` flag internally, so commands that mark `--repo` as required continue to work without explicitly passing it.
+- If multiple remotes map to different repositories, bbsc returns an ambiguity error and asks you to pass `--repo` and/or select a server with `auth server use --host`.
+- Non-repository directories (or remotes that do not match authenticated hosts) fall back to the normal repository-required validation message.
 
 Diagnostics and supportability notes:
 
@@ -178,8 +188,9 @@ Runtime config precedence:
 
 1. CLI flags
 2. Environment variables / `.env`
-3. Stored config (`~/.config/bbsc/config.yaml`) + keyring/fallback secrets
-4. Built-in defaults
+3. Git remote inference (repo + host context, when `--repo` is omitted and a unique authenticated remote match exists)
+4. Stored config (`~/.config/bbsc/config.yaml`) + keyring/fallback secrets
+5. Built-in defaults
 
 API reference source:
 

@@ -201,8 +201,9 @@ func New(deps Dependencies) *cobra.Command {
 
 	var serverUseHost string
 	serverUseCmd := &cobra.Command{
-		Use:   "use",
+		Use:   "use [host]",
 		Short: "Set the active default server context",
+		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if strings.TrimSpace(serverUseHost) == "" && len(args) > 0 {
 				serverUseHost = args[0]

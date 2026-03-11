@@ -90,11 +90,12 @@ func (backend *Backend) RepositoryRoot(ctx context.Context, workingDirectory str
 }
 
 func (backend *Backend) ListRemotes(ctx context.Context, repositoryDirectory string) ([]git.Remote, error) {
-	if strings.TrimSpace(repositoryDirectory) == "" {
+	trimmedDir := strings.TrimSpace(repositoryDirectory)
+	if trimmedDir == "" {
 		return nil, apperrors.New(apperrors.KindValidation, "repository directory cannot be empty", nil)
 	}
 
-	result, err := backend.run(ctx, runOptions{cwd: repositoryDirectory, args: []string{"remote", "-v"}})
+	result, err := backend.run(ctx, runOptions{cwd: trimmedDir, args: []string{"remote", "-v"}})
 	if err != nil {
 		return nil, err
 	}
