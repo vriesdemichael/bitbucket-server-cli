@@ -39,6 +39,7 @@ func NewRootCommand() *cobra.Command {
 	}
 
 	rootCmd.PersistentFlags().BoolVar(&options.JSON, "json", false, "Output as JSON")
+	rootCmd.PersistentFlags().BoolVar(&options.DryRun, "dry-run", false, "Preview server mutations without applying them")
 	rootCmd.PersistentFlags().String("ca-file", "", "Path to PEM CA bundle for TLS trust")
 	rootCmd.PersistentFlags().Bool("insecure-skip-verify", false, "Disable TLS certificate verification (unsafe; local/dev only)")
 	rootCmd.PersistentFlags().String("request-timeout", "", "HTTP request timeout (Go duration, e.g. 20s)")
@@ -72,11 +73,14 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newHookCommand(options))
 	rootCmd.AddCommand(newSearchCommand(options))
 
+	registerGlobalDryRunInterceptors(rootCmd, options)
+
 	return rootCmd
 }
 
 type rootOptions struct {
-	JSON bool
+	JSON   bool
+	DryRun bool
 }
 
 func loadConfig() (config.AppConfig, error) {

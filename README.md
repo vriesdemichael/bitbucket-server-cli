@@ -125,6 +125,7 @@ Equivalent global CLI flags (highest precedence):
 - `--retry-backoff`
 - `--log-level`
 - `--log-format`
+- `--dry-run` (server-mutating commands only; emits dry-run preview output)
 
 Authentication workflow:
 
@@ -135,6 +136,12 @@ Authentication workflow:
 - `go run ./cmd/bbsc --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
 - `go run ./cmd/bbsc --log-level debug auth status`
 - `go run ./cmd/bbsc --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl`
+
+Dry-run behavior:
+
+- `--dry-run` applies only to server-mutating commands.
+- `--dry-run` emits structured dry-run previews in both human and `--json` mode and does not execute write side effects.
+- Planning mode is `stateful` when API-backed dry-run behavior is available (currently `branch delete`), otherwise `static`.
 
 Repository context behavior:
 
