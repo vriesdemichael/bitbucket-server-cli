@@ -1,14 +1,20 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/git"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/git/execgit"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	branchservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/branch"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
@@ -18,6 +24,17 @@ import (
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	tagservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/tag"
 )
+
+var gitBackendFactory = func() git.Backend {
+	return execgit.New()
+}
+
+type inferredRepositoryContext struct {
+	Host       string
+	ProjectKey string
+	Slug       string
+	RemoteName string
+}
 
 func resolveRepositoryReference(selector string, cfg config.AppConfig) (diffservice.RepositoryRef, error) {
 	repo, err := resolveRepositorySelector(selector, cfg)
@@ -48,12 +65,309 @@ func resolveRepositorySelector(selector string, cfg config.AppConfig) (repositor
 		return repositorySelector{ProjectKey: cfg.ProjectKey, Slug: repoSlug}, nil
 	}
 
-	parts := strings.SplitN(trimmed, "/", 2)
+	return parseRepositorySelector(trimmed)
+}
+
+func applyInferredRepositoryContext(cmd *cobra.Command, asJSON bool) error {
+	if cmd == nil {
+		return nil
+	}
+
+	repoFlag := cmd.Flags().Lookup("repo")
+	if repoFlag == nil {
+		return nil
+	}
+
+	if repoFlag.Changed && strings.TrimSpace(repoFlag.Value.String()) != "" {
+		return nil
+	}
+
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		return nil
+	}
+
+	inferred, err := inferRepositoryContextFromGit(cfg)
+	if err != nil {
+		return err
+	}
+	if inferred == nil {
+		return nil
+	}
+
+	if err := os.Setenv("BITBUCKET_URL", inferred.Host); err != nil {
+		return apperrors.New(apperrors.KindInternal, "failed to set inferred host", err)
+	}
+	if err := os.Setenv("BITBUCKET_PROJECT_KEY", inferred.ProjectKey); err != nil {
+		return apperrors.New(apperrors.KindInternal, "failed to set inferred project key", err)
+	}
+	if err := os.Setenv("BITBUCKET_REPO_SLUG", inferred.Slug); err != nil {
+		return apperrors.New(apperrors.KindInternal, "failed to set inferred repository slug", err)
+	}
+
+	if asJSON {
+		return nil
+	}
+
+	fmt.Fprintf(
+		cmd.ErrOrStderr(),
+		"Using repository context from git remote %q: %s/%s on %s\n",
+		inferred.RemoteName,
+		inferred.ProjectKey,
+		inferred.Slug,
+		inferred.Host,
+	)
+
+	return nil
+}
+
+func parseRepositorySelector(selector string) (repositorySelector, error) {
+	parts := strings.SplitN(selector, "/", 2)
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
 		return repositorySelector{}, apperrors.New(apperrors.KindValidation, "--repo must be in PROJECT/slug format", nil)
 	}
 
 	return repositorySelector{ProjectKey: strings.TrimSpace(parts[0]), Slug: strings.TrimSpace(parts[1])}, nil
+}
+
+func inferRepositoryContextFromGit(cfg config.AppConfig) (*inferredRepositoryContext, error) {
+	backend := gitBackendFactory()
+	if backend == nil {
+		return nil, nil
+	}
+
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, nil
+	}
+
+	repoRoot, err := backend.RepositoryRoot(context.Background(), cwd)
+	if err != nil {
+		if isNonRepositoryError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	remotes, err := backend.ListRemotes(context.Background(), repoRoot)
+	if err != nil {
+		if isNonRepositoryError(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+
+	if len(remotes) == 0 {
+		return nil, nil
+	}
+
+	stored, _ := config.LoadStoredConfig()
+	authenticatedHosts := authenticatedHostLookup(cfg, stored)
+	if len(authenticatedHosts) == 0 {
+		return nil, nil
+	}
+
+	candidates := make([]inferredRepositoryContext, 0)
+	for _, remote := range remotes {
+		host, projectKey, slug, ok := parseBitbucketRemote(remote.URL)
+		if !ok {
+			continue
+		}
+
+		resolvedHost, ok := authenticatedHosts[normalizeHostName(host)]
+		if !ok {
+			continue
+		}
+
+		candidates = append(candidates, inferredRepositoryContext{
+			Host:       resolvedHost,
+			ProjectKey: projectKey,
+			Slug:       slug,
+			RemoteName: remote.Name,
+		})
+	}
+
+	if len(candidates) == 0 {
+		return nil, nil
+	}
+
+	sort.SliceStable(candidates, func(left, right int) bool {
+		if candidates[left].RemoteName == candidates[right].RemoteName {
+			if candidates[left].ProjectKey == candidates[right].ProjectKey {
+				return candidates[left].Slug < candidates[right].Slug
+			}
+			return candidates[left].ProjectKey < candidates[right].ProjectKey
+		}
+		if candidates[left].RemoteName == "origin" {
+			return true
+		}
+		if candidates[right].RemoteName == "origin" {
+			return false
+		}
+		return candidates[left].RemoteName < candidates[right].RemoteName
+	})
+
+	unique := map[string]inferredRepositoryContext{}
+	for _, candidate := range candidates {
+		key := candidate.Host + "\x00" + candidate.ProjectKey + "\x00" + candidate.Slug + "\x00" + candidate.RemoteName
+		unique[key] = candidate
+	}
+
+	if len(unique) > 1 {
+		ordered := make([]inferredRepositoryContext, 0, len(unique))
+		for _, candidate := range unique {
+			ordered = append(ordered, candidate)
+		}
+		sort.SliceStable(ordered, func(left, right int) bool {
+			if ordered[left].RemoteName == ordered[right].RemoteName {
+				if ordered[left].ProjectKey == ordered[right].ProjectKey {
+					return ordered[left].Slug < ordered[right].Slug
+				}
+				return ordered[left].ProjectKey < ordered[right].ProjectKey
+			}
+			if ordered[left].RemoteName == "origin" {
+				return true
+			}
+			if ordered[right].RemoteName == "origin" {
+				return false
+			}
+			return ordered[left].RemoteName < ordered[right].RemoteName
+		})
+
+		descriptions := make([]string, 0, len(ordered))
+		for _, candidate := range ordered {
+			descriptions = append(descriptions, fmt.Sprintf("%s=%s/%s@%s", candidate.RemoteName, candidate.ProjectKey, candidate.Slug, candidate.Host))
+		}
+
+		return nil, apperrors.New(
+			apperrors.KindValidation,
+			fmt.Sprintf("ambiguous git remote context (%s); specify --repo PROJECT/slug and/or set active server with auth server use --host", strings.Join(descriptions, ", ")),
+			nil,
+		)
+	}
+
+	for _, candidate := range unique {
+		selected := candidate
+		return &selected, nil
+	}
+
+	return nil, nil
+}
+
+func authenticatedHostLookup(cfg config.AppConfig, stored config.StoredConfig) map[string]string {
+	lookup := map[string]string{}
+	if strings.TrimSpace(cfg.BitbucketURL) != "" {
+		lookup[normalizeHostName(cfg.BitbucketURL)] = cfg.BitbucketURL
+	}
+
+	for _, profile := range stored.Hosts {
+		host := strings.TrimSpace(profile.URL)
+		if host == "" {
+			continue
+		}
+		normalized := normalizeHostName(host)
+		if normalized == "" {
+			continue
+		}
+		if _, exists := lookup[normalized]; !exists {
+			lookup[normalized] = host
+		}
+	}
+
+	return lookup
+}
+
+func normalizeHostName(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+
+	if !strings.Contains(trimmed, "://") {
+		trimmed = "http://" + trimmed
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return ""
+	}
+
+	hostname := strings.TrimSpace(parsed.Hostname())
+	return strings.ToLower(hostname)
+}
+
+func parseBitbucketRemote(rawRemoteURL string) (host string, projectKey string, slug string, ok bool) {
+	trimmed := strings.TrimSpace(rawRemoteURL)
+	if trimmed == "" {
+		return "", "", "", false
+	}
+
+	if strings.Contains(trimmed, "://") {
+		parsed, err := url.Parse(trimmed)
+		if err != nil {
+			return "", "", "", false
+		}
+
+		host = parsed.Hostname()
+		projectKey, slug, ok = parseBitbucketPath(parsed.Path)
+		return host, projectKey, slug, ok
+	}
+
+	if at := strings.LastIndex(trimmed, "@"); at >= 0 {
+		remainder := trimmed[at+1:]
+		colon := strings.Index(remainder, ":")
+		if colon < 0 {
+			return "", "", "", false
+		}
+
+		host = remainder[:colon]
+		path := remainder[colon+1:]
+		projectKey, slug, ok = parseBitbucketPath(path)
+		return host, projectKey, slug, ok
+	}
+
+	return "", "", "", false
+}
+
+func parseBitbucketPath(path string) (projectKey string, slug string, ok bool) {
+	trimmed := strings.Trim(strings.TrimSpace(path), "/")
+	if trimmed == "" {
+		return "", "", false
+	}
+
+	parts := strings.Split(trimmed, "/")
+	if len(parts) >= 3 {
+		for index := 0; index+2 < len(parts); index++ {
+			if strings.EqualFold(parts[index], "scm") {
+				project := strings.TrimSpace(parts[index+1])
+				repo := strings.TrimSuffix(strings.TrimSpace(parts[index+2]), ".git")
+				if project == "" || repo == "" {
+					return "", "", false
+				}
+				return project, repo, true
+			}
+		}
+	}
+
+	if len(parts) >= 2 {
+		project := strings.TrimSpace(parts[len(parts)-2])
+		repo := strings.TrimSuffix(strings.TrimSpace(parts[len(parts)-1]), ".git")
+		if project == "" || repo == "" {
+			return "", "", false
+		}
+		return project, repo, true
+	}
+
+	return "", "", false
+}
+
+func isNonRepositoryError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "not a git repository") || strings.Contains(message, "cannot find the current directory")
 }
 
 func resolveRepositorySettingsReference(selector string, cfg config.AppConfig) (reposettings.RepositoryRef, error) {

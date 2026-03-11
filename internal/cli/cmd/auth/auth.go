@@ -154,5 +154,80 @@ func New(deps Dependencies) *cobra.Command {
 	logoutCmd.Flags().StringVar(&logoutHost, "host", "", "Bitbucket host URL (defaults to stored default host)")
 	authCmd.AddCommand(logoutCmd)
 
+	serverCmd := &cobra.Command{
+		Use:   "server",
+		Short: "Manage server contexts",
+	}
+
+	serverListCmd := &cobra.Command{
+		Use:   "list",
+		Short: "List stored server contexts",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			contexts, err := config.ListServerContexts()
+			if err != nil {
+				return err
+			}
+
+			if isJSON() {
+				payload := map[string]any{
+					"servers": contexts,
+				}
+				return deps.WriteJSON(cmd.OutOrStdout(), payload)
+			}
+
+			if len(contexts) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No stored server contexts")
+				return nil
+			}
+
+			for _, context := range contexts {
+				marker := " "
+				if context.IsDefault {
+					marker = "*"
+				}
+
+				if context.Username != "" {
+					fmt.Fprintf(cmd.OutOrStdout(), "%s %s (auth=%s, user=%s)\n", marker, context.Host, context.AuthMode, context.Username)
+					continue
+				}
+
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %s (auth=%s)\n", marker, context.Host, context.AuthMode)
+			}
+
+			return nil
+		},
+	}
+	serverCmd.AddCommand(serverListCmd)
+
+	var serverUseHost string
+	serverUseCmd := &cobra.Command{
+		Use:   "use",
+		Short: "Set the active default server context",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if strings.TrimSpace(serverUseHost) == "" && len(args) > 0 {
+				serverUseHost = args[0]
+			}
+
+			resolvedHost, err := config.SetDefaultHost(serverUseHost)
+			if err != nil {
+				return err
+			}
+
+			if isJSON() {
+				return deps.WriteJSON(cmd.OutOrStdout(), map[string]string{
+					"status":       "ok",
+					"default_host": resolvedHost,
+				})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Active server set to %s\n", resolvedHost)
+			return nil
+		},
+	}
+	serverUseCmd.Flags().StringVar(&serverUseHost, "host", "", "Bitbucket host URL")
+	serverCmd.AddCommand(serverUseCmd)
+
+	authCmd.AddCommand(serverCmd)
+
 	return authCmd
 }
