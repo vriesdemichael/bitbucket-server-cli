@@ -753,3 +753,140 @@ func TestSaveStoreError(t *testing.T) {
 		t.Fatal("expected error")
 	}
 }
+
+func TestLoadPlanJSONErrors(t *testing.T) {
+	t.Run("empty payload", func(t *testing.T) {
+		_, err := LoadPlanJSON([]byte(""))
+		if err == nil || !strings.Contains(err.Error(), "is empty") {
+			t.Fatalf("expected empty error, got: %v", err)
+		}
+	})
+
+	t.Run("invalid json", func(t *testing.T) {
+		_, err := LoadPlanJSON([]byte("{"))
+		if err == nil || !strings.Contains(err.Error(), "failed to parse") {
+			t.Fatalf("expected parse error, got: %v", err)
+		}
+	})
+}
+
+func TestStatusStoreSaveValidation(t *testing.T) {
+	t.Run("missing base dir", func(t *testing.T) {
+		store := NewStatusStore("")
+		err := store.Save(ApplyStatus{OperationID: "op-1"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("invalid operation id", func(t *testing.T) {
+		store := NewStatusStore(t.TempDir())
+		err := store.Save(ApplyStatus{OperationID: "../bad"})
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+}
+
+func TestResolveRepositoryEntry(t *testing.T) {
+	t.Run("empty entry", func(t *testing.T) {
+		_, err := resolveRepositoryEntry("PRJ", "")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("missing default project", func(t *testing.T) {
+		_, err := resolveRepositoryEntry("", "repo-a")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("invalid project/slug format", func(t *testing.T) {
+		_, err := resolveRepositoryEntry("PRJ", "PRJ/")
+		if err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("uses default project", func(t *testing.T) {
+		target, err := resolveRepositoryEntry("PRJ", "repo-a")
+		if err != nil {
+			t.Fatalf("expected success, got: %v", err)
+		}
+		if target.ProjectKey != "PRJ" || target.Slug != "repo-a" {
+			t.Fatalf("unexpected target: %#v", target)
+		}
+	})
+}
+
+func TestCopyOperationsDeepClone(t *testing.T) {
+	count := 2
+	active := true
+	required := true
+	input := []OperationSpec{ {
+		Type:                     OperationRepoWebhookCreate,
+		Events:                   []string{"repo:refs_changed"},
+		Payload:                  map[string]any{"k": "v"},
+		Active:                   &active,
+		RequiredAllTasksComplete: &required,
+		Count:                    &count,
+	}}
+
+	cloned := copyOperations(input)
+	if len(cloned) != 1 {
+		t.Fatalf("expected one op, got %d", len(cloned))
+	}
+	if &cloned[0] == &input[0] {
+		t.Fatal("expected a distinct operation copy")
+	}
+
+	input[0].Events[0] = "changed"
+	input[0].Payload["k"] = "changed"
+	*input[0].Active = false
+	*input[0].RequiredAllTasksComplete = false
+	*input[0].Count = 99
+
+	if cloned[0].Events[0] != "repo:refs_changed" {
+		t.Fatalf("events not cloned deeply: %#v", cloned[0].Events)
+	}
+	if cloned[0].Payload["k"] != "v" {
+		t.Fatalf("payload not cloned deeply: %#v", cloned[0].Payload)
+	}
+	if cloned[0].Active == nil || !*cloned[0].Active {
+		t.Fatalf("active pointer not cloned correctly: %#v", cloned[0].Active)
+	}
+	if cloned[0].RequiredAllTasksComplete == nil || !*cloned[0].RequiredAllTasksComplete {
+		t.Fatalf("requiredAllTasksComplete pointer not cloned correctly: %#v", cloned[0].RequiredAllTasksComplete)
+	}
+	if cloned[0].Count == nil || *cloned[0].Count != 2 {
+		t.Fatalf("count pointer not cloned correctly: %#v", cloned[0].Count)
+	}
+}
+
+func TestValidateIdentifier(t *testing.T) {
+	t.Run("missing", func(t *testing.T) {
+		if err := validateIdentifier("", "operation id"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("path separators", func(t *testing.T) {
+		if err := validateIdentifier("bad/id", "operation id"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("unsupported characters", func(t *testing.T) {
+		if err := validateIdentifier("bad id", "operation id"); err == nil {
+			t.Fatal("expected error")
+		}
+	})
+
+	t.Run("valid", func(t *testing.T) {
+		if err := validateIdentifier("op-1.ok", "operation id"); err != nil {
+			t.Fatalf("expected valid id, got: %v", err)
+		}
+	})
+}
