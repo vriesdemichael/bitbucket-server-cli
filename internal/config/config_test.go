@@ -52,6 +52,14 @@ func TestLoadFromEnvDefaults(t *testing.T) {
 }
 
 func TestDotenvCandidatesWalkToRepositoryRoot(t *testing.T) {
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+
 	packageDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
@@ -62,9 +70,6 @@ func TestDotenvCandidatesWalkToRepositoryRoot(t *testing.T) {
 	if err := os.Chdir(nested); err != nil {
 		t.Fatalf("chdir nested: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = os.Chdir(repoRoot)
-	})
 
 	candidates := dotenvCandidates()
 	if len(candidates) < 2 {
@@ -78,22 +83,32 @@ func TestDotenvCandidatesWalkToRepositoryRoot(t *testing.T) {
 	if !reflect.DeepEqual(candidates[:len(expectedPrefix)], expectedPrefix) {
 		t.Fatalf("unexpected dotenv candidates prefix: got %#v want %#v", candidates[:len(expectedPrefix)], expectedPrefix)
 	}
+
+	for _, candidate := range candidates {
+		if filepath.Dir(candidate) == filepath.Dir(repoRoot) {
+			t.Fatalf("expected candidates to stop at repository root, found parent directory candidate: %q", candidate)
+		}
+	}
 }
 
 func TestLoadFromEnvFindsRepositoryDotenvFromNestedWorkingDirectory(t *testing.T) {
+	originalWD, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("getwd: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = os.Chdir(originalWD)
+	})
+
 	packageDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("getwd: %v", err)
 	}
-	repoRoot := filepath.Clean(filepath.Join(packageDir, "..", ".."))
 
 	nested := packageDir
 	if err := os.Chdir(nested); err != nil {
 		t.Fatalf("chdir nested: %v", err)
 	}
-	t.Cleanup(func() {
-		_ = os.Chdir(repoRoot)
-	})
 
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
 	unsetEnvKeys(t,

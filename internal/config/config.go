@@ -191,6 +191,11 @@ func dotenvCandidates() []string {
 		return []string{".env"}
 	}
 
+	searchRoot := cwd
+	if detected, found := findRepositoryRoot(cwd); found {
+		searchRoot = detected
+	}
+
 	candidates := make([]string, 0)
 	seen := map[string]struct{}{}
 	for directory := cwd; ; directory = filepath.Dir(directory) {
@@ -201,12 +206,39 @@ func dotenvCandidates() []string {
 		}
 
 		parent := filepath.Dir(directory)
-		if parent == directory {
+		if parent == directory || directory == searchRoot {
 			break
 		}
 	}
 
 	return candidates
+}
+
+func findRepositoryRoot(startDirectory string) (string, bool) {
+	for directory := filepath.Clean(startDirectory); ; directory = filepath.Dir(directory) {
+		if hasRepositoryMarker(directory) {
+			return directory, true
+		}
+
+		parent := filepath.Dir(directory)
+		if parent == directory {
+			return "", false
+		}
+	}
+}
+
+func hasRepositoryMarker(directory string) bool {
+	goModPath := filepath.Join(directory, "go.mod")
+	if info, err := os.Stat(goModPath); err == nil && !info.IsDir() {
+		return true
+	}
+
+	gitPath := filepath.Join(directory, ".git")
+	if _, err := os.Stat(gitPath); err == nil {
+		return true
+	}
+
+	return false
 }
 
 func SaveLogin(input LoginInput) (LoginResult, error) {

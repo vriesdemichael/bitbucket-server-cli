@@ -104,7 +104,10 @@ func TestLiveBulkPolicyPlanApplyStatus(t *testing.T) {
 			t.Fatalf("get updated pull request settings for %s failed: %v", repo.Slug, err)
 		}
 		value, ok := settings["requiredAllTasksComplete"].(bool)
-		if ok && value != targetValue {
+		if !ok {
+			t.Fatalf("expected requiredAllTasksComplete to be a boolean setting for %s", repo.Slug)
+		}
+		if value != targetValue {
 			t.Fatalf("expected requiredAllTasksComplete=%t for %s, got %t", targetValue, repo.Slug, value)
 		}
 	}
