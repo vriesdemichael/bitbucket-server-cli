@@ -105,6 +105,12 @@ func applyInferredRepositoryContext(cmd *cobra.Command, asJSON bool) error {
 		return apperrors.New(apperrors.KindInternal, "failed to set inferred repository slug", err)
 	}
 
+	repoValue := fmt.Sprintf("%s/%s", inferred.ProjectKey, inferred.Slug)
+	if err := repoFlag.Value.Set(repoValue); err != nil {
+		return apperrors.New(apperrors.KindInternal, "failed to apply inferred repository to --repo flag", err)
+	}
+	repoFlag.Changed = true
+
 	if asJSON {
 		return nil
 	}

@@ -16,7 +16,14 @@ This document captures the initial issue #1 UX contract for repository settings 
 Repository selection contract:
 
 1. `--repo PROJECT/slug`
-2. `BITBUCKET_PROJECT_KEY` + `BITBUCKET_REPO_SLUG`
+2. Git remote inference from local repository remotes (only when `--repo` is omitted and exactly one authenticated host/repo candidate is found)
+3. `BITBUCKET_PROJECT_KEY` + `BITBUCKET_REPO_SLUG`
+
+Notes:
+
+- Inference uses authenticated server contexts from stored auth/login profiles; switch active default host with `bbsc auth server use [host]` or `--host`.
+- If multiple remotes resolve to different repositories, commands fail with an explicit ambiguity error and require `--repo` (or host disambiguation).
+- Inferred repository context is applied to env and `--repo` flag state so commands that mark `--repo` required still execute.
 
 Machine output contract:
 
