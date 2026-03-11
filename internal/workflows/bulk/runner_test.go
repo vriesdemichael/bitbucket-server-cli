@@ -71,3 +71,42 @@ func TestServiceRunnerUnconfigured(t *testing.T) {
 		}
 	})
 }
+
+func TestServiceRunnerValidationBranches(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer server.Close()
+
+	client, _ := openapi.NewClientWithResponsesFromConfig(config.AppConfig{BitbucketURL: server.URL})
+	runner := NewServiceRunner(reposettings.NewService(client), qualityservice.NewService(client))
+	repo := RepositoryTarget{ProjectKey: "PRJ", Slug: "repo"}
+
+	t.Run("webhook defaults active true", func(t *testing.T) {
+		_, err := runner.Run(context.Background(), repo, OperationSpec{
+			Type:   OperationRepoWebhookCreate,
+			Name:   "hook",
+			URL:    "https://example.test/hook",
+			Events: []string{"repo:refs_changed"},
+		})
+		if err != nil {
+			t.Fatalf("expected webhook create to succeed with default active=true: %v", err)
+		}
+	})
+
+	t.Run("requiredAllTasksComplete nil is validation error", func(t *testing.T) {
+		_, err := runner.Run(context.Background(), repo, OperationSpec{Type: OperationRepoPullRequestRequiredAllTasksComplete})
+		if err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+
+	t.Run("requiredApprovers count nil is validation error", func(t *testing.T) {
+		_, err := runner.Run(context.Background(), repo, OperationSpec{Type: OperationRepoPullRequestRequiredApproversCount})
+		if err == nil {
+			t.Fatal("expected validation error")
+		}
+	})
+}
