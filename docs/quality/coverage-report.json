@@ -7,7 +7,7 @@
     "live_scoped_percent": 54.22038060159608,
     "combined_raw_percent": 20.312190832142466,
     "combined_scoped_percent": 88.73282442748092,
-    "patch_percent": 87.85529715762273,
+    "patch_percent": 100,
     "unit_statements": {
       "covered": 5785,
       "total": 45485
@@ -33,8 +33,8 @@
       "total": 6550
     },
     "patch_lines": {
-      "covered": 340,
-      "total": 387
+      "covered": 0,
+      "total": 0
     },
     "scope": {
       "include_prefixes": [
