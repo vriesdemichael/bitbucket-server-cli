@@ -2,7 +2,9 @@ package cli
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -12,11 +14,50 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/spf13/cobra"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/git"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
 )
+
+type inferenceGitBackendStub struct {
+	repoRoot string
+	rootErr  error
+	remotes  []git.Remote
+	listErr  error
+}
+
+func (stub inferenceGitBackendStub) Version(context.Context) (string, error) {
+	return "", nil
+}
+
+func (stub inferenceGitBackendStub) Clone(context.Context, string, git.CloneOptions) error {
+	return nil
+}
+
+func (stub inferenceGitBackendStub) Fetch(context.Context, string, git.FetchOptions) error {
+	return nil
+}
+
+func (stub inferenceGitBackendStub) Checkout(context.Context, string, git.CheckoutOptions) error {
+	return nil
+}
+
+func (stub inferenceGitBackendStub) RepositoryRoot(context.Context, string) (string, error) {
+	if stub.rootErr != nil {
+		return "", stub.rootErr
+	}
+	return stub.repoRoot, nil
+}
+
+func (stub inferenceGitBackendStub) ListRemotes(context.Context, string) ([]git.Remote, error) {
+	if stub.listErr != nil {
+		return nil, stub.listErr
+	}
+	return stub.remotes, nil
+}
 
 func init() {
 	// Block external network access during tests by default
@@ -1244,6 +1285,457 @@ func TestResolveRepositorySelector(t *testing.T) {
 			t.Fatalf("unexpected selector: %+v", repo)
 		}
 	})
+}
+
+func TestApplyInferredRepositoryContext(t *testing.T) {
+	originalFactory := gitBackendFactory
+	t.Cleanup(func() {
+		gitBackendFactory = originalFactory
+	})
+
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "http://bitbucket.local:7990")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "ENV")
+	t.Setenv("BITBUCKET_REPO_SLUG", "env-repo")
+
+	t.Run("sets inferred repository and host", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{
+				repoRoot: "/tmp/repo",
+				remotes: []git.Remote{{
+					Name: "origin",
+					URL:  "https://bitbucket.local:7990/scm/PRJ/demo.git",
+				}},
+			}
+		}
+
+		cmd := &cobra.Command{Use: "branch list"}
+		cmd.Flags().String("repo", "", "")
+		errBuffer := &bytes.Buffer{}
+		cmd.SetErr(errBuffer)
+
+		if err := applyInferredRepositoryContext(cmd, false); err != nil {
+			t.Fatalf("apply inferred repository context failed: %v", err)
+		}
+
+		if got := os.Getenv("BITBUCKET_PROJECT_KEY"); got != "PRJ" {
+			t.Fatalf("expected inferred project key, got %q", got)
+		}
+		if got := os.Getenv("BITBUCKET_REPO_SLUG"); got != "demo" {
+			t.Fatalf("expected inferred repo slug, got %q", got)
+		}
+		if !strings.Contains(errBuffer.String(), "Using repository context from git remote") {
+			t.Fatalf("expected inference notice, got: %s", errBuffer.String())
+		}
+	})
+
+	t.Run("nil command is ignored", func(t *testing.T) {
+		if err := applyInferredRepositoryContext(nil, false); err != nil {
+			t.Fatalf("expected nil command to be ignored, got: %v", err)
+		}
+	})
+
+	t.Run("command without repo flag is ignored", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "project list"}
+		if err := applyInferredRepositoryContext(cmd, false); err != nil {
+			t.Fatalf("expected no error when repo flag is absent, got: %v", err)
+		}
+	})
+
+	t.Run("explicit repo flag skips inference", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{
+				repoRoot: "/tmp/repo",
+				remotes:  []git.Remote{{Name: "origin", URL: "https://bitbucket.local:7990/scm/PRJ/demo.git"}},
+			}
+		}
+
+		t.Setenv("BITBUCKET_PROJECT_KEY", "EXPLICIT")
+		t.Setenv("BITBUCKET_REPO_SLUG", "keep")
+
+		cmd := &cobra.Command{Use: "branch list"}
+		cmd.Flags().String("repo", "", "")
+		if err := cmd.Flags().Set("repo", "OVERRIDE/repo"); err != nil {
+			t.Fatalf("set repo flag: %v", err)
+		}
+
+		if err := applyInferredRepositoryContext(cmd, false); err != nil {
+			t.Fatalf("expected no error for explicit repo, got: %v", err)
+		}
+
+		if got := os.Getenv("BITBUCKET_PROJECT_KEY"); got != "EXPLICIT" {
+			t.Fatalf("expected project key unchanged, got %q", got)
+		}
+		if got := os.Getenv("BITBUCKET_REPO_SLUG"); got != "keep" {
+			t.Fatalf("expected repo slug unchanged, got %q", got)
+		}
+	})
+
+	t.Run("ambiguous remotes returns validation error", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{
+				repoRoot: "/tmp/repo",
+				remotes: []git.Remote{
+					{Name: "origin", URL: "https://bitbucket.local:7990/scm/PRJ/demo.git"},
+					{Name: "upstream", URL: "https://bitbucket.local:7990/scm/ALT/demo.git"},
+				},
+			}
+		}
+
+		cmd := &cobra.Command{Use: "branch list"}
+		cmd.Flags().String("repo", "", "")
+
+		err := applyInferredRepositoryContext(cmd, false)
+		if err == nil {
+			t.Fatal("expected ambiguity error")
+		}
+		if apperrors.ExitCode(err) != 2 {
+			t.Fatalf("expected validation exit code, got %d (%v)", apperrors.ExitCode(err), err)
+		}
+	})
+
+	t.Run("non-repository git context is ignored", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{rootErr: errors.New("fatal: not a git repository (or any of the parent directories): .git")}
+		}
+
+		cmd := &cobra.Command{Use: "branch list"}
+		cmd.Flags().String("repo", "", "")
+
+		if err := applyInferredRepositoryContext(cmd, false); err != nil {
+			t.Fatalf("expected non-repository error to be ignored, got: %v", err)
+		}
+	})
+
+	t.Run("json mode does not emit inference banner", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{
+				repoRoot: "/tmp/repo",
+				remotes:  []git.Remote{{Name: "origin", URL: "https://bitbucket.local:7990/scm/PRJ/demo.git"}},
+			}
+		}
+
+		cmd := &cobra.Command{Use: "branch list"}
+		cmd.Flags().String("repo", "", "")
+		errBuffer := &bytes.Buffer{}
+		cmd.SetErr(errBuffer)
+
+		if err := applyInferredRepositoryContext(cmd, true); err != nil {
+			t.Fatalf("json inference failed: %v", err)
+		}
+		if errBuffer.Len() != 0 {
+			t.Fatalf("expected no banner output in json mode, got: %q", errBuffer.String())
+		}
+	})
+
+	t.Run("load config errors are ignored", func(t *testing.T) {
+		t.Setenv("BITBUCKET_URL", "://bad-url")
+		cmd := &cobra.Command{Use: "branch list"}
+		cmd.Flags().String("repo", "", "")
+
+		if err := applyInferredRepositoryContext(cmd, false); err != nil {
+			t.Fatalf("expected load config error to be ignored, got: %v", err)
+		}
+	})
+}
+
+func TestInferenceHelperFunctions(t *testing.T) {
+	originalFactory := gitBackendFactory
+	t.Cleanup(func() {
+		gitBackendFactory = originalFactory
+	})
+
+	t.Run("parse bitbucket remote supports ssh and https", func(t *testing.T) {
+		host, project, slug, ok := parseBitbucketRemote("git@bitbucket.local:scm/PRJ/repo.git")
+		if !ok || host != "bitbucket.local" || project != "PRJ" || slug != "repo" {
+			t.Fatalf("unexpected ssh remote parse result: ok=%v host=%q project=%q slug=%q", ok, host, project, slug)
+		}
+
+		host, project, slug, ok = parseBitbucketRemote("https://bitbucket.local/scm/PRJ/repo.git")
+		if !ok || host != "bitbucket.local" || project != "PRJ" || slug != "repo" {
+			t.Fatalf("unexpected https remote parse result: ok=%v host=%q project=%q slug=%q", ok, host, project, slug)
+		}
+	})
+
+	t.Run("parse bitbucket path invalid input", func(t *testing.T) {
+		if _, _, ok := parseBitbucketPath("/"); ok {
+			t.Fatal("expected invalid path to fail")
+		}
+	})
+
+	t.Run("normalize host name strips scheme and port", func(t *testing.T) {
+		if got := normalizeHostName("https://Bitbucket.Local:7990"); got != "bitbucket.local" {
+			t.Fatalf("unexpected normalized host: %q", got)
+		}
+		if got := normalizeHostName("bad host value"); got != "" {
+			t.Fatalf("expected invalid host to normalize to empty, got %q", got)
+		}
+		if got := normalizeHostName("http://[::1"); got != "" {
+			t.Fatalf("expected malformed URL to normalize to empty, got %q", got)
+		}
+	})
+
+	t.Run("non repository errors are recognized", func(t *testing.T) {
+		if isNonRepositoryError(nil) {
+			t.Fatal("did not expect nil error to match")
+		}
+		if !isNonRepositoryError(errors.New("not a git repository")) {
+			t.Fatal("expected non-repository error to match")
+		}
+		if isNonRepositoryError(errors.New("permission denied")) {
+			t.Fatal("did not expect unrelated error to match")
+		}
+	})
+
+	t.Run("authenticated host lookup includes runtime and stored profiles", func(t *testing.T) {
+		lookup := authenticatedHostLookup(
+			config.AppConfig{BitbucketURL: "http://runtime.local:7990"},
+			config.StoredConfig{Hosts: map[string]config.StoredProfile{
+				"blank":                    {URL: ""},
+				"malformed":                {URL: "http://[::1"},
+				"http://stored.local:7990": {URL: "http://stored.local:7990"},
+			}},
+		)
+
+		if lookup["runtime.local"] == "" {
+			t.Fatal("expected runtime host in lookup")
+		}
+		if lookup["stored.local"] == "" {
+			t.Fatal("expected stored host in lookup")
+		}
+	})
+
+	t.Run("parse bitbucket remote malformed forms", func(t *testing.T) {
+		if _, _, _, ok := parseBitbucketRemote("https://%zz"); ok {
+			t.Fatal("expected malformed https remote to fail")
+		}
+		if _, _, _, ok := parseBitbucketRemote("git@bitbucket.local"); ok {
+			t.Fatal("expected ssh remote without colon to fail")
+		}
+		if _, _, _, ok := parseBitbucketRemote("git@bitbucket.local:"); ok {
+			t.Fatal("expected ssh remote with empty path to fail")
+		}
+	})
+
+	t.Run("parse bitbucket path single segment fails", func(t *testing.T) {
+		if _, _, ok := parseBitbucketPath("repo"); ok {
+			t.Fatal("expected single-segment path parse to fail")
+		}
+	})
+
+	t.Run("infer context ignores remotes without authenticated host match", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{
+				repoRoot: "/tmp/repo",
+				remotes:  []git.Remote{{Name: "origin", URL: "https://other-host.local/scm/PRJ/repo.git"}},
+			}
+		}
+
+		inferred, err := inferRepositoryContextFromGit(config.AppConfig{BitbucketURL: "https://bitbucket.local:7990"})
+		if err != nil {
+			t.Fatalf("infer context failed: %v", err)
+		}
+		if inferred != nil {
+			t.Fatalf("expected nil inferred context for unmatched host, got %+v", inferred)
+		}
+	})
+
+	t.Run("infer context ignores non-repository errors from remotes", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{
+				repoRoot: "/tmp/repo",
+				listErr:  errors.New("fatal: not a git repository"),
+			}
+		}
+
+		inferred, err := inferRepositoryContextFromGit(config.AppConfig{BitbucketURL: "https://bitbucket.local:7990"})
+		if err != nil {
+			t.Fatalf("expected nil error for non-repository remotes listing, got: %v", err)
+		}
+		if inferred != nil {
+			t.Fatalf("expected nil inferred context, got %+v", inferred)
+		}
+	})
+
+	t.Run("infer context returns backend errors", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{rootErr: errors.New("backend failure")}
+		}
+
+		_, err := inferRepositoryContextFromGit(config.AppConfig{BitbucketURL: "https://bitbucket.local:7990"})
+		if err == nil {
+			t.Fatal("expected backend error to be returned")
+		}
+	})
+
+	t.Run("infer context with nil backend returns nil", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend { return nil }
+
+		inferred, err := inferRepositoryContextFromGit(config.AppConfig{BitbucketURL: "https://bitbucket.local:7990"})
+		if err != nil {
+			t.Fatalf("expected nil error, got: %v", err)
+		}
+		if inferred != nil {
+			t.Fatalf("expected nil inferred context, got %+v", inferred)
+		}
+	})
+
+	t.Run("infer context with no remotes returns nil", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{repoRoot: "/tmp/repo", remotes: nil}
+		}
+
+		inferred, err := inferRepositoryContextFromGit(config.AppConfig{BitbucketURL: "https://bitbucket.local:7990"})
+		if err != nil {
+			t.Fatalf("infer context failed: %v", err)
+		}
+		if inferred != nil {
+			t.Fatalf("expected nil inferred context, got %+v", inferred)
+		}
+	})
+
+	t.Run("infer context with no authenticated hosts returns nil", func(t *testing.T) {
+		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BITBUCKET_URL", "")
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{repoRoot: "/tmp/repo", remotes: []git.Remote{{Name: "origin", URL: "https://bitbucket.local/scm/PRJ/repo.git"}}}
+		}
+
+		inferred, err := inferRepositoryContextFromGit(config.AppConfig{})
+		if err != nil {
+			t.Fatalf("infer context failed: %v", err)
+		}
+		if inferred != nil {
+			t.Fatalf("expected nil inferred context, got %+v", inferred)
+		}
+	})
+
+	t.Run("infer context returns nil when working directory cannot be resolved", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{repoRoot: "/tmp/repo", remotes: []git.Remote{{Name: "origin", URL: "https://bitbucket.local/scm/PRJ/repo.git"}}}
+		}
+
+		originalDirectory, err := os.Getwd()
+		if err != nil {
+			t.Fatalf("getwd failed: %v", err)
+		}
+		badDirectory := t.TempDir()
+		if err := os.Chdir(badDirectory); err != nil {
+			t.Fatalf("chdir failed: %v", err)
+		}
+		if err := os.RemoveAll(badDirectory); err != nil {
+			t.Fatalf("remove temp directory failed: %v", err)
+		}
+		t.Cleanup(func() { _ = os.Chdir(originalDirectory) })
+
+		inferred, err := inferRepositoryContextFromGit(config.AppConfig{BitbucketURL: "https://bitbucket.local:7990"})
+		if err != nil {
+			t.Fatalf("expected nil error when getwd fails, got: %v", err)
+		}
+		if inferred != nil {
+			t.Fatalf("expected nil inferred context when getwd fails, got %+v", inferred)
+		}
+	})
+
+	t.Run("infer context returns remote listing errors", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{repoRoot: "/tmp/repo", listErr: errors.New("remote listing failed")}
+		}
+
+		_, err := inferRepositoryContextFromGit(config.AppConfig{BitbucketURL: "https://bitbucket.local:7990"})
+		if err == nil {
+			t.Fatal("expected remote listing error")
+		}
+	})
+
+	t.Run("infer context skips invalid remote entries", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{
+				repoRoot: "/tmp/repo",
+				remotes: []git.Remote{
+					{Name: "invalid", URL: "not-a-remote"},
+					{Name: "origin", URL: "https://bitbucket.local/scm/PRJ/repo.git"},
+				},
+			}
+		}
+
+		inferred, err := inferRepositoryContextFromGit(config.AppConfig{BitbucketURL: "https://bitbucket.local:7990"})
+		if err != nil {
+			t.Fatalf("infer context failed: %v", err)
+		}
+		if inferred == nil || inferred.ProjectKey != "PRJ" {
+			t.Fatalf("expected valid remote to be selected, got %+v", inferred)
+		}
+	})
+
+	t.Run("infer context ambiguity sorts by remote and project details", func(t *testing.T) {
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{
+				repoRoot: "/tmp/repo",
+				remotes: []git.Remote{
+					{Name: "alpha", URL: "https://bitbucket.local/scm/PRJ/b.git"},
+					{Name: "alpha", URL: "https://bitbucket.local/scm/PRJ/a.git"},
+					{Name: "beta", URL: "https://bitbucket.local/scm/ZZZ/z.git"},
+				},
+			}
+		}
+
+		_, err := inferRepositoryContextFromGit(config.AppConfig{BitbucketURL: "https://bitbucket.local:7990"})
+		if err == nil {
+			t.Fatal("expected ambiguity error")
+		}
+		if !strings.Contains(err.Error(), "ambiguous git remote context") {
+			t.Fatalf("expected ambiguity guidance, got: %v", err)
+		}
+	})
+
+	t.Run("parse bitbucket remote invalid input", func(t *testing.T) {
+		if _, _, _, ok := parseBitbucketRemote("not-a-remote"); ok {
+			t.Fatal("expected invalid remote parsing to fail")
+		}
+	})
+
+	t.Run("parse bitbucket path fallback project slash repo", func(t *testing.T) {
+		project, slug, ok := parseBitbucketPath("PRJ/repo.git")
+		if !ok || project != "PRJ" || slug != "repo" {
+			t.Fatalf("unexpected fallback parse result: ok=%v project=%q slug=%q", ok, project, slug)
+		}
+	})
+}
+
+func TestRootCommandPreRunPropagatesInferenceErrors(t *testing.T) {
+	originalFactory := gitBackendFactory
+	t.Cleanup(func() {
+		gitBackendFactory = originalFactory
+	})
+
+	gitBackendFactory = func() git.Backend {
+		return inferenceGitBackendStub{
+			repoRoot: "/tmp/repo",
+			remotes: []git.Remote{
+				{Name: "origin", URL: "https://bitbucket.local:7990/scm/PRJ/demo.git"},
+				{Name: "upstream", URL: "https://bitbucket.local:7990/scm/ALT/demo.git"},
+			},
+		}
+	}
+
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.local:7990")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	command.SetOut(&bytes.Buffer{})
+	command.SetErr(&bytes.Buffer{})
+	command.SetArgs([]string{"branch", "list"})
+
+	err := command.Execute()
+	if err == nil {
+		t.Fatal("expected inference ambiguity error")
+	}
+	if apperrors.ExitCode(err) != 2 {
+		t.Fatalf("expected validation exit code, got %d (%v)", apperrors.ExitCode(err), err)
+	}
 }
 
 func TestLoadConfigAndClientAndClientFactoryBranches(t *testing.T) {

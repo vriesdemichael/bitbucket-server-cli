@@ -30,7 +30,11 @@ func NewRootCommand() *cobra.Command {
 		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			diagnostics.SetOutputWriter(cmd.ErrOrStderr())
-			return applyRuntimeFlagOverrides(cmd)
+			if err := applyRuntimeFlagOverrides(cmd); err != nil {
+				return err
+			}
+
+			return applyInferredRepositoryContext(cmd, options.JSON)
 		},
 	}
 

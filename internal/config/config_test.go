@@ -363,6 +363,106 @@ func TestSaveLoginAndLoadStoredConfig(t *testing.T) {
 	}
 }
 
+func TestListServerContextsAndSetDefaultHost(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
+	t.Setenv("BBSC_CONFIG_PATH", configPath)
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+
+	if _, err := SaveLogin(LoginInput{Host: "http://alpha.local:7990", Token: "token-alpha", SetDefault: true}); err != nil {
+		t.Fatalf("save alpha login: %v", err)
+	}
+	if _, err := SaveLogin(LoginInput{Host: "http://beta.local:7990", Token: "token-beta", SetDefault: false}); err != nil {
+		t.Fatalf("save beta login: %v", err)
+	}
+
+	contexts, err := ListServerContexts()
+	if err != nil {
+		t.Fatalf("list server contexts: %v", err)
+	}
+	if len(contexts) != 2 {
+		t.Fatalf("expected 2 contexts, got %d", len(contexts))
+	}
+	if !contexts[0].IsDefault || contexts[0].Host != "http://alpha.local:7990" {
+		t.Fatalf("expected alpha as default first entry, got %+v", contexts[0])
+	}
+
+	selected, err := SetDefaultHost("http://beta.local:7990")
+	if err != nil {
+		t.Fatalf("set default host: %v", err)
+	}
+	if selected != "http://beta.local:7990" {
+		t.Fatalf("unexpected selected host: %q", selected)
+	}
+
+	contexts, err = ListServerContexts()
+	if err != nil {
+		t.Fatalf("list server contexts after update: %v", err)
+	}
+	if !contexts[0].IsDefault || contexts[0].Host != "http://beta.local:7990" {
+		t.Fatalf("expected beta as default first entry, got %+v", contexts[0])
+	}
+
+	if _, err := SetDefaultHost("http://missing.local:7990"); err == nil || apperrors.ExitCode(err) != 4 {
+		t.Fatalf("expected not found when selecting missing host, got: %v", err)
+	}
+
+	if _, err := SetDefaultHost(" "); err == nil || apperrors.ExitCode(err) != 2 {
+		t.Fatalf("expected validation error for empty host, got: %v", err)
+	}
+}
+
+func TestServerContextConfigErrorBranchesAndSorting(t *testing.T) {
+	brokenConfigPath := t.TempDir()
+	t.Setenv("BBSC_CONFIG_PATH", brokenConfigPath)
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+
+	if _, err := ListServerContexts(); err == nil {
+		t.Fatal("expected list server contexts to fail for directory config path")
+	}
+	if _, err := SetDefaultHost("http://example.local:7990"); err == nil {
+		t.Fatal("expected set default host to fail for directory config path")
+	}
+
+	baseDir := t.TempDir()
+	configPath := filepath.Join(baseDir, "bbsc", "config.yaml")
+	t.Setenv("BBSC_CONFIG_PATH", configPath)
+
+	stored := StoredConfig{
+		DefaultHost: "",
+		Hosts: map[string]StoredProfile{
+			"http://b.local:7990": {URL: "http://b.local:7990"},
+			"http://a.local:7990": {URL: "http://a.local:7990", AuthMode: "token"},
+		},
+		InsecureSecrets: map[string]StoredSecret{},
+	}
+	if err := SaveStoredConfig(stored); err != nil {
+		t.Fatalf("save stored config: %v", err)
+	}
+
+	contexts, err := ListServerContexts()
+	if err != nil {
+		t.Fatalf("list server contexts: %v", err)
+	}
+	if len(contexts) != 2 {
+		t.Fatalf("expected two contexts, got %d", len(contexts))
+	}
+	if contexts[0].Host != "http://a.local:7990" {
+		t.Fatalf("expected lexical sort when no default host, got %+v", contexts)
+	}
+	if contexts[1].AuthMode != "none" {
+		t.Fatalf("expected empty auth_mode to fallback to none, got %+v", contexts[1])
+	}
+
+	parentFile := filepath.Join(t.TempDir(), "not-a-dir")
+	if err := os.WriteFile(parentFile, []byte("x"), 0o600); err != nil {
+		t.Fatalf("write parent marker file: %v", err)
+	}
+	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(parentFile, "config.yaml"))
+	if _, err := SetDefaultHost("http://a.local:7990"); err == nil {
+		t.Fatal("expected save failure when config parent is a file")
+	}
+}
+
 func TestConfigAuthModeAndLogoutBranches(t *testing.T) {
 	if (AppConfig{}).AuthMode() != "none" {
 		t.Fatal("expected auth mode none")

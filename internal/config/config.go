@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -75,6 +76,13 @@ type LoginResult struct {
 	Host                string
 	AuthMode            string
 	UsedInsecureStorage bool
+}
+
+type ServerContext struct {
+	Host      string
+	AuthMode  string
+	Username  string
+	IsDefault bool
 }
 
 func LoadFromEnv() (AppConfig, error) {
@@ -335,6 +343,62 @@ func Logout(host string) error {
 	}
 
 	return SaveStoredConfig(stored)
+}
+
+func ListServerContexts() ([]ServerContext, error) {
+	stored, err := LoadStoredConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	contexts := make([]ServerContext, 0, len(stored.Hosts))
+	for key, profile := range stored.Hosts {
+		mode := strings.TrimSpace(profile.AuthMode)
+		if mode == "" {
+			mode = "none"
+		}
+
+		contexts = append(contexts, ServerContext{
+			Host:      normalizeURL(profile.URL),
+			AuthMode:  mode,
+			Username:  strings.TrimSpace(profile.Username),
+			IsDefault: key == stored.DefaultHost,
+		})
+	}
+
+	sort.SliceStable(contexts, func(left, right int) bool {
+		if contexts[left].IsDefault != contexts[right].IsDefault {
+			return contexts[left].IsDefault
+		}
+		return contexts[left].Host < contexts[right].Host
+	})
+
+	return contexts, nil
+}
+
+func SetDefaultHost(host string) (string, error) {
+	trimmedHost := strings.TrimSpace(host)
+	if trimmedHost == "" {
+		return "", apperrors.New(apperrors.KindValidation, "host is required", nil)
+	}
+
+	stored, err := LoadStoredConfig()
+	if err != nil {
+		return "", err
+	}
+
+	key := hostKey(trimmedHost)
+	profile, ok := stored.Hosts[key]
+	if !ok {
+		return "", apperrors.New(apperrors.KindNotFound, fmt.Sprintf("no stored server context for %s", normalizeURL(trimmedHost)), nil)
+	}
+
+	stored.DefaultHost = key
+	if err := SaveStoredConfig(stored); err != nil {
+		return "", err
+	}
+
+	return normalizeURL(profile.URL), nil
 }
 
 func LoadStoredConfig() (StoredConfig, error) {

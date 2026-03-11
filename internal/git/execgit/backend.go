@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
@@ -77,6 +78,67 @@ func (backend *Backend) Checkout(ctx context.Context, repositoryDirectory string
 
 	_, err := backend.run(ctx, runOptions{cwd: repositoryDirectory, args: []string{"checkout", options.Ref}})
 	return err
+}
+
+func (backend *Backend) RepositoryRoot(ctx context.Context, workingDirectory string) (string, error) {
+	result, err := backend.run(ctx, runOptions{cwd: strings.TrimSpace(workingDirectory), args: []string{"rev-parse", "--show-toplevel"}})
+	if err != nil {
+		return "", err
+	}
+
+	return strings.TrimSpace(result.stdout), nil
+}
+
+func (backend *Backend) ListRemotes(ctx context.Context, repositoryDirectory string) ([]git.Remote, error) {
+	if strings.TrimSpace(repositoryDirectory) == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "repository directory cannot be empty", nil)
+	}
+
+	result, err := backend.run(ctx, runOptions{cwd: repositoryDirectory, args: []string{"remote", "-v"}})
+	if err != nil {
+		return nil, err
+	}
+
+	lines := strings.Split(result.stdout, "\n")
+	seen := map[string]struct{}{}
+	remotes := make([]git.Remote, 0)
+	for _, line := range lines {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) < 3 {
+			continue
+		}
+		if fields[2] != "(fetch)" {
+			continue
+		}
+
+		name := strings.TrimSpace(fields[0])
+		url := strings.TrimSpace(fields[1])
+		if name == "" || url == "" {
+			continue
+		}
+
+		key := name + "\x00" + url
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		remotes = append(remotes, git.Remote{Name: name, URL: url})
+	}
+
+	sort.SliceStable(remotes, func(left, right int) bool {
+		if remotes[left].Name == remotes[right].Name {
+			return remotes[left].URL < remotes[right].URL
+		}
+		if remotes[left].Name == "origin" {
+			return true
+		}
+		if remotes[right].Name == "origin" {
+			return false
+		}
+		return remotes[left].Name < remotes[right].Name
+	})
+
+	return remotes, nil
 }
 
 type runOptions struct {
