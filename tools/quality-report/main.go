@@ -686,15 +686,14 @@ func calculatePatchCoverage(changed map[string]map[int]struct{}, profile coverag
 		}
 		for line := range lineSet {
 			coverable := false
-			covered := false
+			covered := true
 			for _, segment := range segments {
 				if line < segment.startLine || line > segment.endLine {
 					continue
 				}
 				coverable = true
-				if segment.covered {
-					covered = true
-					break
+				if !segment.covered {
+					covered = false
 				}
 			}
 			if !coverable {
