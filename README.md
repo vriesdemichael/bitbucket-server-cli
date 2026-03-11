@@ -66,12 +66,13 @@ Coverage/reporting workflow:
 	- Publishes a final aggregate check named `CI Complete` (recommended PR required check)
 	- Does not run `test:live` because live integration tests require Bitbucket/Postgres infrastructure
 - Release workflow: `.github/workflows/release.yml`
-	- Manual trigger only via `workflow_dispatch`
-	- Requires a version input (for example `v0.1.0`)
+	- Automatically runs on pushes to `main` (including PR merges)
+	- Derives SemVer version bumps from Conventional Commits (`major` for breaking, `minor` for `feat`, `patch` otherwise)
+	- Supports optional manual `workflow_dispatch` version override for controlled backfills/hotfixes
 	- Builds and packages release binaries for Linux/macOS/Windows on amd64 + arm64
 	- Generates a `sha256sums.txt` manifest for all packaged artifacts
 	- Publishes GitHub-native build provenance attestations for release artifacts
-	- Generates release notes from Conventional Commit history, tags the commit, and publishes a GitHub release with attached artifacts
+	- Generates rich release notes from Conventional Commit history (breaking changes + commit/compare links), emits `changelog.json`, tags the commit, and publishes a GitHub release with attached artifacts
 
 ## Binary installation (GitHub releases)
 

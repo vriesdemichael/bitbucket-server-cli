@@ -1,19 +1,140 @@
 name: Release
 
 on:
+  push:
+    branches:
+      - main
   workflow_dispatch:
     inputs:
       version:
-        description: Release version tag (for example v0.1.0)
-        required: true
+        description: Optional release version tag override (for example v0.1.0)
+        required: false
         type: string
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
 
 jobs:
+  determine-version:
+    name: Determine release version
+    runs-on: ubuntu-latest
+    outputs:
+      should_release: ${{ steps.compute.outputs.should_release }}
+      version: ${{ steps.compute.outputs.version }}
+      previous_tag: ${{ steps.compute.outputs.previous_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute release version from Conventional Commits
+        id: compute
+        env:
+          MANUAL_VERSION: ${{ github.event.inputs.version || '' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import os
+          import re
+          import subprocess
+
+
+          def run_git(*args: str) -> str:
+              return subprocess.check_output(["git", *args], text=True).strip()
+
+
+          def write_output(key: str, value: str) -> None:
+              with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as fh:
+                  fh.write(f"{key}={value}\n")
+
+
+          manual_version = os.environ.get("MANUAL_VERSION", "").strip()
+          semver_pattern = re.compile(r"^v\d+\.\d+\.\d+(?:[.-][0-9A-Za-z.-]+)?$")
+
+          try:
+              previous_tag = run_git("describe", "--tags", "--abbrev=0", "--match", "v[0-9]*.[0-9]*.[0-9]*")
+          except subprocess.CalledProcessError:
+              previous_tag = ""
+
+          if manual_version:
+              if not semver_pattern.match(manual_version):
+                  raise SystemExit("Manual version must look like vMAJOR.MINOR.PATCH (optionally with prerelease/build suffix).")
+              write_output("should_release", "true")
+              write_output("version", manual_version)
+              write_output("previous_tag", previous_tag)
+              raise SystemExit(0)
+
+          range_spec = f"{previous_tag}..HEAD" if previous_tag else "HEAD"
+          raw = run_git("log", "--no-merges", "--pretty=format:%H%x1f%s%x1f%b%x1e", range_spec)
+          records = [record for record in raw.split("\x1e") if record.strip()]
+
+          conventional_pattern = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!)?: (?P<description>.+)$")
+
+          bump_level = 0
+          found_conventional = False
+          for record in records:
+              parts = record.split("\x1f", 2)
+              if len(parts) < 2:
+                  continue
+              subject = parts[1].strip()
+              body = parts[2] if len(parts) > 2 else ""
+              match = conventional_pattern.match(subject)
+              if not match:
+                  continue
+
+              found_conventional = True
+              commit_type = match.group("type")
+              has_breaking_footer = "BREAKING CHANGE:" in body or "BREAKING-CHANGE:" in body
+              is_breaking = bool(match.group("bang")) or has_breaking_footer
+
+              if is_breaking:
+                  bump_level = max(bump_level, 3)
+              elif commit_type == "feat":
+                  bump_level = max(bump_level, 2)
+              else:
+                  bump_level = max(bump_level, 1)
+
+          if not found_conventional or bump_level == 0:
+              write_output("should_release", "false")
+              write_output("version", "")
+              write_output("previous_tag", previous_tag)
+              raise SystemExit(0)
+
+          base_version = previous_tag[1:] if previous_tag else "0.0.0"
+          major, minor, patch = [int(part) for part in base_version.split(".")]
+
+          if bump_level == 3:
+              major, minor, patch = major + 1, 0, 0
+          elif bump_level == 2:
+              minor, patch = minor + 1, 0
+          else:
+              patch += 1
+
+          next_version = f"v{major}.{minor}.{patch}"
+          try:
+              run_git("rev-parse", "--verify", "--quiet", next_version)
+              write_output("should_release", "false")
+              write_output("version", "")
+              write_output("previous_tag", previous_tag)
+              raise SystemExit(0)
+          except subprocess.CalledProcessError:
+              pass
+
+          write_output("should_release", "true")
+          write_output("version", next_version)
+          write_output("previous_tag", previous_tag)
+          PY
+
   build-artifacts:
     name: Build ${{ matrix.goos }}/${{ matrix.goarch }} artifact
+    needs:
+      - determine-version
+    if: ${{ needs.determine-version.outputs.should_release == 'true' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -55,7 +176,7 @@ jobs:
 
       - name: Validate version input
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.determine-version.outputs.version }}
         run: |
           set -euo pipefail
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -65,7 +186,7 @@ jobs:
 
       - name: Build and package artifact
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.determine-version.outputs.version }}
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
           ARCHIVE: ${{ matrix.archive }}
@@ -98,7 +219,9 @@ jobs:
   release:
     name: Publish Release
     needs:
+      - determine-version
       - build-artifacts
+    if: ${{ needs.determine-version.outputs.should_release == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -125,7 +248,7 @@ jobs:
 
       - name: Validate version input
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.determine-version.outputs.version }}
         run: |
           set -euo pipefail
           if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]; then
@@ -133,90 +256,165 @@ jobs:
             exit 1
           fi
 
-      - name: Ensure release tag does not already exist
-        env:
-          VERSION: ${{ inputs.version }}
-        run: |
-          set -euo pipefail
-          if git rev-parse "$VERSION" >/dev/null 2>&1; then
-            echo "Tag $VERSION already exists."
-            exit 1
-          fi
-
       - name: Generate changelog from Conventional Commits
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.determine-version.outputs.version }}
+          PREVIOUS_TAG: ${{ needs.determine-version.outputs.previous_tag }}
+          REPOSITORY_URL: ${{ github.server_url }}/${{ github.repository }}
         run: |
           set -euo pipefail
-          LAST_TAG="$(git describe --tags --abbrev=0 2>/dev/null || true)"
-          RANGE=""
-          if [[ -n "$LAST_TAG" ]]; then
-            RANGE="$LAST_TAG..HEAD"
-          fi
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
 
-          mapfile -t COMMITS < <(git log --no-merges --pretty=format:%s $RANGE)
 
-          {
-            echo "## $VERSION"
-            echo
-            if [[ -n "$LAST_TAG" ]]; then
-              echo "Changes since $LAST_TAG."
-            else
-              echo "Initial release changes."
-            fi
-            echo
+          def run_git(*args: str) -> str:
+              return subprocess.check_output(["git", *args], text=True).strip()
 
-            declare -a FEAT FIX PERF REFACTOR DOCS TEST BUILD CI CHORE OTHER
-            for SUBJECT in "${COMMITS[@]}"; do
-              case "$SUBJECT" in
-                feat\(*|feat:*) FEAT+=("$SUBJECT") ;;
-                fix\(*|fix:*) FIX+=("$SUBJECT") ;;
-                perf\(*|perf:*) PERF+=("$SUBJECT") ;;
-                refactor\(*|refactor:*) REFACTOR+=("$SUBJECT") ;;
-                docs\(*|docs:*) DOCS+=("$SUBJECT") ;;
-                test\(*|test:*) TEST+=("$SUBJECT") ;;
-                build\(*|build:*) BUILD+=("$SUBJECT") ;;
-                ci\(*|ci:*) CI+=("$SUBJECT") ;;
-                chore\(*|chore:*) CHORE+=("$SUBJECT") ;;
-                *) OTHER+=("$SUBJECT") ;;
-              esac
-            done
 
-            write_section() {
-              local heading="$1"
-              shift
-              local entries=("$@")
-              if [[ ${#entries[@]} -eq 0 ]]; then
-                return
-              fi
-              echo "### $heading"
-              for item in "${entries[@]}"; do
-                echo "- $item"
-              done
-              echo
-            }
+          version = os.environ["VERSION"]
+          previous_tag = os.environ.get("PREVIOUS_TAG", "").strip()
+          repository_url = os.environ["REPOSITORY_URL"].rstrip("/")
+          range_spec = f"{previous_tag}..HEAD" if previous_tag else "HEAD"
 
-            write_section "Features" "${FEAT[@]}"
-            write_section "Fixes" "${FIX[@]}"
-            write_section "Performance" "${PERF[@]}"
-            write_section "Refactors" "${REFACTOR[@]}"
-            write_section "Docs" "${DOCS[@]}"
-            write_section "Tests" "${TEST[@]}"
-            write_section "Build" "${BUILD[@]}"
-            write_section "CI" "${CI[@]}"
-            write_section "Chores" "${CHORE[@]}"
-            write_section "Other" "${OTHER[@]}"
-          } > RELEASE_NOTES.md
+          raw = run_git("log", "--no-merges", "--pretty=format:%H%x1f%s%x1f%b%x1e", range_spec)
+          records = [record for record in raw.split("\x1e") if record.strip()]
+
+          conventional_pattern = re.compile(r"^(?P<type>[a-z]+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!)?: (?P<description>.+)$")
+          breaking_footer_pattern = re.compile(r"^BREAKING(?:-| )CHANGE:\s*(.+)$", re.MULTILINE)
+
+          section_titles = {
+              "feat": "Features",
+              "fix": "Fixes",
+              "perf": "Performance",
+              "refactor": "Refactors",
+              "docs": "Docs",
+              "test": "Tests",
+              "build": "Build",
+              "ci": "CI",
+              "chore": "Chores",
+          }
+          ordered_sections = [
+              "Features",
+              "Fixes",
+              "Performance",
+              "Refactors",
+              "Docs",
+              "Tests",
+              "Build",
+              "CI",
+              "Chores",
+              "Other",
+          ]
+
+          grouped = {section: [] for section in ordered_sections}
+          breaking_changes = []
+          all_entries = []
+
+          for record in records:
+              parts = record.split("\x1f", 2)
+              if len(parts) < 2:
+                  continue
+
+              sha = parts[0].strip()
+              subject = parts[1].strip()
+              body = parts[2] if len(parts) > 2 else ""
+              commit_url = f"{repository_url}/commit/{sha}"
+
+              match = conventional_pattern.match(subject)
+              if match:
+                  commit_type = match.group("type")
+                  description = match.group("description")
+                  scope = match.group("scope")
+                  is_breaking = bool(match.group("bang")) or bool(breaking_footer_pattern.search(body))
+              else:
+                  commit_type = "other"
+                  description = subject
+                  scope = None
+                  is_breaking = bool(breaking_footer_pattern.search(body))
+
+              section = section_titles.get(commit_type, "Other")
+              entry = {
+                  "sha": sha,
+                  "shortSha": sha[:7],
+                  "subject": subject,
+                  "description": description,
+                  "scope": scope,
+                  "type": commit_type,
+                  "section": section,
+                  "breaking": is_breaking,
+                  "url": commit_url,
+              }
+              grouped[section].append(entry)
+              all_entries.append(entry)
+
+              if is_breaking:
+                  footer_match = breaking_footer_pattern.search(body)
+                  entry_with_note = dict(entry)
+                  entry_with_note["breakingNote"] = footer_match.group(1).strip() if footer_match else ""
+                  breaking_changes.append(entry_with_note)
+
+          compare_url = ""
+          if previous_tag:
+              compare_url = f"{repository_url}/compare/{previous_tag}...{version}"
+
+          lines = [f"## {version}", ""]
+          if previous_tag:
+              lines.append(f"Changes since {previous_tag}.")
+              lines.append("")
+              lines.append(f"Compare: [{previous_tag}...{version}]({compare_url})")
+              lines.append("")
+          else:
+              lines.append("Initial release changes.")
+              lines.append("")
+
+          if breaking_changes:
+              lines.append("### ⚠ Breaking Changes")
+              for item in breaking_changes:
+                  breaking_note = f" — {item['breakingNote']}" if item.get("breakingNote") else ""
+                  lines.append(f"- {item['description']} ([{item['shortSha']}]({item['url']})){breaking_note}")
+              lines.append("")
+
+          for section in ordered_sections:
+              entries = grouped[section]
+              if not entries:
+                  continue
+              lines.append(f"### {section}")
+              for item in entries:
+                  scoped_description = f"{item['scope']}: {item['description']}" if item.get("scope") else item["description"]
+                  lines.append(f"- {scoped_description} ([{item['shortSha']}]({item['url']}))")
+              lines.append("")
+
+          with open("RELEASE_NOTES.md", "w", encoding="utf-8") as markdown_file:
+              markdown_file.write("\n".join(lines).rstrip() + "\n")
+
+          payload = {
+              "version": version,
+              "previousTag": previous_tag,
+              "compareUrl": compare_url,
+              "commits": all_entries,
+              "breakingChanges": breaking_changes,
+          }
+          with open("changelog.json", "w", encoding="utf-8") as json_file:
+              json.dump(payload, json_file, indent=2)
+              json_file.write("\n")
+          PY
 
       - name: Create and push annotated tag
         env:
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.determine-version.outputs.version }}
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag -a "$VERSION" -m "Release $VERSION"
-          git push origin "$VERSION"
+          if git rev-parse "$VERSION" >/dev/null 2>&1; then
+            echo "Tag $VERSION already exists; continuing with release publication."
+          else
+            git tag -a "$VERSION" -m "Release $VERSION"
+            git push origin "$VERSION"
+          fi
 
       - name: Generate checksums
         run: |
@@ -236,7 +434,12 @@ jobs:
       - name: Publish GitHub release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ needs.determine-version.outputs.version }}
         run: |
           set -euo pipefail
-          gh release create "$VERSION" --title "$VERSION" --notes-file RELEASE_NOTES.md dist/*
+          if gh release view "$VERSION" >/dev/null 2>&1; then
+            gh release edit "$VERSION" --title "$VERSION" --notes-file RELEASE_NOTES.md
+            gh release upload "$VERSION" dist/* changelog.json --clobber
+          else
+            gh release create "$VERSION" --title "$VERSION" --notes-file RELEASE_NOTES.md dist/* changelog.json
+          fi
