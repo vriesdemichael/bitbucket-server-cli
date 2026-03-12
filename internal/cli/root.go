@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -12,6 +11,7 @@ import (
 	"github.com/spf13/pflag"
 	authcmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/auth"
 	bulkcmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/bulk"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/diagnostics"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -81,18 +81,6 @@ func NewRootCommand() *cobra.Command {
 type rootOptions struct {
 	JSON   bool
 	DryRun bool
-}
-
-const jsonContractVersion = "v1"
-
-type jsonEnvelope struct {
-	Version string           `json:"version"`
-	Data    any              `json:"data"`
-	Meta    jsonEnvelopeMeta `json:"meta"`
-}
-
-type jsonEnvelopeMeta struct {
-	Contract string `json:"contract"`
 }
 
 func loadConfig() (config.AppConfig, error) {
@@ -210,19 +198,5 @@ func newAPIClientFromConfig(cfg config.AppConfig) (*openapigenerated.ClientWithR
 }
 
 func writeJSON(writer io.Writer, payload any) error {
-	envelope := jsonEnvelope{
-		Version: jsonContractVersion,
-		Data:    payload,
-		Meta: jsonEnvelopeMeta{
-			Contract: "bbsc.machine",
-		},
-	}
-
-	encoded, err := json.MarshalIndent(envelope, "", "  ")
-	if err != nil {
-		return apperrors.New(apperrors.KindInternal, "failed to encode JSON output", err)
-	}
-
-	fmt.Fprintln(writer, string(encoded))
-	return nil
+	return jsonoutput.Write(writer, payload)
 }

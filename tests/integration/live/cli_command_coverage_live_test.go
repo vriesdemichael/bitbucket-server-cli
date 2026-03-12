@@ -676,17 +676,24 @@ func decodeJSONMap(t *testing.T, value string) map[string]any {
 func decodeJSONData(t *testing.T, value string, target any) {
 	t.Helper()
 
-	payload := map[string]any{}
-	if err := json.Unmarshal([]byte(value), &payload); err != nil {
-		t.Fatalf("expected json object output, got parse error %v for: %s", err, value)
+	var envelope struct {
+		Version string `json:"version"`
+		Data    any    `json:"data"`
 	}
 
-	rawData, ok := payload["data"]
-	if !ok {
+	if err := json.Unmarshal([]byte(value), &envelope); err != nil {
+		t.Fatalf("expected json envelope output, got parse error %v for: %s", err, value)
+	}
+
+	if strings.TrimSpace(envelope.Version) == "" {
+		t.Fatalf("expected json envelope version in output: %s", value)
+	}
+
+	if envelope.Data == nil {
 		t.Fatalf("expected data field in envelope output: %s", value)
 	}
 
-	encodedData, err := json.Marshal(rawData)
+	encodedData, err := json.Marshal(envelope.Data)
 	if err != nil {
 		t.Fatalf("failed to re-encode envelope data: %v", err)
 	}

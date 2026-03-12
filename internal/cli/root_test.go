@@ -15,6 +15,7 @@ import (
 	"testing"
 
 	"github.com/spf13/cobra"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/git"
@@ -378,8 +379,8 @@ func decodeJSONEnvelopeDataMap(t *testing.T, raw []byte) map[string]any {
 		t.Fatalf("expected valid json output, got: %s (%v)", string(raw), err)
 	}
 
-	if envelope.Version != jsonContractVersion {
-		t.Fatalf("expected json envelope version %q, got %q", jsonContractVersion, envelope.Version)
+	if envelope.Version != jsonoutput.ContractVersion {
+		t.Fatalf("expected json envelope version %q, got %q", jsonoutput.ContractVersion, envelope.Version)
 	}
 
 	if envelope.Data == nil {

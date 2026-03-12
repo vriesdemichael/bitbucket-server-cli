@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 )
 
@@ -27,12 +28,7 @@ func TestStatusJSONUsesHostOverride(t *testing.T) {
 			}, nil
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 
@@ -63,17 +59,24 @@ func TestStatusJSONUsesHostOverride(t *testing.T) {
 }
 
 func decodeJSONEnvelopeData(raw []byte, target any) error {
-	envelope := map[string]any{}
+	var envelope struct {
+		Version string `json:"version"`
+		Data    any    `json:"data"`
+	}
+
 	if err := json.Unmarshal(raw, &envelope); err != nil {
 		return err
 	}
 
-	rawData, ok := envelope["data"]
-	if !ok {
-		return json.Unmarshal(raw, target)
+	if strings.TrimSpace(envelope.Version) == "" {
+		return os.ErrInvalid
 	}
 
-	encodedData, err := json.Marshal(rawData)
+	if envelope.Data == nil {
+		return os.ErrInvalid
+	}
+
+	encodedData, err := json.Marshal(envelope.Data)
 	if err != nil {
 		return err
 	}
@@ -106,12 +109,7 @@ func TestAuthCommandAdditionalBranches(t *testing.T) {
 				return config.AppConfig{BitbucketURL: "http://resolved.local:7990"}, nil
 			},
 			WriteJSON: func(writer io.Writer, payload any) error {
-				encoded, err := json.Marshal(payload)
-				if err != nil {
-					return err
-				}
-				_, err = writer.Write(encoded)
-				return err
+				return jsonoutput.Write(writer, payload)
 			},
 		})
 
@@ -138,12 +136,7 @@ func TestAuthCommandAdditionalBranches(t *testing.T) {
 				return config.LoadFromEnv()
 			},
 			WriteJSON: func(writer io.Writer, payload any) error {
-				encoded, err := json.Marshal(payload)
-				if err != nil {
-					return err
-				}
-				_, err = writer.Write(encoded)
-				return err
+				return jsonoutput.Write(writer, payload)
 			},
 		})
 
@@ -154,7 +147,7 @@ func TestAuthCommandAdditionalBranches(t *testing.T) {
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("logout json failed: %v", err)
 		}
-		if !strings.Contains(out.String(), "\"status\":\"ok\"") {
+		if !strings.Contains(out.String(), "\"status\": \"ok\"") {
 			t.Fatalf("expected json ok status, got: %s", out.String())
 		}
 	})
@@ -198,12 +191,7 @@ func TestServerListAndUseCommands(t *testing.T) {
 			return config.LoadFromEnv()
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 
@@ -230,12 +218,7 @@ func TestServerListAndUseCommands(t *testing.T) {
 			return config.LoadFromEnv()
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 	cmd.SetOut(useOutput)
@@ -269,12 +252,7 @@ func TestServerCommandsJSONAndEmptyStates(t *testing.T) {
 			return config.LoadFromEnv()
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 
@@ -299,12 +277,7 @@ func TestServerCommandsJSONAndEmptyStates(t *testing.T) {
 			return config.LoadFromEnv()
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 
@@ -325,12 +298,7 @@ func TestServerCommandsJSONAndEmptyStates(t *testing.T) {
 			return config.LoadFromEnv()
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 
@@ -357,12 +325,7 @@ func TestServerCommandsErrorBranches(t *testing.T) {
 			return config.LoadFromEnv()
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 
@@ -385,12 +348,7 @@ func TestServerCommandsErrorBranches(t *testing.T) {
 			return config.LoadFromEnv()
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 
@@ -407,12 +365,7 @@ func TestServerCommandsErrorBranches(t *testing.T) {
 			return config.LoadFromEnv()
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 
@@ -439,12 +392,7 @@ func TestServerListIncludesUsernameForBasicAuth(t *testing.T) {
 			return config.LoadFromEnv()
 		},
 		WriteJSON: func(writer io.Writer, payload any) error {
-			encoded, err := json.Marshal(payload)
-			if err != nil {
-				return err
-			}
-			_, err = writer.Write(encoded)
-			return err
+			return jsonoutput.Write(writer, payload)
 		},
 	})
 
