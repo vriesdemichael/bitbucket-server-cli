@@ -2,9 +2,11 @@ package cli
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/spf13/cobra"
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	projectservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/project"
 )
 
@@ -97,6 +99,48 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := projectservice.NewService(client)
+			if options.DryRun {
+				_, err := service.Get(cmd.Context(), args[0])
+				predicted := "create"
+				reason := "project will be created"
+				if err == nil {
+					predicted = "conflict"
+					reason = "project key already exists"
+				} else if apperrors.ExitCode(err) != 4 {
+					return err
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "project.create",
+						Target:          map[string]any{"project": args[0], "name": createName, "description": createDesc},
+						Action:          "create",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project get"},
+						BlockingReasons: func() []string {
+							if predicted == "conflict" {
+								return []string{"project key exists"}
+							}
+							return nil
+						}(),
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "create" {
+					preview.Summary.CreateCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			created, err := service.Create(cmd.Context(), projectservice.CreateInput{
 				Key:         args[0],
 				Name:        createName,
@@ -132,6 +176,46 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := projectservice.NewService(client)
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), args[0])
+				if err != nil {
+					return err
+				}
+
+				predicted := "update"
+				reason := "project details will be updated"
+				currentName := strings.TrimSpace(safeString(current.Name))
+				currentDesc := strings.TrimSpace(safeString(current.Description))
+				if strings.EqualFold(currentName, strings.TrimSpace(updateName)) && strings.EqualFold(currentDesc, strings.TrimSpace(updateDesc)) {
+					predicted = "no-op"
+					reason = "project already matches requested values"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "project.update",
+						Target:          map[string]any{"project": args[0], "name": updateName, "description": updateDesc},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project get"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			updated, err := service.Update(cmd.Context(), args[0], projectservice.UpdateInput{
 				Name:        updateName,
 				Description: updateDesc,
@@ -163,6 +247,44 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := projectservice.NewService(client)
+			if options.DryRun {
+				_, err := service.Get(cmd.Context(), args[0])
+				predicted := "delete"
+				reason := "project will be deleted"
+				if err != nil {
+					if apperrors.ExitCode(err) == 4 {
+						predicted = "no-op"
+						reason = "project was not found"
+					} else {
+						return err
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "project.delete",
+						Target:          map[string]any{"project": args[0]},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project get"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "delete" {
+					preview.Summary.DeleteCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.Delete(cmd.Context(), args[0]); err != nil {
 				return err
 			}
@@ -228,14 +350,66 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := projectservice.NewService(client)
-			if err := service.GrantProjectUserPermission(cmd.Context(), args[0], args[1], args[2]); err != nil {
+			permission := strings.ToUpper(strings.TrimSpace(args[2]))
+			if options.DryRun {
+				users, err := service.ListProjectPermissionUsers(cmd.Context(), args[0], projectPermissionsLimit)
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "permission grant will create project user permission entry"
+				for _, user := range users {
+					if strings.EqualFold(strings.TrimSpace(user.Name), strings.TrimSpace(args[1])) {
+						if strings.EqualFold(strings.TrimSpace(user.Permission), permission) {
+							predicted = "no-op"
+							reason = "user already has requested project permission"
+						} else {
+							predicted = "update"
+							reason = "user project permission will be updated"
+						}
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "project.permission.user.grant",
+						Target:          map[string]any{"project": args[0], "username": args[1], "permission": permission},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project permission users list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "create":
+					preview.Summary.CreateCount = 1
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			if err := service.GrantProjectUserPermission(cmd.Context(), args[0], args[1], permission); err != nil {
 				return err
 			}
 
 			if options.JSON {
-				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "username": args[1], "permission": strings.ToUpper(args[2])})
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "username": args[1], "permission": permission})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to %s for project %s\n", strings.ToUpper(args[2]), args[1], args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to %s for project %s\n", permission, args[1], args[0])
 			return nil
 		},
 	}
@@ -251,6 +425,49 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := projectservice.NewService(client)
+			if options.DryRun {
+				users, err := service.ListProjectPermissionUsers(cmd.Context(), args[0], projectPermissionsLimit)
+				if err != nil {
+					return err
+				}
+
+				predicted := "no-op"
+				reason := "user does not currently have project permission entry"
+				if slices.ContainsFunc(users, func(user projectservice.PermissionUser) bool {
+					return strings.EqualFold(strings.TrimSpace(user.Name), strings.TrimSpace(args[1]))
+				}) {
+					predicted = "delete"
+					reason = "user project permission entry will be removed"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "project.permission.user.revoke",
+						Target:          map[string]any{"project": args[0], "username": args[1]},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project permission users list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "delete":
+					preview.Summary.DeleteCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.RevokeProjectUserPermission(cmd.Context(), args[0], args[1]); err != nil {
 				return err
 			}
@@ -312,14 +529,66 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := projectservice.NewService(client)
-			if err := service.GrantProjectGroupPermission(cmd.Context(), args[0], args[1], args[2]); err != nil {
+			permission := strings.ToUpper(strings.TrimSpace(args[2]))
+			if options.DryRun {
+				groups, err := service.ListProjectPermissionGroups(cmd.Context(), args[0], projectPermissionsLimit)
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "permission grant will create project group permission entry"
+				for _, group := range groups {
+					if strings.EqualFold(strings.TrimSpace(group.Name), strings.TrimSpace(args[1])) {
+						if strings.EqualFold(strings.TrimSpace(group.Permission), permission) {
+							predicted = "no-op"
+							reason = "group already has requested project permission"
+						} else {
+							predicted = "update"
+							reason = "group project permission will be updated"
+						}
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "project.permission.group.grant",
+						Target:          map[string]any{"project": args[0], "group": args[1], "permission": permission},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project permission groups list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "create":
+					preview.Summary.CreateCount = 1
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			if err := service.GrantProjectGroupPermission(cmd.Context(), args[0], args[1], permission); err != nil {
 				return err
 			}
 
 			if options.JSON {
-				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "group": args[1], "permission": strings.ToUpper(args[2])})
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "group": args[1], "permission": permission})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to group %s for project %s\n", strings.ToUpper(args[2]), args[1], args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to group %s for project %s\n", permission, args[1], args[0])
 			return nil
 		},
 	}
@@ -335,6 +604,49 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := projectservice.NewService(client)
+			if options.DryRun {
+				groups, err := service.ListProjectPermissionGroups(cmd.Context(), args[0], projectPermissionsLimit)
+				if err != nil {
+					return err
+				}
+
+				predicted := "no-op"
+				reason := "group does not currently have project permission entry"
+				if slices.ContainsFunc(groups, func(group projectservice.PermissionGroup) bool {
+					return strings.EqualFold(strings.TrimSpace(group.Name), strings.TrimSpace(args[1]))
+				}) {
+					predicted = "delete"
+					reason = "group project permission entry will be removed"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "project.permission.group.revoke",
+						Target:          map[string]any{"project": args[0], "group": args[1]},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project permission groups list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "delete":
+					preview.Summary.DeleteCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.RevokeProjectGroupPermission(cmd.Context(), args[0], args[1]); err != nil {
 				return err
 			}

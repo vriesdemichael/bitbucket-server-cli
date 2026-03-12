@@ -2,8 +2,10 @@ package cli
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	diffservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
 	tagservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/tag"
 )
@@ -213,6 +215,53 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := tagservice.NewService(client)
+			if options.DryRun {
+				tags, err := service.List(cmd.Context(), repo, tagservice.ListOptions{Limit: 200, FilterText: args[0]})
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "tag will be created"
+				for _, tag := range tags {
+					if strings.EqualFold(strings.TrimSpace(safeString(tag.DisplayId)), strings.TrimSpace(args[0])) || strings.EqualFold(strings.TrimSpace(safeString(tag.Id)), strings.TrimSpace(args[0])) {
+						predicted = "conflict"
+						reason = "tag already exists"
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "tag.create",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "name": args[0], "start_point": startPoint, "message": message},
+						Action:          "create",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"tag list (filtered by name)"},
+						BlockingReasons: func() []string {
+							if predicted == "conflict" {
+								return []string{"tag already exists"}
+							}
+							return nil
+						}(),
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "create" {
+					preview.Summary.CreateCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			createdTag, err := service.Create(cmd.Context(), repo, args[0], startPoint, message)
 			if err != nil {
 				return err
@@ -279,6 +328,44 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := tagservice.NewService(client)
+			if options.DryRun {
+				_, err := service.Get(cmd.Context(), repo, args[0])
+				predicted := "delete"
+				reason := "tag will be deleted"
+				if err != nil {
+					if apperrors.ExitCode(err) == 4 {
+						predicted = "no-op"
+						reason = "tag was not found"
+					} else {
+						return err
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "tag.delete",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "name": args[0]},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"tag get"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "delete" {
+					preview.Summary.DeleteCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.Delete(cmd.Context(), repo, args[0]); err != nil {
 				return err
 			}

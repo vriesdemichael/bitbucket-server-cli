@@ -125,6 +125,7 @@ Equivalent global CLI flags (highest precedence):
 - `--retry-backoff`
 - `--log-level`
 - `--log-format`
+- `--dry-run` (server-mutating Bitbucket commands only; excludes local auth/config mutators and emits dry-run preview output)
 
 Authentication workflow:
 
@@ -135,6 +136,15 @@ Authentication workflow:
 - `go run ./cmd/bbsc --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
 - `go run ./cmd/bbsc --log-level debug auth status`
 - `go run ./cmd/bbsc --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl`
+
+Dry-run behavior:
+
+- `--dry-run` applies only to server-mutating Bitbucket commands; local auth/config mutators are out of scope.
+- `--dry-run` emits structured previews in both human and `--json` mode and does not execute write side effects.
+- Implemented mutation command families use `stateful` planning backed by live server reads/prediction rather than write execution. This includes the main branch, tag, repo settings/security, project, reviewer, hook, repo admin, pull request, comment, insights, and build mutation flows.
+- Preview payloads explicitly report `planning_mode`, `capability`, predicted action, reason, and blocking/required-state details when available.
+- Static preview support remains as a safety fallback for unsupported or future paths, but the primary rollout target is stateful planning for server mutations.
+- Live integration tests validate no-side-effect behavior by capturing server context before a dry-run, executing the dry-run preview, and asserting the relevant server state is unchanged afterward.
 
 Repository context behavior:
 
@@ -180,7 +190,7 @@ Bulk policy workflow:
 - Policy schema fields: `apiVersion`, `selector`, `operations`
 - Selector support: `projectKey`, `repoPattern`, and explicit `repositories`
 - Initial operation types: `repo.permission.user.grant`, `repo.permission.group.grant`, `repo.webhook.create`, `repo.pull-request-settings.required-all-tasks-complete`, `repo.pull-request-settings.required-approvers-count`, `build.required.create`
-- `bulk plan` performs no writes and emits a deterministic reviewed plan artifact with a `planHash`
+- `bulk plan` performs no writes and emits a deterministic reviewed plan artifact with a `planHash`; this is the preview/dry-run mechanism for bulk workflows
 - `bulk apply` executes only operations embedded in the reviewed plan and persists result status under the local BBSC config directory (override with `BBSC_BULK_STATUS_DIR`)
 - Example policy: `docs/examples/bulk-policy.yaml`
 - Schema export command: `go run ./tools/bulk-schema-export -out docs/reference/schemas`

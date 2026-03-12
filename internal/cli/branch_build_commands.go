@@ -3,10 +3,13 @@ package cli
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	branchservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/branch"
 	qualityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/quality"
 )
@@ -107,6 +110,56 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := branchservice.NewService(client)
+			if options.DryRun {
+				branches, err := service.List(cmd.Context(), repo, branchservice.ListOptions{Limit: 1000, FilterText: args[0]})
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "branch will be created"
+				normalizedRequested := normalizeBranchName(args[0])
+				for _, branch := range branches {
+					if strings.EqualFold(strings.TrimSpace(safeString(branch.DisplayId)), strings.TrimSpace(args[0])) ||
+						strings.EqualFold(strings.TrimSpace(safeString(branch.Id)), normalizedRequested) {
+						predicted = "conflict"
+						reason = "branch already exists"
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "branch.create",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "name": args[0], "start_point": createStartPoint},
+						Action:          "create",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"branch list (filtered by name)"},
+						BlockingReasons: func() []string {
+							if predicted == "conflict" {
+								return []string{"branch already exists"}
+							}
+							return nil
+						}(),
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "create":
+					preview.Summary.CreateCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			created, err := service.Create(cmd.Context(), repo, args[0], createStartPoint)
 			if err != nil {
 				return err
@@ -125,7 +178,6 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 	branchCmd.AddCommand(createCmd)
 
 	var deleteEndPoint string
-	var deleteDryRun bool
 	deleteCmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete repository branch",
@@ -142,15 +194,39 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := branchservice.NewService(client)
-			if err := service.Delete(cmd.Context(), repo, args[0], deleteEndPoint, deleteDryRun); err != nil {
+			if err := service.Delete(cmd.Context(), repo, args[0], deleteEndPoint, options.DryRun); err != nil {
 				return err
 			}
 
 			if options.JSON {
-				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "branch": args[0], "dry_run": deleteDryRun})
+				if options.DryRun {
+					reason := "validated through Bitbucket branch delete dry-run endpoint"
+					if strings.TrimSpace(deleteEndPoint) != "" {
+						reason = "validated through Bitbucket branch delete dry-run endpoint with end-point precondition"
+					}
+					return writeJSON(cmd.OutOrStdout(), dryRunPreview{
+						DryRun:       true,
+						PlanningMode: planningModeStateful,
+						Capability:   capabilityFull,
+						Items: []dryRunItem{{
+							Intent: "branch.delete",
+							Target: map[string]any{
+								"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug),
+								"branch":     args[0],
+								"end_point":  strings.TrimSpace(deleteEndPoint),
+							},
+							Action:    "delete",
+							Supported: true,
+							Reason:    reason,
+						}},
+						Summary: dryRunSummary{Total: 1, Supported: 1, DeleteCount: 1},
+					})
+				}
+
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "branch": args[0]})
 			}
 
-			if deleteDryRun {
+			if options.DryRun {
 				fmt.Fprintf(cmd.OutOrStdout(), "Dry-run delete completed for %s\n", args[0])
 				return nil
 			}
@@ -160,7 +236,6 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 		},
 	}
 	deleteCmd.Flags().StringVar(&deleteEndPoint, "end-point", "", "Expected commit at branch tip")
-	deleteCmd.Flags().BoolVar(&deleteDryRun, "dry-run", false, "Validate branch delete without performing it")
 	branchCmd.AddCommand(deleteCmd)
 
 	defaultCmd := &cobra.Command{Use: "default", Short: "Get or set repository default branch"}
@@ -211,6 +286,50 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := branchservice.NewService(client)
+			if options.DryRun {
+				currentDefault, err := service.GetDefault(cmd.Context(), repo)
+				if err != nil {
+					return err
+				}
+				predicted := "update"
+				reason := "default branch will be updated"
+				currentDefaultID := strings.TrimSpace(safeString(currentDefault.DisplayId))
+				if currentDefaultID == "" {
+					currentDefaultID = strings.TrimPrefix(strings.TrimSpace(safeString(currentDefault.Id)), "refs/heads/")
+				}
+				if strings.EqualFold(currentDefaultID, strings.TrimSpace(args[0])) {
+					predicted = "no-op"
+					reason = "default branch already set to requested value"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "branch.default.set",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "default_branch": args[0]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"default branch"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.SetDefault(cmd.Context(), repo, args[0]); err != nil {
 				return err
 			}
@@ -283,6 +402,50 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := branchservice.NewService(client)
+			if options.DryRun {
+				currentDefault, err := service.GetDefault(cmd.Context(), repo)
+				if err != nil {
+					return err
+				}
+				predicted := "update"
+				reason := "branch model default will be updated"
+				currentDefaultID := strings.TrimSpace(safeString(currentDefault.DisplayId))
+				if currentDefaultID == "" {
+					currentDefaultID = strings.TrimPrefix(strings.TrimSpace(safeString(currentDefault.Id)), "refs/heads/")
+				}
+				if strings.EqualFold(currentDefaultID, strings.TrimSpace(args[0])) {
+					predicted = "no-op"
+					reason = "branch model default already set to requested value"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "branch.model.update",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "default_branch": args[0]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"default branch"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.SetDefault(cmd.Context(), repo, args[0]); err != nil {
 				return err
 			}
@@ -422,6 +585,53 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := branchservice.NewService(client)
+			if options.DryRun {
+				restrictions, err := service.ListRestrictions(cmd.Context(), repo, branchservice.RestrictionListOptions{Limit: 1000})
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "branch restriction will be created"
+				for _, restriction := range restrictions {
+					if matchesRestrictionSignature(restriction, createRestrictionType, createMatcherType, createMatcherID) {
+						predicted = "conflict"
+						reason = "matching branch restriction already exists"
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "branch.restriction.create",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "type": createRestrictionType, "matcher_type": createMatcherType, "matcher_id": createMatcherID},
+						Action:          "create",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"branch restrictions list"},
+						BlockingReasons: func() []string {
+							if predicted == "conflict" {
+								return []string{"matching restriction exists"}
+							}
+							return nil
+						}(),
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "create":
+					preview.Summary.CreateCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			created, err := service.CreateRestriction(cmd.Context(), repo, branchservice.RestrictionUpsertInput{
 				Type:           createRestrictionType,
 				MatcherType:    createMatcherType,
@@ -482,6 +692,45 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := branchservice.NewService(client)
+			if options.DryRun {
+				current, err := service.GetRestriction(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+				predicted := "update"
+				reason := "branch restriction will be updated"
+				if matchesRestrictionUpdate(current, updateRestrictionType, updateMatcherType, updateMatcherID, updateUsers, updateGroups, accessKeyIDs) {
+					predicted = "no-op"
+					reason = "branch restriction already matches requested values"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "branch.restriction.update",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"branch restriction"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			updated, err := service.UpdateRestriction(cmd.Context(), repo, args[0], branchservice.RestrictionUpsertInput{
 				Type:           updateRestrictionType,
 				MatcherType:    updateMatcherType,
@@ -530,6 +779,46 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := branchservice.NewService(client)
+			if options.DryRun {
+				_, err := service.GetRestriction(cmd.Context(), repo, args[0])
+				predicted := "delete"
+				reason := "branch restriction will be deleted"
+				if err != nil {
+					if apperrors.ExitCode(err) == 4 {
+						predicted = "no-op"
+						reason = "branch restriction was not found"
+					} else {
+						return err
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "branch.restriction.delete",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"branch restriction"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "delete":
+					preview.Summary.DeleteCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.DeleteRestriction(cmd.Context(), repo, args[0]); err != nil {
 				return err
 			}
@@ -582,6 +871,47 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := qualityservice.NewService(client)
+			if options.DryRun {
+				statuses, err := service.GetBuildStatuses(cmd.Context(), args[0], 200, "")
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "build status entry will be created"
+				for _, status := range statuses {
+					if strings.EqualFold(strings.TrimSpace(safeString(status.Key)), strings.TrimSpace(setKey)) {
+						predicted = "update"
+						reason = "build status entry with this key will be updated"
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "build.status.set",
+						Target:          map[string]any{"commit": args[0], "key": setKey, "state": setState, "url": setURL},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"build statuses list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "create" {
+					preview.Summary.CreateCount = 1
+				} else {
+					preview.Summary.UpdateCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.SetBuildStatus(cmd.Context(), args[0], qualityservice.BuildStatusSetInput{
 				Key:         setKey,
 				State:       setState,
@@ -741,6 +1071,26 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
 			}
 
+			if options.DryRun {
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "build.required.create",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug)},
+						Action:          "create",
+						PredictedAction: "create",
+						Supported:       true,
+						Reason:          "required build check will be created",
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"required build checks endpoint availability"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, CreateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			created, err := service.CreateRequiredBuildCheck(cmd.Context(), repo, payload)
 			if err != nil {
 				return err
@@ -774,6 +1124,26 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
 			}
 
+			if options.DryRun {
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "build.required.update",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": id},
+						Action:          "update",
+						PredictedAction: "update",
+						Supported:       true,
+						Reason:          "required build check will be updated",
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"required build checks endpoint availability"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, UpdateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			updated, err := service.UpdateRequiredBuildCheck(cmd.Context(), repo, id, payload)
 			if err != nil {
 				return err
@@ -801,6 +1171,47 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "merge check id must be a valid integer", err)
 			}
 
+			if options.DryRun {
+				checks, err := service.ListRequiredBuildChecks(cmd.Context(), repo, requiredLimit)
+				if err != nil {
+					return err
+				}
+
+				predicted := "no-op"
+				reason := "required build check was not found"
+				for _, check := range checks {
+					if safeInt64(check.Id) == id {
+						predicted = "delete"
+						reason = "required build check will be deleted"
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "build.required.delete",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": id},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"required build checks list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "delete" {
+					preview.Summary.DeleteCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.DeleteRequiredBuildCheck(cmd.Context(), repo, id); err != nil {
 				return err
 			}
@@ -818,4 +1229,81 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 	buildCmd.AddCommand(requiredCmd)
 
 	return buildCmd
+}
+
+func matchesRestrictionSignature(restriction openapigenerated.RestRefRestriction, restrictionType, matcherType, matcherID string) bool {
+	currentType := strings.TrimSpace(strings.ToLower(safeString(restriction.Type)))
+	requestedType := strings.TrimSpace(strings.ToLower(restrictionType))
+	if currentType != requestedType {
+		return false
+	}
+
+	currentMatcherType := ""
+	currentMatcherID := ""
+	if restriction.Matcher != nil {
+		if restriction.Matcher.Type != nil && restriction.Matcher.Type.Id != nil {
+			currentMatcherType = strings.TrimSpace(strings.ToUpper(string(*restriction.Matcher.Type.Id)))
+		}
+		currentMatcherID = strings.TrimSpace(safeString(restriction.Matcher.Id))
+	}
+
+	requestedMatcherType := strings.TrimSpace(strings.ToUpper(matcherType))
+	requestedMatcherID := strings.TrimSpace(matcherID)
+	return currentMatcherType == requestedMatcherType && currentMatcherID == requestedMatcherID
+}
+
+func matchesRestrictionUpdate(restriction openapigenerated.RestRefRestriction, restrictionType, matcherType, matcherID string, users, groups []string, accessKeyIDs []int32) bool {
+	if !matchesRestrictionSignature(restriction, restrictionType, matcherType, matcherID) {
+		return false
+	}
+
+	currentUsers := make([]string, 0, len(safeUsers(restriction.Users)))
+	for _, user := range safeUsers(restriction.Users) {
+		currentUsers = append(currentUsers, strings.TrimSpace(safeString(user.Name)))
+	}
+	currentGroups := make([]string, 0, len(safeStringSlice(restriction.Groups)))
+	for _, group := range safeStringSlice(restriction.Groups) {
+		currentGroups = append(currentGroups, strings.TrimSpace(group))
+	}
+	currentAccessKeys := make([]int32, 0)
+	if restriction.AccessKeys != nil {
+		for _, key := range *restriction.AccessKeys {
+			if key.Key != nil && key.Key.Id != nil {
+				currentAccessKeys = append(currentAccessKeys, *key.Key.Id)
+			}
+		}
+	}
+
+	normalizeStrings := func(values []string) []string {
+		normalized := make([]string, 0, len(values))
+		for _, value := range values {
+			if trimmed := strings.TrimSpace(value); trimmed != "" {
+				normalized = append(normalized, trimmed)
+			}
+		}
+		slices.Sort(normalized)
+		return normalized
+	}
+
+	requestedUsers := normalizeStrings(users)
+	requestedGroups := normalizeStrings(groups)
+	normalizedCurrentUsers := normalizeStrings(currentUsers)
+	normalizedCurrentGroups := normalizeStrings(currentGroups)
+
+	requestedAccessKeys := append([]int32(nil), accessKeyIDs...)
+	slices.Sort(requestedAccessKeys)
+	slices.Sort(currentAccessKeys)
+
+	return slices.Equal(normalizedCurrentUsers, requestedUsers) && slices.Equal(normalizedCurrentGroups, requestedGroups) && slices.Equal(currentAccessKeys, requestedAccessKeys)
+}
+
+func normalizeBranchName(name string) string {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "refs/") {
+		return trimmed
+	}
+	return "refs/heads/" + trimmed
 }
