@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
+	"strings"
 
 	"github.com/spf13/cobra"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
@@ -95,6 +97,40 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if options.DryRun {
+					conditions, err := service.ListRepositoryConditions(cmd.Context(), repo.ProjectKey, repo.Slug)
+					if err != nil {
+						return err
+					}
+					predicted := "no-op"
+					reason := "reviewer condition not found in repository"
+					if reviewerConditionExists(conditions, id) {
+						predicted = "delete"
+						reason = "reviewer condition will be deleted"
+					}
+					preview := dryRunPreview{
+						DryRun:       true,
+						PlanningMode: planningModeStateful,
+						Capability:   capabilityFull,
+						Items: []dryRunItem{{
+							Intent:          "reviewer.condition.delete",
+							Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": id},
+							Action:          "delete",
+							PredictedAction: predicted,
+							Supported:       true,
+							Reason:          reason,
+							Confidence:      capabilityFull,
+							RequiredState:   []string{"repository reviewer conditions"},
+						}},
+						Summary: dryRunSummary{Total: 1, Supported: 1},
+					}
+					if predicted == "delete" {
+						preview.Summary.DeleteCount = 1
+					} else {
+						preview.Summary.NoopCount = 1
+					}
+					return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+				}
 				if err := service.DeleteRepositoryCondition(cmd.Context(), repo.ProjectKey, repo.Slug, id); err != nil {
 					return err
 				}
@@ -110,6 +146,40 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 			}
 			if projectKey == "" {
 				return fmt.Errorf("project key is required (use --project or --repo)")
+			}
+			if options.DryRun {
+				conditions, err := service.ListProjectConditions(cmd.Context(), projectKey)
+				if err != nil {
+					return err
+				}
+				predicted := "no-op"
+				reason := "reviewer condition not found in project"
+				if reviewerConditionExists(conditions, id) {
+					predicted = "delete"
+					reason = "reviewer condition will be deleted"
+				}
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "reviewer.condition.delete",
+						Target:          map[string]any{"project": projectKey, "id": id},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project reviewer conditions"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "delete" {
+					preview.Summary.DeleteCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
 			}
 
 			if err := service.DeleteProjectCondition(cmd.Context(), projectKey, id); err != nil {
@@ -171,6 +241,46 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if options.DryRun {
+					conditions, err := service.ListRepositoryConditions(cmd.Context(), repo.ProjectKey, repo.Slug)
+					if err != nil {
+						return err
+					}
+					predicted := "create"
+					reason := "reviewer condition will be created"
+					if reviewerConditionEquivalentExists(conditions, condition) {
+						predicted = "conflict"
+						reason = "equivalent reviewer condition already exists"
+					}
+					preview := dryRunPreview{
+						DryRun:       true,
+						PlanningMode: planningModeStateful,
+						Capability:   capabilityFull,
+						Items: []dryRunItem{{
+							Intent:          "reviewer.condition.create",
+							Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug)},
+							Action:          "create",
+							PredictedAction: predicted,
+							Supported:       true,
+							Reason:          reason,
+							Confidence:      capabilityFull,
+							RequiredState:   []string{"repository reviewer conditions"},
+							BlockingReasons: func() []string {
+								if predicted == "conflict" {
+									return []string{"equivalent condition exists"}
+								}
+								return nil
+							}(),
+						}},
+						Summary: dryRunSummary{Total: 1, Supported: 1},
+					}
+					if predicted == "create" {
+						preview.Summary.CreateCount = 1
+					} else {
+						preview.Summary.UnknownCount = 1
+					}
+					return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+				}
 				created, err := service.CreateRepositoryCondition(cmd.Context(), repo.ProjectKey, repo.Slug, condition)
 				if err != nil {
 					return err
@@ -187,6 +297,46 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 			}
 			if projectKey == "" {
 				return fmt.Errorf("project key is required (use --project or --repo)")
+			}
+			if options.DryRun {
+				conditions, err := service.ListProjectConditions(cmd.Context(), projectKey)
+				if err != nil {
+					return err
+				}
+				predicted := "create"
+				reason := "reviewer condition will be created"
+				if reviewerConditionEquivalentExists(conditions, condition) {
+					predicted = "conflict"
+					reason = "equivalent reviewer condition already exists"
+				}
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "reviewer.condition.create",
+						Target:          map[string]any{"project": projectKey},
+						Action:          "create",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project reviewer conditions"},
+						BlockingReasons: func() []string {
+							if predicted == "conflict" {
+								return []string{"equivalent condition exists"}
+							}
+							return nil
+						}(),
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "create" {
+					preview.Summary.CreateCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
 			}
 			created, err := service.CreateProjectCondition(cmd.Context(), projectKey, condition)
 			if err != nil {
@@ -249,6 +399,49 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 				if err := json.Unmarshal(configData, &condition); err != nil {
 					return fmt.Errorf("invalid condition JSON: %w", err)
 				}
+				if options.DryRun {
+					conditions, err := service.ListRepositoryConditions(cmd.Context(), repo.ProjectKey, repo.Slug)
+					if err != nil {
+						return err
+					}
+					predicted := "blocked"
+					reason := "reviewer condition not found in repository"
+					blocking := []string{"reviewer condition not found"}
+					if existing, found := findReviewerCondition(conditions, id); found {
+						blocking = nil
+						predicted = "update"
+						reason = "reviewer condition will be updated"
+						if reviewerConditionUpdateEquivalent(existing, condition) {
+							predicted = "no-op"
+							reason = "reviewer condition already matches requested update"
+						}
+					}
+					preview := dryRunPreview{
+						DryRun:       true,
+						PlanningMode: planningModeStateful,
+						Capability:   capabilityFull,
+						Items: []dryRunItem{{
+							Intent:          "reviewer.condition.update",
+							Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": id},
+							Action:          "update",
+							PredictedAction: predicted,
+							Supported:       true,
+							Reason:          reason,
+							Confidence:      capabilityFull,
+							RequiredState:   []string{"repository reviewer conditions"},
+							BlockingReasons: blocking,
+						}},
+						Summary: dryRunSummary{Total: 1, Supported: 1},
+					}
+					if predicted == "update" {
+						preview.Summary.UpdateCount = 1
+					} else if predicted == "no-op" {
+						preview.Summary.NoopCount = 1
+					} else {
+						preview.Summary.UnknownCount = 1
+					}
+					return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+				}
 				updated, err := service.UpdateRepositoryCondition(cmd.Context(), repo.ProjectKey, repo.Slug, id, condition)
 				if err != nil {
 					return err
@@ -269,6 +462,49 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 			var condition openapigenerated.UpdatePullRequestConditionJSONRequestBody
 			if err := json.Unmarshal(configData, &condition); err != nil {
 				return fmt.Errorf("invalid condition JSON: %w", err)
+			}
+			if options.DryRun {
+				conditions, err := service.ListProjectConditions(cmd.Context(), projectKey)
+				if err != nil {
+					return err
+				}
+				predicted := "blocked"
+				reason := "reviewer condition not found in project"
+				blocking := []string{"reviewer condition not found"}
+				if existing, found := findReviewerCondition(conditions, id); found {
+					blocking = nil
+					predicted = "update"
+					reason = "reviewer condition will be updated"
+					if reviewerConditionUpdateEquivalent(existing, condition) {
+						predicted = "no-op"
+						reason = "reviewer condition already matches requested update"
+					}
+				}
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "reviewer.condition.update",
+						Target:          map[string]any{"project": projectKey, "id": id},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project reviewer conditions"},
+						BlockingReasons: blocking,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else if predicted == "no-op" {
+					preview.Summary.NoopCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
 			}
 			updated, err := service.UpdateProjectCondition(cmd.Context(), projectKey, id, condition)
 			if err != nil {
@@ -296,4 +532,56 @@ func printReviewerConditions(cmd *cobra.Command, conditions []openapigenerated.R
 	// Basic summary for human output
 	fmt.Fprintf(cmd.OutOrStdout(), "Found %d conditions\n", len(conditions))
 	// We could add more details here if we cast to RestPullRequestCondition
+}
+
+func reviewerConditionExists(conditions []openapigenerated.RestPullRequestCondition, id string) bool {
+	_, ok := findReviewerCondition(conditions, id)
+	return ok
+}
+
+func findReviewerCondition(conditions []openapigenerated.RestPullRequestCondition, id string) (openapigenerated.RestPullRequestCondition, bool) {
+	trimmedID := strings.TrimSpace(id)
+	if trimmedID == "" {
+		return openapigenerated.RestPullRequestCondition{}, false
+	}
+
+	for _, condition := range conditions {
+		if condition.Id != nil && strings.TrimSpace(fmt.Sprintf("%d", *condition.Id)) == trimmedID {
+			return condition, true
+		}
+	}
+
+	return openapigenerated.RestPullRequestCondition{}, false
+}
+
+func reviewerConditionEquivalentExists(conditions []openapigenerated.RestPullRequestCondition, condition openapigenerated.RestDefaultReviewersRequest) bool {
+	for _, existing := range conditions {
+		if reviewerConditionEquivalent(existing, condition) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func reviewerConditionEquivalent(existing openapigenerated.RestPullRequestCondition, desired openapigenerated.RestDefaultReviewersRequest) bool {
+	existingPayload := map[string]any{
+		"requiredApprovals": existing.RequiredApprovals,
+		"sourceMatcher":     existing.SourceRefMatcher,
+		"targetMatcher":     existing.TargetRefMatcher,
+		"reviewers":         existing.Reviewers,
+	}
+
+	desiredPayload := map[string]any{
+		"requiredApprovals": desired.RequiredApprovals,
+		"sourceMatcher":     desired.SourceMatcher,
+		"targetMatcher":     desired.TargetMatcher,
+		"reviewers":         desired.Reviewers,
+	}
+
+	return reflect.DeepEqual(normalizeJSONShape(existingPayload), normalizeJSONShape(desiredPayload))
+}
+
+func reviewerConditionUpdateEquivalent(existing openapigenerated.RestPullRequestCondition, desired any) bool {
+	return reflect.DeepEqual(normalizeJSONShape(existing), normalizeJSONShape(desired))
 }

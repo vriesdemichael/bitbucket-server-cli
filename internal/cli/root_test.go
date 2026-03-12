@@ -3326,6 +3326,74 @@ func TestProjectPermissionsUsersList(t *testing.T) {
 	}
 }
 
+func TestRepoSettingsSecurityPermissionsUsersGrantDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/permissions/users":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"user":{"name":"alice","displayName":"Alice"},"permission":"REPO_READ"}],"isLastPage":true}`))
+			return
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/permissions/users":
+			t.Fatalf("grant endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "repo", "settings", "security", "permissions", "users", "grant", "alice", "repo_write"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	output := buffer.String()
+	if !strings.Contains(output, `"planning_mode": "stateful"`) || !strings.Contains(output, `"predicted_action": "update"`) {
+		t.Fatalf("expected stateful update preview output, got: %s", output)
+	}
+}
+
+func TestProjectPermissionsUsersGrantDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"user":{"name":"alice"},"permission":"PROJECT_READ"}],"isLastPage":true}`))
+			return
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			t.Fatalf("grant endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "project", "permissions", "users", "grant", "PRJ", "alice", "project_write"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	output := buffer.String()
+	if !strings.Contains(output, `"planning_mode": "stateful"`) || !strings.Contains(output, `"predicted_action": "update"`) {
+		t.Fatalf("expected stateful update preview output, got: %s", output)
+	}
+}
+
 func TestHookList(t *testing.T) {
 	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -3352,5 +3420,298 @@ func TestHookList(t *testing.T) {
 
 	if !strings.Contains(buffer.String(), `"hook1"`) {
 		t.Fatalf("expected hook1 in output, got: %s", buffer.String())
+	}
+}
+
+func TestHookEnableDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"enabled":false,"details":{"key":"hook1","name":"Hook 1"}}],"isLastPage":true}`))
+			return
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/hook1/enabled":
+			t.Fatalf("enable endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "hook", "enable", "hook1", "--project", "PRJ"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"predicted_action": "update"`) {
+		t.Fatalf("expected update prediction, got: %s", buffer.String())
+	}
+}
+
+func TestHookConfigureDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"enabled":true,"details":{"key":"hook1","name":"Hook 1"}}],"isLastPage":true}`))
+			return
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/hook1/settings":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"required":true}`))
+			return
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/hook1/settings":
+			t.Fatalf("configure endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "hook", "configure", "hook1", `{"required":true}`, "--project", "PRJ"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"predicted_action": "no-op"`) {
+		t.Fatalf("expected no-op prediction, got: %s", buffer.String())
+	}
+}
+
+func TestRepoSettingsWorkflowWebhooksCreateDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/webhooks":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`[{"id":11,"name":"existing","url":"http://existing.local"}]`))
+			return
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/webhooks":
+			t.Fatalf("create webhook endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "repo", "settings", "workflow", "webhooks", "create", "newhook", "http://example.local/hook"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"predicted_action": "create"`) {
+		t.Fatalf("expected create prediction, got: %s", buffer.String())
+	}
+}
+
+func TestRepoSettingsPullRequestsUpdateDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/settings/pull-requests":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"requiredAllTasksComplete":false}`))
+			return
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/settings/pull-requests":
+			t.Fatalf("update pull-request settings endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "repo", "settings", "pull-requests", "update", "--required-all-tasks-complete=true"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"predicted_action": "update"`) {
+		t.Fatalf("expected update prediction, got: %s", buffer.String())
+	}
+}
+
+func TestBranchCreateDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/branches":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"id":"refs/heads/main","displayId":"main"}],"isLastPage":true}`))
+			return
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/branches":
+			t.Fatalf("branch create endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "branch", "create", "feature/demo", "--start-point", "master"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"planning_mode": "stateful"`) || !strings.Contains(buffer.String(), `"predicted_action": "create"`) {
+		t.Fatalf("expected stateful create prediction, got: %s", buffer.String())
+	}
+}
+
+func TestBranchDefaultSetDryRunStatefulNoop(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/default-branch":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":"refs/heads/master","displayId":"master"}`))
+			return
+		case request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/default-branch":
+			t.Fatalf("set default endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "branch", "default", "set", "master"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"predicted_action": "no-op"`) {
+		t.Fatalf("expected no-op prediction, got: %s", buffer.String())
+	}
+}
+
+func TestTagCreateDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/tags":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"id":"refs/tags/v1.0.0","displayId":"v1.0.0"}],"isLastPage":true}`))
+			return
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/tags":
+			t.Fatalf("tag create endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "tag", "create", "v1.2.3", "--start-point", "master"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"planning_mode": "stateful"`) || !strings.Contains(buffer.String(), `"predicted_action": "create"`) {
+		t.Fatalf("expected stateful create prediction, got: %s", buffer.String())
+	}
+}
+
+func TestReviewerConditionCreateDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/conditions":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`[]`))
+			return
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/conditions":
+			t.Fatalf("reviewer condition create endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "reviewer", "condition", "create", `{"requiredApprovals":1}`, "--project", "PRJ"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"predicted_action": "create"`) {
+		t.Fatalf("expected create prediction, got: %s", buffer.String())
+	}
+}
+
+func TestProjectCreateDryRunStateful(t *testing.T) {
+	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ":
+			writer.WriteHeader(http.StatusNotFound)
+			_, _ = writer.Write([]byte(`{"errors":[{"message":"not found"}]}`))
+			return
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects":
+			t.Fatalf("project create endpoint must not be called in dry-run mode")
+		}
+		http.NotFound(writer, request)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "project", "create", "PRJ", "--name", "Project"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("execute failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"predicted_action": "create"`) {
+		t.Fatalf("expected create prediction, got: %s", buffer.String())
 	}
 }

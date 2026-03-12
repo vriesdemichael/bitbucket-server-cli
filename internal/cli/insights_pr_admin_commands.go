@@ -44,6 +44,42 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body", err)
 			}
 
+			if options.DryRun {
+				_, err := service.GetReport(cmd.Context(), repo, args[0], args[1])
+				predicted := "create"
+				reason := "insights report will be created"
+				if err == nil {
+					predicted = "update"
+					reason = "insights report will be updated"
+				} else if apperrors.ExitCode(err) != 4 {
+					return err
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "insights.report.set",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "commit": args[0], "key": args[1]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"insights report get"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "create" {
+					preview.Summary.CreateCount = 1
+				} else {
+					preview.Summary.UpdateCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			report, err := service.SetReport(cmd.Context(), repo, args[0], args[1], request)
 			if err != nil {
 				return err
@@ -83,6 +119,44 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
+			}
+
+			if options.DryRun {
+				_, err := service.GetReport(cmd.Context(), repo, args[0], args[1])
+				predicted := "delete"
+				reason := "insights report will be deleted"
+				if err != nil {
+					if apperrors.ExitCode(err) == 4 {
+						predicted = "no-op"
+						reason = "insights report was not found"
+					} else {
+						return err
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "insights.report.delete",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "commit": args[0], "key": args[1]},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"insights report get"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "delete" {
+					preview.Summary.DeleteCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
 			}
 
 			if err := service.DeleteReport(cmd.Context(), repo, args[0], args[1]); err != nil {
@@ -151,6 +225,26 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindValidation, "invalid JSON for --body (expected array of annotations)", err)
 			}
 
+			if options.DryRun {
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "insights.annotation.add",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "commit": args[0], "key": args[1], "count": len(annotations)},
+						Action:          "create",
+						PredictedAction: "create",
+						Supported:       true,
+						Reason:          "insights annotations will be added",
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"insights report context"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, CreateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.AddAnnotations(cmd.Context(), repo, args[0], args[1], annotations); err != nil {
 				return err
 			}
@@ -208,6 +302,47 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 			repo, service, err := loadQualityRepoAndService(repositorySelector)
 			if err != nil {
 				return err
+			}
+
+			if options.DryRun {
+				annotations, err := service.ListAnnotations(cmd.Context(), repo, args[0], args[1])
+				if err != nil {
+					return err
+				}
+
+				predicted := "no-op"
+				reason := "no matching annotation found"
+				for _, annotation := range annotations {
+					if strings.EqualFold(strings.TrimSpace(safeString(annotation.ExternalId)), strings.TrimSpace(externalID)) {
+						predicted = "delete"
+						reason = "annotation will be deleted"
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "insights.annotation.delete",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "commit": args[0], "key": args[1], "external_id": externalID},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"insights annotations list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "delete" {
+					preview.Summary.DeleteCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
 			}
 
 			if err := service.DeleteAnnotations(cmd.Context(), repo, args[0], args[1], externalID); err != nil {
@@ -363,6 +498,59 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				existing, err := service.List(cmd.Context(), repo, pullrequestservice.ListOptions{
+					State:        "open",
+					Limit:        200,
+					SourceBranch: createFromRef,
+					TargetBranch: createToRef,
+				})
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "pull request will be created"
+				for _, pullRequest := range existing {
+					if strings.EqualFold(strings.TrimSpace(pullRequest.SourceBranch), strings.TrimSpace(createFromRef)) &&
+						strings.EqualFold(strings.TrimSpace(pullRequest.TargetBranch), strings.TrimSpace(createToRef)) {
+						predicted = "conflict"
+						reason = "an open pull request already exists for the same source and target branches"
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.create",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "from_ref": createFromRef, "to_ref": createToRef, "title": createTitle},
+						Action:          "create",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"open pull requests"},
+						BlockingReasons: func() []string {
+							if predicted == "conflict" {
+								return []string{"matching open pull request exists"}
+							}
+							return nil
+						}(),
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "create" {
+					preview.Summary.CreateCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			created, err := service.Create(cmd.Context(), repo, pullrequestservice.CreateInput{
 				FromRef:     createFromRef,
 				ToRef:       createToRef,
@@ -410,6 +598,45 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+
+				predicted := "update"
+				reason := "pull request metadata will be updated"
+				if strings.EqualFold(strings.TrimSpace(current.Title), strings.TrimSpace(updateTitle)) &&
+					strings.EqualFold(strings.TrimSpace(current.Description), strings.TrimSpace(updateDescription)) {
+					predicted = "no-op"
+					reason = "pull request already matches requested metadata"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.update",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0], "title": updateTitle, "description": updateDescription, "version": updateVersion},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			updated, err := service.Update(cmd.Context(), repo, args[0], pullrequestservice.UpdateInput{
 				Title:       updateTitle,
 				Description: updateDescription,
@@ -450,6 +677,51 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+
+				predicted := "update"
+				reason := "pull request will be merged"
+				blocking := []string{}
+				if strings.EqualFold(strings.TrimSpace(current.State), "MERGED") {
+					predicted = "no-op"
+					reason = "pull request is already merged"
+				} else if !strings.EqualFold(strings.TrimSpace(current.State), "OPEN") {
+					predicted = "blocked"
+					reason = "pull request is not open"
+					blocking = []string{"pull request is not open"}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.merge",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+						BlockingReasons: blocking,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else if predicted == "no-op" {
+					preview.Summary.NoopCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 
 			var version *int
 			if cmd.Flags().Changed("version") {
@@ -488,6 +760,43 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+
+				predicted := "update"
+				reason := "pull request will be declined"
+				if strings.EqualFold(strings.TrimSpace(current.State), "DECLINED") {
+					predicted = "no-op"
+					reason = "pull request is already declined"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.decline",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 
 			var version *int
 			if cmd.Flags().Changed("version") {
@@ -526,6 +835,43 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+
+				predicted := "update"
+				reason := "pull request will be reopened"
+				if strings.EqualFold(strings.TrimSpace(current.State), "OPEN") {
+					predicted = "no-op"
+					reason = "pull request is already open"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.reopen",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 
 			var version *int
 			if cmd.Flags().Changed("version") {
@@ -566,6 +912,42 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+				predicted := "update"
+				reason := "pull request approval will be added"
+				if hasApprovedReviewer(current.Reviewers) {
+					predicted = "no-op"
+					reason = "an approved reviewer already exists"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.review.approve",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 			pullRequest, err := service.Approve(cmd.Context(), repo, args[0])
 			if err != nil {
 				return err
@@ -597,6 +979,42 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+				predicted := "update"
+				reason := "pull request approval will be removed"
+				if !hasApprovedReviewer(current.Reviewers) {
+					predicted = "no-op"
+					reason = "no approved reviewer exists"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.review.unapprove",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 			pullRequest, err := service.Unapprove(cmd.Context(), repo, args[0])
 			if err != nil {
 				return err
@@ -630,6 +1048,42 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+				predicted := "update"
+				reason := "reviewer will be added"
+				if hasReviewer(current.Reviewers, reviewerUsername) {
+					predicted = "no-op"
+					reason = "reviewer already present"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.review.reviewer.add",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0], "user": reviewerUsername},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 			pullRequest, err := service.AddReviewer(cmd.Context(), repo, args[0], reviewerUsername)
 			if err != nil {
 				return err
@@ -663,6 +1117,42 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+				predicted := "delete"
+				reason := "reviewer will be removed"
+				if !hasReviewer(current.Reviewers, reviewerUsername) {
+					predicted = "no-op"
+					reason = "reviewer is not present"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.review.reviewer.remove",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0], "user": reviewerUsername},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "delete" {
+					preview.Summary.DeleteCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 			pullRequest, err := service.RemoveReviewer(cmd.Context(), repo, args[0], reviewerUsername)
 			if err != nil {
 				return err
@@ -747,6 +1237,25 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.task.create",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0], "text": taskText},
+						Action:          "create",
+						PredictedAction: "create",
+						Supported:       true,
+						Reason:          "pull request task will be created",
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request reference"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, CreateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 			task, err := service.CreateTask(cmd.Context(), repo, args[0], taskText)
 			if err != nil {
 				return err
@@ -792,6 +1301,52 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				tasks, err := service.ListTasks(cmd.Context(), repo, args[0], pullrequestservice.TaskListOptions{State: "all", Limit: 200, Start: 0})
+				if err != nil {
+					return err
+				}
+
+				predicted := "blocked"
+				reason := "task was not found"
+				blocking := []string{"task not found"}
+				if existing, ok := findTask(tasks, taskID); ok {
+					blocking = nil
+					predicted = "update"
+					reason = "task will be updated"
+					if taskUpdateEquivalent(existing, taskText, resolved) {
+						predicted = "no-op"
+						reason = "task already matches requested values"
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.task.update",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0], "task": taskID},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request tasks list"},
+						BlockingReasons: blocking,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else if predicted == "no-op" {
+					preview.Summary.NoopCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 			updated, err := service.UpdateTask(cmd.Context(), repo, args[0], taskID, taskText, resolved, version)
 			if err != nil {
 				return err
@@ -833,6 +1388,43 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			if options.DryRun {
+				tasks, err := service.ListTasks(cmd.Context(), repo, args[0], pullrequestservice.TaskListOptions{State: "all", Limit: 200, Start: 0})
+				if err != nil {
+					return err
+				}
+
+				predicted := "no-op"
+				reason := "task was not found"
+				if _, ok := findTask(tasks, taskID); ok {
+					predicted = "delete"
+					reason = "task will be deleted"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.task.delete",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0], "task": taskID},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request tasks list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "delete" {
+					preview.Summary.DeleteCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 			if err := service.DeleteTask(cmd.Context(), repo, args[0], taskID, version); err != nil {
 				return err
 			}
@@ -892,4 +1484,47 @@ func newAdminCommand(options *rootOptions) *cobra.Command {
 	})
 
 	return adminCmd
+}
+
+func hasApprovedReviewer(reviewers []pullrequestservice.Reviewer) bool {
+	for _, reviewer := range reviewers {
+		if reviewer.Approved || strings.EqualFold(strings.TrimSpace(reviewer.Status), "APPROVED") {
+			return true
+		}
+	}
+
+	return false
+}
+
+func hasReviewer(reviewers []pullrequestservice.Reviewer, username string) bool {
+	trimmed := strings.TrimSpace(username)
+	for _, reviewer := range reviewers {
+		if strings.EqualFold(strings.TrimSpace(reviewer.Name), trimmed) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func findTask(tasks []pullrequestservice.Task, taskID string) (pullrequestservice.Task, bool) {
+	trimmed := strings.TrimSpace(taskID)
+	for _, task := range tasks {
+		if strings.TrimSpace(fmt.Sprintf("%d", task.ID)) == trimmed {
+			return task, true
+		}
+	}
+
+	return pullrequestservice.Task{}, false
+}
+
+func taskUpdateEquivalent(task pullrequestservice.Task, text string, resolved *bool) bool {
+	if strings.TrimSpace(text) != "" && !strings.EqualFold(strings.TrimSpace(task.Text), strings.TrimSpace(text)) {
+		return false
+	}
+	if resolved != nil && task.Resolved != *resolved {
+		return false
+	}
+
+	return true
 }

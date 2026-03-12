@@ -511,6 +511,95 @@ func TestLiveCLIAdminHealthOutputs(t *testing.T) {
 	}
 }
 
+func TestLiveCLITagCreateDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "tag", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("tag list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	tagName := fmt.Sprintf("v-live-dryrun-%d", time.Now().UnixNano()%100000)
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "tag", "create", tagName, "--start-point", repo.CommitIDs[0])
+	if err != nil {
+		t.Fatalf("tag create dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful planning mode, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "tag.create"`) {
+		t.Fatalf("expected tag.create intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "tag", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("tag list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no tag side-effect from dry-run create\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLITagDeleteDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	tagName := fmt.Sprintf("v-live-dryrun-del-%d", time.Now().UnixNano()%100000)
+	createOutput, err := executeLiveCLI(t, "--json", "tag", "create", tagName, "--start-point", repo.CommitIDs[0])
+	if err != nil {
+		t.Fatalf("tag create fixture failed: %v\noutput: %s", err, createOutput)
+	}
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "tag", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("tag list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "tag", "delete", tagName)
+	if err != nil {
+		t.Fatalf("tag delete dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful planning mode, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "tag.delete"`) {
+		t.Fatalf("expected tag.delete intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "tag", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("tag list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no tag side-effect from dry-run delete\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "--json", "tag", "delete", tagName)
+}
+
 func createRequiredBuildCheckWithRetry(t *testing.T, body string) (string, bool) {
 	t.Helper()
 

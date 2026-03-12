@@ -57,23 +57,23 @@ func TestRegisterGlobalDryRunInterceptorsProfilePreview(t *testing.T) {
 	root.PersistentFlags().BoolVar(&options.JSON, "json", false, "")
 
 	originalCalled := false
-	projectCmd := &cobra.Command{Use: "project"}
-	createCmd := &cobra.Command{
-		Use: "create <key>",
+	bulkCmd := &cobra.Command{Use: "bulk"}
+	applyCmd := &cobra.Command{
+		Use: "apply",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			originalCalled = true
 			return nil
 		},
 	}
-	projectCmd.AddCommand(createCmd)
-	root.AddCommand(projectCmd)
+	bulkCmd.AddCommand(applyCmd)
+	root.AddCommand(bulkCmd)
 
 	registerGlobalDryRunInterceptors(root, options)
 
 	buffer := &bytes.Buffer{}
 	root.SetOut(buffer)
 	root.SetErr(buffer)
-	root.SetArgs([]string{"--dry-run", "--json", "project", "create", "DEMO"})
+	root.SetArgs([]string{"--dry-run", "--json", "bulk", "apply"})
 
 	if err := root.Execute(); err != nil {
 		t.Fatalf("dry-run preview execution failed: %v", err)
@@ -86,8 +86,8 @@ func TestRegisterGlobalDryRunInterceptorsProfilePreview(t *testing.T) {
 	if !strings.Contains(output, `"planning_mode": "static"`) {
 		t.Fatalf("expected static planning mode in output, got: %s", output)
 	}
-	if !strings.Contains(output, `"intent": "project.create"`) {
-		t.Fatalf("expected project.create intent in output, got: %s", output)
+	if !strings.Contains(output, `"intent": "bulk.apply"`) {
+		t.Fatalf("expected bulk.apply intent in output, got: %s", output)
 	}
 }
 
@@ -352,6 +352,75 @@ func TestWriteDryRunPreviewWriterErrors(t *testing.T) {
 	writer = &failAfterWriter{failAfter: 4}
 	if err := writeDryRunPreview(writer, false, preview); err == nil {
 		t.Fatal("expected error when note write fails")
+	}
+}
+
+func TestDryRunPassthroughPathCoverage(t *testing.T) {
+	paths := []string{
+		"branch delete",
+		"repo settings security permissions users grant",
+		"repo settings security permissions users revoke",
+		"repo settings security permissions groups grant",
+		"repo settings security permissions groups revoke",
+		"project permissions users grant",
+		"project permissions users revoke",
+		"project permissions groups grant",
+		"project permissions groups revoke",
+		"hook enable",
+		"hook disable",
+		"hook configure",
+		"repo settings workflow webhooks create",
+		"repo settings workflow webhooks delete",
+		"repo settings pull-requests update",
+		"repo settings pull-requests update-approvers",
+		"repo settings pull-requests set-strategy",
+		"branch create",
+		"branch default set",
+		"branch model update",
+		"branch restriction create",
+		"branch restriction update",
+		"branch restriction delete",
+		"tag create",
+		"tag delete",
+		"reviewer condition create",
+		"reviewer condition update",
+		"reviewer condition delete",
+		"repo admin create",
+		"repo admin fork",
+		"repo admin update",
+		"repo admin delete",
+		"project create",
+		"project update",
+		"project delete",
+		"pr create",
+		"pr update",
+		"pr merge",
+		"pr decline",
+		"pr reopen",
+		"pr review approve",
+		"pr review unapprove",
+		"pr review reviewer add",
+		"pr review reviewer remove",
+		"pr task create",
+		"pr task update",
+		"pr task delete",
+		"build status set",
+		"build required create",
+		"build required update",
+		"build required delete",
+		"insights report set",
+		"insights report delete",
+		"insights annotation add",
+		"insights annotation delete",
+		"repo comment create",
+		"repo comment update",
+		"repo comment delete",
+	}
+
+	for _, path := range paths {
+		if _, ok := dryRunPassthroughPaths[path]; !ok {
+			t.Fatalf("expected passthrough entry for %q", path)
+		}
 	}
 }
 

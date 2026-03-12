@@ -2,9 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/spf13/cobra"
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
@@ -135,6 +138,26 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := commentservice.NewService(client)
+			if options.DryRun {
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "repo.comment.create",
+						Target:          map[string]any{"context": target.Context(), "text": createText},
+						Action:          "create",
+						PredictedAction: "create",
+						Supported:       true,
+						Reason:          "comment will be created",
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"comment target context"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, CreateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			created, err := service.Create(cmd.Context(), target, createText)
 			if err != nil {
 				return err
@@ -170,6 +193,43 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := commentservice.NewService(client)
+			if options.DryRun {
+				current, err := service.Get(cmd.Context(), target, updateCommentID)
+				if err != nil {
+					return err
+				}
+
+				predicted := "update"
+				reason := "comment will be updated"
+				if strings.EqualFold(strings.TrimSpace(safeString(current.Text)), strings.TrimSpace(updateText)) {
+					predicted = "no-op"
+					reason = "comment text already matches requested value"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "repo.comment.update",
+						Target:          map[string]any{"context": target.Context(), "id": updateCommentID, "text": updateText},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"comment get"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 
 			var version *int32
 			if cmd.Flags().Changed("version") {
@@ -213,6 +273,43 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := commentservice.NewService(client)
+			if options.DryRun {
+				_, err := service.Get(cmd.Context(), target, deleteCommentID)
+				predicted := "delete"
+				reason := "comment will be deleted"
+				if err != nil {
+					if apperrors.ExitCode(err) == 4 {
+						predicted = "no-op"
+						reason = "comment was not found"
+					} else {
+						return err
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "repo.comment.delete",
+						Target:          map[string]any{"context": target.Context(), "id": deleteCommentID},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"comment get"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "delete" {
+					preview.Summary.DeleteCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 
 			var version *int32
 			if cmd.Flags().Changed("version") {
@@ -316,14 +413,66 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposettings.NewService(client)
-			if err := service.GrantRepositoryUserPermission(cmd.Context(), repo, args[0], args[1]); err != nil {
+			permission := strings.ToUpper(strings.TrimSpace(args[1]))
+			if options.DryRun {
+				users, err := service.ListRepositoryPermissionUsers(cmd.Context(), repo, permissionsLimit)
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "permission grant will create user permission entry"
+				for _, user := range users {
+					if strings.EqualFold(strings.TrimSpace(user.Name), strings.TrimSpace(args[0])) {
+						if strings.EqualFold(strings.TrimSpace(user.Permission), permission) {
+							predicted = "no-op"
+							reason = "user already has requested repository permission"
+						} else {
+							predicted = "update"
+							reason = "user permission will be updated"
+						}
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.permission.user.grant",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "username": args[0], "permission": permission},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"repository permission users list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "create":
+					preview.Summary.CreateCount = 1
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			if err := service.GrantRepositoryUserPermission(cmd.Context(), repo, args[0], permission); err != nil {
 				return err
 			}
 
 			if options.JSON {
-				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "username": args[0], "permission": strings.ToUpper(args[1])})
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "username": args[0], "permission": permission})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to %s\n", strings.ToUpper(args[1]), args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to %s\n", permission, args[0])
 			return nil
 		},
 	}
@@ -343,6 +492,50 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposettings.NewService(client)
+			if options.DryRun {
+				users, err := service.ListRepositoryPermissionUsers(cmd.Context(), repo, permissionsLimit)
+				if err != nil {
+					return err
+				}
+
+				predicted := "no-op"
+				reason := "user does not currently have repository permission entry"
+				for _, user := range users {
+					if strings.EqualFold(strings.TrimSpace(user.Name), strings.TrimSpace(args[0])) {
+						predicted = "delete"
+						reason = "user repository permission entry will be removed"
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.permission.user.revoke",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "username": args[0]},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"repository permission users list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "delete":
+					preview.Summary.DeleteCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.RevokeRepositoryUserPermission(cmd.Context(), repo, args[0]); err != nil {
 				return err
 			}
@@ -408,14 +601,66 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposettings.NewService(client)
-			if err := service.GrantRepositoryGroupPermission(cmd.Context(), repo, args[0], args[1]); err != nil {
+			permission := strings.ToUpper(strings.TrimSpace(args[1]))
+			if options.DryRun {
+				groups, err := service.ListRepositoryPermissionGroups(cmd.Context(), repo, permissionsLimit)
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "permission grant will create group permission entry"
+				for _, group := range groups {
+					if strings.EqualFold(strings.TrimSpace(group.Name), strings.TrimSpace(args[0])) {
+						if strings.EqualFold(strings.TrimSpace(group.Permission), permission) {
+							predicted = "no-op"
+							reason = "group already has requested repository permission"
+						} else {
+							predicted = "update"
+							reason = "group permission will be updated"
+						}
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.permission.group.grant",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "group": args[0], "permission": permission},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"repository permission groups list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "create":
+					preview.Summary.CreateCount = 1
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			if err := service.GrantRepositoryGroupPermission(cmd.Context(), repo, args[0], permission); err != nil {
 				return err
 			}
 
 			if options.JSON {
-				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "group": args[0], "permission": strings.ToUpper(args[1])})
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "group": args[0], "permission": permission})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to group %s\n", strings.ToUpper(args[1]), args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to group %s\n", permission, args[0])
 			return nil
 		},
 	}
@@ -436,6 +681,49 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposettings.NewService(client)
+			if options.DryRun {
+				groups, err := service.ListRepositoryPermissionGroups(cmd.Context(), repo, permissionsLimit)
+				if err != nil {
+					return err
+				}
+
+				predicted := "no-op"
+				reason := "group does not currently have repository permission entry"
+				if slices.ContainsFunc(groups, func(group reposettings.PermissionGroup) bool {
+					return strings.EqualFold(strings.TrimSpace(group.Name), strings.TrimSpace(args[0]))
+				}) {
+					predicted = "delete"
+					reason = "group repository permission entry will be removed"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.permission.group.revoke",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "group": args[0]},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"repository permission groups list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "delete":
+					preview.Summary.DeleteCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.RevokeRepositoryGroupPermission(cmd.Context(), repo, args[0]); err != nil {
 				return err
 			}
@@ -509,6 +797,50 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposettings.NewService(client)
+			if options.DryRun {
+				webhooks, err := service.ListRepositoryWebhooks(cmd.Context(), repo)
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "webhook will be created"
+				blocking := []string{}
+				if webhookExistsByNameAndURL(webhooks.Payload, args[0], args[1]) {
+					predicted = "conflict"
+					reason = "webhook with the same name and URL already exists"
+					blocking = []string{"webhook already exists"}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.webhook.create",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "name": args[0], "url": args[1], "events": webhookEvents, "active": webhookActive},
+						Action:          "create",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"repository webhooks list"},
+						BlockingReasons: blocking,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "create":
+					preview.Summary.CreateCount = 1
+				case "conflict":
+					preview.Summary.UnknownCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			payload, err := service.CreateRepositoryWebhook(cmd.Context(), repo, reposettings.WebhookCreateInput{
 				Name:   args[0],
 				URL:    args[1],
@@ -544,6 +876,47 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposettings.NewService(client)
+			if options.DryRun {
+				webhooks, err := service.ListRepositoryWebhooks(cmd.Context(), repo)
+				if err != nil {
+					return err
+				}
+
+				predicted := "no-op"
+				reason := "webhook id was not found in repository"
+				if webhookExistsByID(webhooks.Payload, args[0]) {
+					predicted = "delete"
+					reason = "webhook will be deleted"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.webhook.delete",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "webhook_id": args[0]},
+						Action:          "delete",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"repository webhooks list"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "delete":
+					preview.Summary.DeleteCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			if err := service.DeleteRepositoryWebhook(cmd.Context(), repo, args[0]); err != nil {
 				return err
 			}
@@ -693,6 +1066,51 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposettings.NewService(client)
+			if options.DryRun {
+				currentSettings, err := service.GetRepositoryPullRequestSettings(cmd.Context(), repo)
+				if err != nil {
+					return err
+				}
+				current := false
+				if value, ok := currentSettings["requiredAllTasksComplete"].(bool); ok {
+					current = value
+				}
+
+				predicted := "update"
+				reason := "required-all-tasks-complete setting will be updated"
+				if current == requiredAllTasksComplete {
+					predicted = "no-op"
+					reason = "required-all-tasks-complete setting already has requested value"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.pull-request-settings.update",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "required_all_tasks_complete": requiredAllTasksComplete},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"repository pull-request settings"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			settings, err := service.UpdateRepositoryPullRequestRequiredAllTasks(cmd.Context(), repo, requiredAllTasksComplete)
 			if err != nil {
 				return err
@@ -721,6 +1139,64 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposettings.NewService(client)
+			if options.DryRun {
+				currentSettings, err := service.GetRepositoryPullRequestSettings(cmd.Context(), repo)
+				if err != nil {
+					return err
+				}
+
+				currentCount := -1
+				if section, ok := currentSettings["requiredApprovers"].(map[string]any); ok {
+					enabled, _ := section["enabled"].(bool)
+					if enabled {
+						switch count := section["count"].(type) {
+						case string:
+							if value, convErr := strconv.Atoi(strings.TrimSpace(count)); convErr == nil {
+								currentCount = value
+							}
+						case float64:
+							currentCount = int(count)
+						}
+					} else {
+						currentCount = 0
+					}
+				}
+
+				predicted := "update"
+				reason := "required approvers setting will be updated"
+				if currentCount == requiredApproversCount {
+					predicted = "no-op"
+					reason = "required approvers setting already has requested value"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.pull-request-settings.update-approvers",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "count": requiredApproversCount},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"repository pull-request settings"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			settings, err := service.UpdateRepositoryPullRequestRequiredApproversCount(cmd.Context(), repo, requiredApproversCount)
 			if err != nil {
 				return err
@@ -751,6 +1227,55 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 
 			service := reposettings.NewService(client)
 			mergeStrategyID := args[0]
+			if options.DryRun {
+				currentSettings, err := service.GetRepositoryPullRequestSettings(cmd.Context(), repo)
+				if err != nil {
+					return err
+				}
+
+				currentStrategyID := ""
+				if mergeConfig, ok := currentSettings["mergeConfig"].(map[string]any); ok {
+					if defaultStrategy, ok := mergeConfig["defaultStrategy"].(map[string]any); ok {
+						if value, ok := defaultStrategy["id"].(string); ok {
+							currentStrategyID = strings.TrimSpace(value)
+						}
+					}
+				}
+
+				predicted := "update"
+				reason := "default merge strategy will be updated"
+				if strings.EqualFold(currentStrategyID, mergeStrategyID) {
+					predicted = "no-op"
+					reason = "default merge strategy already matches requested strategy"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.pull-request-settings.set-strategy",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "strategy_id": mergeStrategyID},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"repository pull-request settings"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				switch predicted {
+				case "update":
+					preview.Summary.UpdateCount = 1
+				case "no-op":
+					preview.Summary.NoopCount = 1
+				default:
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 
 			settings := map[string]any{
 				"mergeConfig": map[string]any{
@@ -780,4 +1305,62 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 	settingsCmd.AddCommand(pullRequestsCmd)
 
 	return settingsCmd
+}
+
+func webhookEntries(payload any) []map[string]any {
+	entries := make([]map[string]any, 0)
+	appendEntry := func(value any) {
+		if object, ok := value.(map[string]any); ok {
+			entries = append(entries, object)
+		}
+	}
+
+	switch typed := payload.(type) {
+	case []any:
+		for _, value := range typed {
+			appendEntry(value)
+		}
+	case map[string]any:
+		if values, ok := typed["values"].([]any); ok {
+			for _, value := range values {
+				appendEntry(value)
+			}
+		} else {
+			appendEntry(typed)
+		}
+	}
+
+	return entries
+}
+
+func webhookExistsByNameAndURL(payload any, name, url string) bool {
+	trimmedName := strings.TrimSpace(name)
+	trimmedURL := strings.TrimSpace(url)
+	for _, entry := range webhookEntries(payload) {
+		entryName, _ := entry["name"].(string)
+		entryURL, _ := entry["url"].(string)
+		if strings.EqualFold(strings.TrimSpace(entryName), trimmedName) && strings.EqualFold(strings.TrimSpace(entryURL), trimmedURL) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func webhookExistsByID(payload any, webhookID string) bool {
+	trimmedID := strings.TrimSpace(webhookID)
+	for _, entry := range webhookEntries(payload) {
+		switch value := entry["id"].(type) {
+		case string:
+			if strings.EqualFold(strings.TrimSpace(value), trimmedID) {
+				return true
+			}
+		case float64:
+			if strings.EqualFold(strconv.FormatInt(int64(value), 10), trimmedID) {
+				return true
+			}
+		}
+	}
+
+	return false
 }

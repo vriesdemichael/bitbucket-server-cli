@@ -222,6 +222,298 @@ func TestLiveCodeInsightsAnnotationsLifecycle(t *testing.T) {
 	}
 }
 
+func TestLiveCLIInsightsReportSetDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	commitID := repo.CommitIDs[0]
+	reportKey := fmt.Sprintf("live-dryrun-report-%d", time.Now().UnixNano()%100000)
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "insights", "report", "list", commitID, "--limit", "200")
+	if err != nil {
+		t.Fatalf("insights report list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	body := fmt.Sprintf(`{"title":"Dry Run Report %s","result":"PASS"}`, reportKey)
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "insights", "report", "set", commitID, reportKey, "--body", body)
+	if err != nil {
+		t.Fatalf("insights report set dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "insights.report.set"`) {
+		t.Fatalf("expected insights.report.set intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "insights", "report", "list", commitID, "--limit", "200")
+	if err != nil {
+		t.Fatalf("insights report list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no report side-effect from set dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIBuildStatusSetDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	commitID := repo.CommitIDs[0]
+
+	statsBeforeOutput, err := executeLiveCLI(t, "--json", "build", "status", "stats", commitID)
+	if err != nil {
+		t.Fatalf("build status stats before failed: %v\noutput: %s", err, statsBeforeOutput)
+	}
+
+	statusKey := fmt.Sprintf("live-dryrun-status-%d", time.Now().UnixNano()%100000)
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "build", "status", "set", commitID, "--key", statusKey, "--state", "SUCCESSFUL", "--url", "https://example.invalid/dryrun")
+	if err != nil {
+		t.Fatalf("build status set dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "build.status.set"`) {
+		t.Fatalf("expected build.status.set intent, got: %s", dryRunOutput)
+	}
+
+	statsAfterOutput, err := executeLiveCLI(t, "--json", "build", "status", "stats", commitID)
+	if err != nil {
+		t.Fatalf("build status stats after failed: %v\noutput: %s", err, statsAfterOutput)
+	}
+
+	if statsBeforeOutput != statsAfterOutput {
+		t.Fatalf("expected no build-status side-effect from set dry-run\nbefore: %s\nafter: %s", statsBeforeOutput, statsAfterOutput)
+	}
+}
+
+func TestLiveCLIInsightsReportDeleteDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	commitID := repo.CommitIDs[0]
+	reportKey := fmt.Sprintf("live-dryrun-report-del-%d", time.Now().UnixNano()%100000)
+	body := fmt.Sprintf(`{"title":"Dry Run Report Delete %s","result":"PASS"}`, reportKey)
+
+	setOutput, err := executeLiveCLI(t, "--json", "insights", "report", "set", commitID, reportKey, "--body", body)
+	if err != nil {
+		t.Fatalf("insights report set fixture failed: %v\noutput: %s", err, setOutput)
+	}
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "insights", "report", "list", commitID, "--limit", "200")
+	if err != nil {
+		t.Fatalf("insights report list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "insights", "report", "delete", commitID, reportKey)
+	if err != nil {
+		t.Fatalf("insights report delete dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "insights.report.delete"`) {
+		t.Fatalf("expected insights.report.delete intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "insights", "report", "list", commitID, "--limit", "200")
+	if err != nil {
+		t.Fatalf("insights report list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no report side-effect from delete dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "--json", "insights", "report", "delete", commitID, reportKey)
+}
+
+func TestLiveCLIInsightsAnnotationAddDeleteDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	commitID := repo.CommitIDs[0]
+	reportKey := fmt.Sprintf("live-dryrun-ann-report-%d", time.Now().UnixNano()%100000)
+	body := fmt.Sprintf(`{"title":"Dry Run Annotation Report %s","result":"PASS"}`, reportKey)
+
+	setOutput, err := executeLiveCLI(t, "--json", "insights", "report", "set", commitID, reportKey, "--body", body)
+	if err != nil {
+		t.Fatalf("insights report set fixture failed: %v\noutput: %s", err, setOutput)
+	}
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "insights", "annotation", "list", commitID, reportKey)
+	if err != nil {
+		t.Fatalf("insights annotation list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	externalID := fmt.Sprintf("live-dryrun-ann-%d", time.Now().UnixNano()%100000)
+	annotationBody := fmt.Sprintf(`[{"externalId":"%s","message":"dry-run annotation","severity":"LOW","path":"seed.txt","line":1}]`, externalID)
+
+	addDryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "insights", "annotation", "add", commitID, reportKey, "--body", annotationBody)
+	if err != nil {
+		t.Fatalf("insights annotation add dry-run failed: %v\noutput: %s", err, addDryRunOutput)
+	}
+	if !strings.Contains(addDryRunOutput, `"intent": "insights.annotation.add"`) {
+		t.Fatalf("expected insights.annotation.add intent, got: %s", addDryRunOutput)
+	}
+
+	listAfterAddOutput, err := executeLiveCLI(t, "--json", "insights", "annotation", "list", commitID, reportKey)
+	if err != nil {
+		t.Fatalf("insights annotation list after add dry-run failed: %v\noutput: %s", err, listAfterAddOutput)
+	}
+	if listBeforeOutput != listAfterAddOutput {
+		t.Fatalf("expected no annotation side-effect from add dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterAddOutput)
+	}
+
+	createAnnotationOutput, err := executeLiveCLI(t, "--json", "insights", "annotation", "add", commitID, reportKey, "--body", annotationBody)
+	if err != nil {
+		t.Fatalf("insights annotation add fixture failed: %v\noutput: %s", err, createAnnotationOutput)
+	}
+
+	listBeforeDeleteOutput, err := executeLiveCLI(t, "--json", "insights", "annotation", "list", commitID, reportKey)
+	if err != nil {
+		t.Fatalf("insights annotation list before delete dry-run failed: %v\noutput: %s", err, listBeforeDeleteOutput)
+	}
+
+	deleteDryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "insights", "annotation", "delete", commitID, reportKey, "--external-id", externalID)
+	if err != nil {
+		t.Fatalf("insights annotation delete dry-run failed: %v\noutput: %s", err, deleteDryRunOutput)
+	}
+	if !strings.Contains(deleteDryRunOutput, `"intent": "insights.annotation.delete"`) {
+		t.Fatalf("expected insights.annotation.delete intent, got: %s", deleteDryRunOutput)
+	}
+
+	listAfterDeleteOutput, err := executeLiveCLI(t, "--json", "insights", "annotation", "list", commitID, reportKey)
+	if err != nil {
+		t.Fatalf("insights annotation list after delete dry-run failed: %v\noutput: %s", err, listAfterDeleteOutput)
+	}
+	if listBeforeDeleteOutput != listAfterDeleteOutput {
+		t.Fatalf("expected no annotation side-effect from delete dry-run\nbefore: %s\nafter: %s", listBeforeDeleteOutput, listAfterDeleteOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "--json", "insights", "annotation", "delete", commitID, reportKey, "--external-id", externalID)
+	_, _ = executeLiveCLI(t, "--json", "insights", "report", "delete", commitID, reportKey)
+}
+
+func TestLiveCLIBuildRequiredCreateUpdateDeleteDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	listBeforeCreateOutput, err := executeLiveCLI(t, "--json", "build", "required", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("build required list before create failed: %v\noutput: %s", err, listBeforeCreateOutput)
+	}
+
+	body := `{"buildParentKeys":["ci"],"refMatcher":{"id":"refs/heads/master"}}`
+	createDryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "build", "required", "create", "--body", body)
+	if err != nil {
+		t.Fatalf("build required create dry-run failed: %v\noutput: %s", err, createDryRunOutput)
+	}
+	if !strings.Contains(createDryRunOutput, `"intent": "build.required.create"`) {
+		t.Fatalf("expected build.required.create intent, got: %s", createDryRunOutput)
+	}
+
+	listAfterCreateOutput, err := executeLiveCLI(t, "--json", "build", "required", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("build required list after create dry-run failed: %v\noutput: %s", err, listAfterCreateOutput)
+	}
+	if listBeforeCreateOutput != listAfterCreateOutput {
+		t.Fatalf("expected no required-build side-effect from create dry-run\nbefore: %s\nafter: %s", listBeforeCreateOutput, listAfterCreateOutput)
+	}
+
+	requiredID, requiredAvailable := createRequiredBuildCheckWithRetry(t, body)
+	if !requiredAvailable {
+		t.Skip("required-build endpoint unavailable for update/delete dry-run assertions")
+	}
+
+	listBeforeUpdateOutput, err := executeLiveCLI(t, "--json", "build", "required", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("build required list before update dry-run failed: %v\noutput: %s", err, listBeforeUpdateOutput)
+	}
+
+	updateDryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "build", "required", "update", requiredID, "--body", body)
+	if err != nil {
+		t.Fatalf("build required update dry-run failed: %v\noutput: %s", err, updateDryRunOutput)
+	}
+	if !strings.Contains(updateDryRunOutput, `"intent": "build.required.update"`) {
+		t.Fatalf("expected build.required.update intent, got: %s", updateDryRunOutput)
+	}
+
+	listAfterUpdateOutput, err := executeLiveCLI(t, "--json", "build", "required", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("build required list after update dry-run failed: %v\noutput: %s", err, listAfterUpdateOutput)
+	}
+	if listBeforeUpdateOutput != listAfterUpdateOutput {
+		t.Fatalf("expected no required-build side-effect from update dry-run\nbefore: %s\nafter: %s", listBeforeUpdateOutput, listAfterUpdateOutput)
+	}
+
+	listBeforeDeleteOutput, err := executeLiveCLI(t, "--json", "build", "required", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("build required list before delete dry-run failed: %v\noutput: %s", err, listBeforeDeleteOutput)
+	}
+
+	deleteDryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "build", "required", "delete", requiredID)
+	if err != nil {
+		t.Fatalf("build required delete dry-run failed: %v\noutput: %s", err, deleteDryRunOutput)
+	}
+	if !strings.Contains(deleteDryRunOutput, `"intent": "build.required.delete"`) {
+		t.Fatalf("expected build.required.delete intent, got: %s", deleteDryRunOutput)
+	}
+
+	listAfterDeleteOutput, err := executeLiveCLI(t, "--json", "build", "required", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("build required list after delete dry-run failed: %v\noutput: %s", err, listAfterDeleteOutput)
+	}
+	if listBeforeDeleteOutput != listAfterDeleteOutput {
+		t.Fatalf("expected no required-build side-effect from delete dry-run\nbefore: %s\nafter: %s", listBeforeDeleteOutput, listAfterDeleteOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "build", "required", "delete", requiredID)
+}
+
 func requiredBuildCheckID(payload map[string]any) (int64, bool) {
 	value, ok := payload["id"]
 	if !ok {
