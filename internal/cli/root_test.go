@@ -344,22 +344,49 @@ func TestAuthStatusJSON(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	var parsed map[string]string
-	if err := json.Unmarshal(buffer.Bytes(), &parsed); err != nil {
-		t.Fatalf("expected valid json output, got: %s (%v)", buffer.String(), err)
+	parsed := decodeJSONEnvelopeDataMap(t, buffer.Bytes())
+
+	if asString(parsed["bitbucket_url"]) != "http://localhost:7990" {
+		t.Fatalf("unexpected bitbucket_url: %q", asString(parsed["bitbucket_url"]))
 	}
 
-	if parsed["bitbucket_url"] != "http://localhost:7990" {
-		t.Fatalf("unexpected bitbucket_url: %q", parsed["bitbucket_url"])
+	if asString(parsed["auth_mode"]) != "none" {
+		t.Fatalf("unexpected auth_mode: %q", asString(parsed["auth_mode"]))
 	}
 
-	if parsed["auth_mode"] != "none" {
-		t.Fatalf("unexpected auth_mode: %q", parsed["auth_mode"])
+	if asString(parsed["auth_source"]) != "env/default" {
+		t.Fatalf("unexpected auth_source: %q", asString(parsed["auth_source"]))
+	}
+}
+
+func asString(value any) string {
+	if typed, ok := value.(string); ok {
+		return typed
+	}
+	return ""
+}
+
+func decodeJSONEnvelopeDataMap(t *testing.T, raw []byte) map[string]any {
+	t.Helper()
+
+	var envelope struct {
+		Version string         `json:"version"`
+		Data    map[string]any `json:"data"`
 	}
 
-	if parsed["auth_source"] != "env/default" {
-		t.Fatalf("unexpected auth_source: %q", parsed["auth_source"])
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		t.Fatalf("expected valid json output, got: %s (%v)", string(raw), err)
 	}
+
+	if envelope.Version != jsonContractVersion {
+		t.Fatalf("expected json envelope version %q, got %q", jsonContractVersion, envelope.Version)
+	}
+
+	if envelope.Data == nil {
+		t.Fatalf("expected json envelope data payload, got: %s", string(raw))
+	}
+
+	return envelope.Data
 }
 
 func TestRootTransportFlagsOverrideEnvironment(t *testing.T) {
@@ -482,10 +509,7 @@ func TestAdminHealthJSON(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	var parsed map[string]any
-	if err := json.Unmarshal(buffer.Bytes(), &parsed); err != nil {
-		t.Fatalf("expected valid json output, got: %s (%v)", buffer.String(), err)
-	}
+	parsed := decodeJSONEnvelopeDataMap(t, buffer.Bytes())
 
 	if healthy, ok := parsed["healthy"].(bool); !ok || !healthy {
 		t.Fatalf("expected healthy=true, got: %#v", parsed["healthy"])
@@ -855,10 +879,7 @@ func TestRepoCommentListCommitJSON(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	var parsed map[string]any
-	if err := json.Unmarshal(buffer.Bytes(), &parsed); err != nil {
-		t.Fatalf("expected valid json output, got: %s (%v)", buffer.String(), err)
-	}
+	parsed := decodeJSONEnvelopeDataMap(t, buffer.Bytes())
 
 	contextPayload, ok := parsed["context"].(map[string]any)
 	if !ok {
@@ -910,10 +931,7 @@ func TestRepoCommentCreatePRJSON(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	var parsed map[string]any
-	if err := json.Unmarshal(buffer.Bytes(), &parsed); err != nil {
-		t.Fatalf("expected valid json output, got: %s (%v)", buffer.String(), err)
-	}
+	parsed := decodeJSONEnvelopeDataMap(t, buffer.Bytes())
 
 	contextPayload, ok := parsed["context"].(map[string]any)
 	if !ok || contextPayload["type"] != "pull_request" || contextPayload["pull_request_id"] != "77" {

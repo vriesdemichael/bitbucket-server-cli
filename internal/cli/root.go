@@ -83,6 +83,18 @@ type rootOptions struct {
 	DryRun bool
 }
 
+const jsonContractVersion = "v1"
+
+type jsonEnvelope struct {
+	Version string           `json:"version"`
+	Data    any              `json:"data"`
+	Meta    jsonEnvelopeMeta `json:"meta"`
+}
+
+type jsonEnvelopeMeta struct {
+	Contract string `json:"contract"`
+}
+
 func loadConfig() (config.AppConfig, error) {
 	cfg, err := config.LoadFromEnv()
 	if err != nil {
@@ -198,7 +210,15 @@ func newAPIClientFromConfig(cfg config.AppConfig) (*openapigenerated.ClientWithR
 }
 
 func writeJSON(writer io.Writer, payload any) error {
-	encoded, err := json.MarshalIndent(payload, "", "  ")
+	envelope := jsonEnvelope{
+		Version: jsonContractVersion,
+		Data:    payload,
+		Meta: jsonEnvelopeMeta{
+			Contract: "bbsc.machine",
+		},
+	}
+
+	encoded, err := json.MarshalIndent(envelope, "", "  ")
 	if err != nil {
 		return apperrors.New(apperrors.KindInternal, "failed to encode JSON output", err)
 	}

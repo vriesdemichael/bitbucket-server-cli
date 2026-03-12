@@ -90,7 +90,7 @@ func TestBulkPlanApplyAndStatusCommands(t *testing.T) {
 	}
 
 	var plan bulkworkflow.Plan
-	if err := json.Unmarshal(planOutput.Bytes(), &plan); err != nil {
+	if err := decodeJSONEnvelopeData(planOutput.Bytes(), &plan); err != nil {
 		t.Fatalf("decode plan output: %v", err)
 	}
 	if plan.Summary.TargetCount != 2 || plan.Summary.OperationCount != 2 {
@@ -122,7 +122,7 @@ func TestBulkPlanApplyAndStatusCommands(t *testing.T) {
 	}
 
 	var status bulkworkflow.ApplyStatus
-	if err := json.Unmarshal(applyOutput.Bytes(), &status); err != nil {
+	if err := decodeJSONEnvelopeData(applyOutput.Bytes(), &status); err != nil {
 		t.Fatalf("decode apply output: %v", err)
 	}
 	if status.Summary.SuccessfulTargets != 2 || status.Summary.FailedTargets != 0 {
@@ -142,7 +142,7 @@ func TestBulkPlanApplyAndStatusCommands(t *testing.T) {
 	}
 
 	var loaded bulkworkflow.ApplyStatus
-	if err := json.Unmarshal(statusOutput.Bytes(), &loaded); err != nil {
+	if err := decodeJSONEnvelopeData(statusOutput.Bytes(), &loaded); err != nil {
 		t.Fatalf("decode status output: %v", err)
 	}
 	if loaded.OperationID != status.OperationID {
@@ -201,7 +201,7 @@ func TestBulkApplyReturnsStructuredFailure(t *testing.T) {
 	}
 
 	var status bulkworkflow.ApplyStatus
-	if decodeErr := json.Unmarshal(buffer.Bytes(), &status); decodeErr != nil {
+	if decodeErr := decodeJSONEnvelopeData(buffer.Bytes(), &status); decodeErr != nil {
 		t.Fatalf("expected structured JSON status, got %q (%v)", buffer.String(), decodeErr)
 	}
 	if status.Status != "failed" {
@@ -429,4 +429,23 @@ func TestWriteJSONFileWriteError(t *testing.T) {
 
 func boolPointer(value bool) *bool {
 	return &value
+}
+
+func decodeJSONEnvelopeData(raw []byte, target any) error {
+	envelope := map[string]any{}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return err
+	}
+
+	rawData, ok := envelope["data"]
+	if !ok {
+		return os.ErrInvalid
+	}
+
+	encodedData, err := json.Marshal(rawData)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(encodedData, target)
 }

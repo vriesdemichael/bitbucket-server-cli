@@ -59,7 +59,7 @@ func TestLiveBulkPolicyPlanApplyStatus(t *testing.T) {
 	}
 
 	var plan bulkworkflow.Plan
-	if err := json.Unmarshal([]byte(planOutput), &plan); err != nil {
+	if err := decodeJSONEnvelopeData(planOutput, &plan); err != nil {
 		t.Fatalf("decode bulk plan output: %v\noutput: %s", err, planOutput)
 	}
 	if plan.Summary.TargetCount != 2 || len(plan.Targets) != 2 {
@@ -75,7 +75,7 @@ func TestLiveBulkPolicyPlanApplyStatus(t *testing.T) {
 	}
 
 	var status bulkworkflow.ApplyStatus
-	if err := json.Unmarshal([]byte(applyOutput), &status); err != nil {
+	if err := decodeJSONEnvelopeData(applyOutput, &status); err != nil {
 		t.Fatalf("decode bulk apply output: %v\noutput: %s", err, applyOutput)
 	}
 	if status.Summary.SuccessfulTargets != 2 || status.Summary.FailedTargets != 0 {
@@ -91,7 +91,7 @@ func TestLiveBulkPolicyPlanApplyStatus(t *testing.T) {
 	}
 
 	var loaded bulkworkflow.ApplyStatus
-	if err := json.Unmarshal([]byte(statusOutput), &loaded); err != nil {
+	if err := decodeJSONEnvelopeData(statusOutput, &loaded); err != nil {
 		t.Fatalf("decode bulk status output: %v\noutput: %s", err, statusOutput)
 	}
 	if loaded.OperationID != status.OperationID {
@@ -118,4 +118,23 @@ func strconvBool(value bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+func decodeJSONEnvelopeData(value string, target any) error {
+	envelope := map[string]any{}
+	if err := json.Unmarshal([]byte(value), &envelope); err != nil {
+		return err
+	}
+
+	rawData, ok := envelope["data"]
+	if !ok {
+		return os.ErrInvalid
+	}
+
+	encodedData, err := json.Marshal(rawData)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(encodedData, target)
 }

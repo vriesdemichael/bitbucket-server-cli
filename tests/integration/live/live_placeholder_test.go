@@ -4,7 +4,6 @@ package live_test
 
 import (
 	"bytes"
-	"encoding/json"
 	"strings"
 	"testing"
 
@@ -40,7 +39,7 @@ func TestLiveAuthStatusAndAdminHealth(t *testing.T) {
 	}
 
 	var payload map[string]any
-	if err := json.Unmarshal(healthOutput.Bytes(), &payload); err != nil {
+	if err := decodeJSONEnvelopeData(healthOutput.String(), &payload); err != nil {
 		t.Fatalf("admin health returned invalid JSON: %v\noutput: %s", err, healthOutput.String())
 	}
 

@@ -160,6 +160,13 @@ Diagnostics and supportability notes:
 - Use `--log-format jsonl` for machine-filterable CI logs and support attachments.
 - Request diagnostics include endpoint path, HTTP status, retry count, and duration.
 - Sensitive values are redacted (token/password/secret/auth credentials and sensitive URL query values).
+
+JSON output contract (`--json`):
+
+- Every machine-mode response is wrapped in a versioned envelope: `{ "version": "v1", "data": <command payload>, "meta": { "contract": "bbsc.machine" } }`.
+- `data` preserves the existing command-specific shape (arrays/objects/scalars) inside the envelope.
+- Backward-compatible changes for `v1`: additive fields only.
+- Breaking changes (field removal/rename/type changes or envelope shape changes) require a new contract version and migration notes.
 - `go run ./cmd/bbsc auth logout`
 - `go run ./cmd/bbsc diff refs main feature --repo TEST/my-repo`
 - `go run ./cmd/bbsc diff pr 123 --repo TEST/my-repo --patch`
