@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
@@ -25,29 +26,12 @@ type Dependencies struct {
 	WriteJSON   func(io.Writer, any) error
 }
 
-const jsonContractVersion = "v1"
-
 func New(deps Dependencies) *cobra.Command {
 	if deps.LoadConfig == nil {
 		deps.LoadConfig = config.LoadFromEnv
 	}
 	if deps.WriteJSON == nil {
-		deps.WriteJSON = func(writer io.Writer, payload any) error {
-			envelope := map[string]any{
-				"version": jsonContractVersion,
-				"data":    payload,
-				"meta": map[string]any{
-					"contract": "bbsc.machine",
-				},
-			}
-
-			encoded, err := json.MarshalIndent(envelope, "", "  ")
-			if err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to encode JSON output", err)
-			}
-			_, err = fmt.Fprintln(writer, string(encoded))
-			return err
-		}
+		deps.WriteJSON = jsonoutput.Write
 	}
 
 	isJSON := func() bool {
