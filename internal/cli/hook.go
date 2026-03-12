@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"reflect"
+	"strings"
 
 	"github.com/spf13/cobra"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
@@ -88,6 +90,45 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if options.DryRun {
+					hooks, err := service.ListRepositoryHooks(cmd.Context(), repo.ProjectKey, repo.Slug, 100)
+					if err != nil {
+						return err
+					}
+					predicted := "blocked"
+					reason := "hook not found in repository scope"
+					blockingReasons := []string{"hook not found"}
+					if hook, found := findHookByKey(hooks, hookKey); found {
+						blockingReasons = nil
+						if hook.Enabled != nil && *hook.Enabled {
+							predicted = "no-op"
+							reason = "hook already enabled"
+						} else {
+							predicted = "update"
+							reason = "hook will be enabled"
+						}
+					}
+
+					preview := dryRunPreview{
+						DryRun:       true,
+						PlanningMode: planningModeStateful,
+						Capability:   capabilityFull,
+						Items: []dryRunItem{{
+							Intent:          "hook.enable",
+							Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "hook_key": hookKey},
+							Action:          "update",
+							PredictedAction: predicted,
+							Supported:       true,
+							Reason:          reason,
+							Confidence:      capabilityFull,
+							RequiredState:   []string{"repository hooks list"},
+							BlockingReasons: blockingReasons,
+						}},
+						Summary: dryRunSummary{Total: 1, Supported: 1},
+					}
+					applyDryRunSummaryPredicted(&preview.Summary, predicted)
+					return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+				}
 				hook, err := service.EnableRepositoryHook(cmd.Context(), repo.ProjectKey, repo.Slug, hookKey)
 				if err != nil {
 					return err
@@ -104,6 +145,45 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			}
 			if projectKey == "" {
 				return fmt.Errorf("project key is required (use --project or --repo)")
+			}
+
+			if options.DryRun {
+				hooks, err := service.ListProjectHooks(cmd.Context(), projectKey, 100)
+				if err != nil {
+					return err
+				}
+				predicted := "blocked"
+				reason := "hook not found in project scope"
+				blockingReasons := []string{"hook not found"}
+				if hook, found := findHookByKey(hooks, hookKey); found {
+					blockingReasons = nil
+					if hook.Enabled != nil && *hook.Enabled {
+						predicted = "no-op"
+						reason = "hook already enabled"
+					} else {
+						predicted = "update"
+						reason = "hook will be enabled"
+					}
+				}
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "hook.enable",
+						Target:          map[string]any{"project": projectKey, "hook_key": hookKey},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project hooks list"},
+						BlockingReasons: blockingReasons,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				applyDryRunSummaryPredicted(&preview.Summary, predicted)
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
 			}
 
 			hook, err := service.EnableProjectHook(cmd.Context(), projectKey, hookKey)
@@ -137,6 +217,45 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if options.DryRun {
+					hooks, err := service.ListRepositoryHooks(cmd.Context(), repo.ProjectKey, repo.Slug, 100)
+					if err != nil {
+						return err
+					}
+					predicted := "blocked"
+					reason := "hook not found in repository scope"
+					blockingReasons := []string{"hook not found"}
+					if hook, found := findHookByKey(hooks, hookKey); found {
+						blockingReasons = nil
+						if hook.Enabled != nil && !*hook.Enabled {
+							predicted = "no-op"
+							reason = "hook already disabled"
+						} else {
+							predicted = "update"
+							reason = "hook will be disabled"
+						}
+					}
+
+					preview := dryRunPreview{
+						DryRun:       true,
+						PlanningMode: planningModeStateful,
+						Capability:   capabilityFull,
+						Items: []dryRunItem{{
+							Intent:          "hook.disable",
+							Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "hook_key": hookKey},
+							Action:          "update",
+							PredictedAction: predicted,
+							Supported:       true,
+							Reason:          reason,
+							Confidence:      capabilityFull,
+							RequiredState:   []string{"repository hooks list"},
+							BlockingReasons: blockingReasons,
+						}},
+						Summary: dryRunSummary{Total: 1, Supported: 1},
+					}
+					applyDryRunSummaryPredicted(&preview.Summary, predicted)
+					return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+				}
 				if err := service.DisableRepositoryHook(cmd.Context(), repo.ProjectKey, repo.Slug, hookKey); err != nil {
 					return err
 				}
@@ -152,6 +271,45 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			}
 			if projectKey == "" {
 				return fmt.Errorf("project key is required (use --project or --repo)")
+			}
+
+			if options.DryRun {
+				hooks, err := service.ListProjectHooks(cmd.Context(), projectKey, 100)
+				if err != nil {
+					return err
+				}
+				predicted := "blocked"
+				reason := "hook not found in project scope"
+				blockingReasons := []string{"hook not found"}
+				if hook, found := findHookByKey(hooks, hookKey); found {
+					blockingReasons = nil
+					if hook.Enabled != nil && !*hook.Enabled {
+						predicted = "no-op"
+						reason = "hook already disabled"
+					} else {
+						predicted = "update"
+						reason = "hook will be disabled"
+					}
+				}
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "hook.disable",
+						Target:          map[string]any{"project": projectKey, "hook_key": hookKey},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project hooks list"},
+						BlockingReasons: blockingReasons,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				applyDryRunSummaryPredicted(&preview.Summary, predicted)
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
 			}
 
 			if err := service.DisableProjectHook(cmd.Context(), projectKey, hookKey); err != nil {
@@ -262,6 +420,50 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				if options.DryRun {
+					hooks, err := service.ListRepositoryHooks(cmd.Context(), repo.ProjectKey, repo.Slug, 100)
+					if err != nil {
+						return err
+					}
+					predicted := "blocked"
+					reason := "hook not found in repository scope"
+					blockingReasons := []string{"hook not found"}
+					requiredState := []string{"repository hooks list"}
+					if _, found := findHookByKey(hooks, hookKey); found {
+						currentSettings, err := service.GetRepositoryHookSettings(cmd.Context(), repo.ProjectKey, repo.Slug, hookKey)
+						if err != nil {
+							return err
+						}
+						requiredState = append(requiredState, "repository hook settings")
+						blockingReasons = nil
+						if reflect.DeepEqual(normalizeJSONShape(currentSettings), normalizeJSONShape(settings)) {
+							predicted = "no-op"
+							reason = "hook settings already match requested configuration"
+						} else {
+							predicted = "update"
+							reason = "hook settings will be updated"
+						}
+					}
+					preview := dryRunPreview{
+						DryRun:       true,
+						PlanningMode: planningModeStateful,
+						Capability:   capabilityFull,
+						Items: []dryRunItem{{
+							Intent:          "hook.configure",
+							Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "hook_key": hookKey},
+							Action:          "update",
+							PredictedAction: predicted,
+							Supported:       true,
+							Reason:          reason,
+							Confidence:      capabilityFull,
+							RequiredState:   requiredState,
+							BlockingReasons: blockingReasons,
+						}},
+						Summary: dryRunSummary{Total: 1, Supported: 1},
+					}
+					applyDryRunSummaryPredicted(&preview.Summary, predicted)
+					return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+				}
 				result, err := service.SetRepositoryHookSettings(cmd.Context(), repo.ProjectKey, repo.Slug, hookKey, settings)
 				if err != nil {
 					return err
@@ -278,6 +480,50 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			}
 			if projectKey == "" {
 				return fmt.Errorf("project key is required (use --project or --repo)")
+			}
+			if options.DryRun {
+				hooks, err := service.ListProjectHooks(cmd.Context(), projectKey, 100)
+				if err != nil {
+					return err
+				}
+				predicted := "blocked"
+				reason := "hook not found in project scope"
+				blockingReasons := []string{"hook not found"}
+				requiredState := []string{"project hooks list"}
+				if _, found := findHookByKey(hooks, hookKey); found {
+					currentSettings, err := service.GetProjectHookSettings(cmd.Context(), projectKey, hookKey)
+					if err != nil {
+						return err
+					}
+					requiredState = append(requiredState, "project hook settings")
+					blockingReasons = nil
+					if reflect.DeepEqual(normalizeJSONShape(currentSettings), normalizeJSONShape(settings)) {
+						predicted = "no-op"
+						reason = "hook settings already match requested configuration"
+					} else {
+						predicted = "update"
+						reason = "hook settings will be updated"
+					}
+				}
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "hook.configure",
+						Target:          map[string]any{"project": projectKey, "hook_key": hookKey},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   requiredState,
+						BlockingReasons: blockingReasons,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				applyDryRunSummaryPredicted(&preview.Summary, predicted)
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
 			}
 			result, err := service.SetProjectHookSettings(cmd.Context(), projectKey, hookKey, settings)
 			if err != nil {
@@ -316,4 +562,55 @@ func printHooks(cmd *cobra.Command, hooks []openapigenerated.RestRepositoryHook)
 		}
 		fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", key, enabled, name)
 	}
+}
+
+func findHookByKey(hooks []openapigenerated.RestRepositoryHook, hookKey string) (openapigenerated.RestRepositoryHook, bool) {
+	trimmedHookKey := strings.TrimSpace(hookKey)
+	if trimmedHookKey == "" {
+		return openapigenerated.RestRepositoryHook{}, false
+	}
+
+	for _, hook := range hooks {
+		if hook.Details == nil || hook.Details.Key == nil {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(*hook.Details.Key), trimmedHookKey) {
+			return hook, true
+		}
+	}
+
+	return openapigenerated.RestRepositoryHook{}, false
+}
+
+func applyDryRunSummaryPredicted(summary *dryRunSummary, predicted string) {
+	if summary == nil {
+		return
+	}
+
+	switch predicted {
+	case "no-op":
+		summary.NoopCount = 1
+	case "create":
+		summary.CreateCount = 1
+	case "update":
+		summary.UpdateCount = 1
+	case "delete":
+		summary.DeleteCount = 1
+	default:
+		summary.UnknownCount = 1
+	}
+}
+
+func normalizeJSONShape(value any) any {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return value
+	}
+
+	var normalized any
+	if err := json.Unmarshal(raw, &normalized); err != nil {
+		return value
+	}
+
+	return normalized
 }

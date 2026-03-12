@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	reposervice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
 )
 
 func newRepoAdminCommand(options *rootOptions) *cobra.Command {
@@ -27,7 +28,7 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 		Use:   "create",
 		Short: "Create a new repository",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, client, err := loadConfigAndClient()
+			cfg, client, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -37,6 +38,54 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 			}
 
 			service := reposervice.NewAdminService(client)
+			if options.DryRun {
+				repoQueryService := reposervice.NewService(httpclient.NewFromConfig(cfg))
+				existing, err := repoQueryService.ListByProject(cmd.Context(), createProject, reposervice.ListOptions{Limit: 200, Name: createName})
+				if err != nil {
+					return err
+				}
+
+				predicted := "create"
+				reason := "repository will be created"
+				for _, repo := range existing {
+					if strings.EqualFold(strings.TrimSpace(repo.Name), strings.TrimSpace(createName)) {
+						predicted = "conflict"
+						reason = "repository with the same name already exists in project"
+						break
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.admin.create",
+						Target:          map[string]any{"project": createProject, "name": createName, "default_branch": createDefaultBranch},
+						Action:          "create",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"project repositories list (name filtered)"},
+						BlockingReasons: func() []string {
+							if predicted == "conflict" {
+								return []string{"repository already exists"}
+							}
+							return nil
+						}(),
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "create" {
+					preview.Summary.CreateCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
 			created, err := service.Create(cmd.Context(), createProject, reposervice.CreateInput{
 				Name:          createName,
 				Description:   createDesc,
@@ -82,6 +131,27 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 
 			repo := reposervice.RepositoryRef{ProjectKey: repoRef.ProjectKey, Slug: repoRef.Slug}
 			service := reposervice.NewAdminService(client)
+			if options.DryRun {
+				predicted := "create"
+				reason := "repository fork will be created"
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "repo.admin.fork",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "name": forkName, "project": forkProject},
+						Action:          "create",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"source repository reference"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, CreateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 
 			forked, err := service.Fork(cmd.Context(), repo, reposervice.ForkInput{
 				Name:    forkName,
@@ -122,6 +192,37 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 
 			repo := reposervice.RepositoryRef{ProjectKey: repoRef.ProjectKey, Slug: repoRef.Slug}
 			service := reposervice.NewAdminService(client)
+			if options.DryRun {
+				predicted := "update"
+				reason := "repository metadata will be updated"
+				if strings.TrimSpace(updateName) == "" && strings.TrimSpace(updateDesc) == "" && strings.TrimSpace(updateDefaultBranch) == "" {
+					predicted = "no-op"
+					reason = "no update fields provided"
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "repo.admin.update",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "name": updateName, "description": updateDesc, "default_branch": updateDefaultBranch},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"repository reference"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.NoopCount = 1
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 
 			updated, err := service.Update(cmd.Context(), repo, reposervice.UpdateInput{
 				Name:          updateName,
@@ -161,6 +262,25 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 
 			repo := reposervice.RepositoryRef{ProjectKey: repoRef.ProjectKey, Slug: repoRef.Slug}
 			service := reposervice.NewAdminService(client)
+			if options.DryRun {
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityPartial,
+					Items: []dryRunItem{{
+						Intent:          "repo.admin.delete",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug)},
+						Action:          "delete",
+						PredictedAction: "delete",
+						Supported:       true,
+						Reason:          "repository delete will be attempted",
+						Confidence:      capabilityPartial,
+						RequiredState:   []string{"repository reference"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, DeleteCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
 
 			if err := service.Delete(cmd.Context(), repo); err != nil {
 				return err

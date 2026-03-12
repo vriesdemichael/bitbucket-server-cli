@@ -74,3 +74,77 @@ func TestLiveCLIProjectLifecycle(t *testing.T) {
 		t.Fatalf("expected project delete status ok, got: %s", deleteOutput)
 	}
 }
+
+func TestLiveCLIProjectUpdateDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	getBeforeOutput, err := executeLiveCLI(t, "--json", "project", "get", seeded.Key)
+	if err != nil {
+		t.Fatalf("project get before failed: %v\noutput: %s", err, getBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "project", "update", seeded.Key, "--name", "Dry Run Updated Name")
+	if err != nil {
+		t.Fatalf("project update dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "project.update"`) {
+		t.Fatalf("expected project.update intent, got: %s", dryRunOutput)
+	}
+
+	getAfterOutput, err := executeLiveCLI(t, "--json", "project", "get", seeded.Key)
+	if err != nil {
+		t.Fatalf("project get after failed: %v\noutput: %s", err, getAfterOutput)
+	}
+
+	if getBeforeOutput != getAfterOutput {
+		t.Fatalf("expected no project side-effect from update dry-run\nbefore: %s\nafter: %s", getBeforeOutput, getAfterOutput)
+	}
+}
+
+func TestLiveCLIProjectDeleteDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "project", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("project list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "project", "delete", seeded.Key)
+	if err != nil {
+		t.Fatalf("project delete dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "project.delete"`) {
+		t.Fatalf("expected project.delete intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "project", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("project list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no project side-effect from delete dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}

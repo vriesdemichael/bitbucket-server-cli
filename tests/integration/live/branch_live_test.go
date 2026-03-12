@@ -191,6 +191,9 @@ func TestLiveCLIBranchDeleteDryRunHasNoSideEffect(t *testing.T) {
 	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
 		t.Fatalf("expected stateful dry-run output, got: %s", dryRunOutput)
 	}
+	if !strings.Contains(dryRunOutput, `"intent": "branch.delete"`) {
+		t.Fatalf("expected branch.delete intent, got: %s", dryRunOutput)
+	}
 
 	listOutput, err := executeLiveCLI(t, "--json", "branch", "list")
 	if err != nil {
@@ -204,4 +207,275 @@ func TestLiveCLIBranchDeleteDryRunHasNoSideEffect(t *testing.T) {
 	if err != nil {
 		t.Fatalf("branch delete cleanup failed: %v\noutput: %s", err, deleteOutput)
 	}
+}
+
+func TestLiveCLIBranchCreateDryRunHasNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	branchName := "feature/live-dry-run-create"
+	startPoint := repo.CommitIDs[0]
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "branch", "list")
+	if err != nil {
+		t.Fatalf("branch list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "branch", "create", branchName, "--start-point", startPoint)
+	if err != nil {
+		t.Fatalf("branch create dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful dry-run output, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "branch.create"`) {
+		t.Fatalf("expected branch.create intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "branch", "list")
+	if err != nil {
+		t.Fatalf("branch list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no branch side-effect from create dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIBranchDefaultSetDryRunHasNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	defaultBeforeOutput, err := executeLiveCLI(t, "--json", "branch", "default", "get")
+	if err != nil {
+		t.Fatalf("branch default get before failed: %v\noutput: %s", err, defaultBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "branch", "default", "set", "master")
+	if err != nil {
+		t.Fatalf("branch default set dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful dry-run output, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "branch.default.set"`) {
+		t.Fatalf("expected branch.default.set intent, got: %s", dryRunOutput)
+	}
+
+	defaultAfterOutput, err := executeLiveCLI(t, "--json", "branch", "default", "get")
+	if err != nil {
+		t.Fatalf("branch default get after failed: %v\noutput: %s", err, defaultAfterOutput)
+	}
+	if defaultBeforeOutput != defaultAfterOutput {
+		t.Fatalf("expected no default-branch side-effect from dry-run\nbefore: %s\nafter: %s", defaultBeforeOutput, defaultAfterOutput)
+	}
+}
+
+func TestLiveCLIBranchRestrictionCreateDryRunHasNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "branch", "restriction", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("restriction list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "branch", "restriction", "create", "--type", "read-only", "--matcher-type", "BRANCH", "--matcher-id", "master")
+	if err != nil {
+		t.Fatalf("restriction create dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "branch.restriction.create"`) {
+		t.Fatalf("expected branch.restriction.create intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "branch", "restriction", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("restriction list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no restriction side-effect from create dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIBranchRestrictionDeleteDryRunHasNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	createOutput, err := executeLiveCLI(t, "--json", "branch", "restriction", "create", "--type", "read-only", "--matcher-id", "refs/heads/master")
+	if err != nil {
+		t.Fatalf("restriction create fixture failed: %v\noutput: %s", err, createOutput)
+	}
+
+	restrictionID := ""
+	if restriction, ok := decodeJSONMap(t, createOutput)["restriction"].(map[string]any); ok {
+		restrictionID = asString(restriction["id"])
+	}
+	if restrictionID == "" {
+		t.Fatalf("expected restriction id in create output: %s", createOutput)
+	}
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "branch", "restriction", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("restriction list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "branch", "restriction", "delete", restrictionID)
+	if err != nil {
+		t.Fatalf("restriction delete dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "branch.restriction.delete"`) {
+		t.Fatalf("expected branch.restriction.delete intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "branch", "restriction", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("restriction list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no restriction side-effect from delete dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "--json", "branch", "restriction", "delete", restrictionID)
+}
+
+func TestLiveCLIBranchModelUpdateDryRunHasNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	defaultBeforeOutput, err := executeLiveCLI(t, "--json", "branch", "default", "get")
+	if err != nil {
+		t.Fatalf("branch default get before failed: %v\noutput: %s", err, defaultBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "branch", "model", "update", "master")
+	if err != nil {
+		t.Fatalf("branch model update dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful dry-run output, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "branch.model.update"`) {
+		t.Fatalf("expected branch.model.update intent, got: %s", dryRunOutput)
+	}
+
+	defaultAfterOutput, err := executeLiveCLI(t, "--json", "branch", "default", "get")
+	if err != nil {
+		t.Fatalf("branch default get after failed: %v\noutput: %s", err, defaultAfterOutput)
+	}
+	if defaultBeforeOutput != defaultAfterOutput {
+		t.Fatalf("expected no default-branch side-effect from model update dry-run\nbefore: %s\nafter: %s", defaultBeforeOutput, defaultAfterOutput)
+	}
+}
+
+func TestLiveCLIBranchRestrictionUpdateDryRunHasNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	createOutput, err := executeLiveCLI(
+		t, "--json", "branch", "restriction", "create",
+		"--type", "read-only",
+		"--matcher-type", "BRANCH",
+		"--matcher-id", "refs/heads/master",
+	)
+	if err != nil {
+		t.Fatalf("restriction create fixture failed: %v\noutput: %s", err, createOutput)
+	}
+
+	restrictionID := ""
+	if restriction, ok := decodeJSONMap(t, createOutput)["restriction"].(map[string]any); ok {
+		restrictionID = asString(restriction["id"])
+	}
+	if restrictionID == "" {
+		t.Fatalf("expected restriction id in create output: %s", createOutput)
+	}
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "branch", "restriction", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("restriction list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(
+		t, "--json", "--dry-run", "branch", "restriction", "update", restrictionID,
+		"--type", "read-only",
+		"--matcher-type", "BRANCH",
+		"--matcher-id", "refs/heads/master",
+	)
+	if err != nil {
+		t.Fatalf("restriction update dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "branch.restriction.update"`) {
+		t.Fatalf("expected branch.restriction.update intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "branch", "restriction", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("restriction list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no restriction side-effect from update dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "--json", "branch", "restriction", "delete", restrictionID)
 }

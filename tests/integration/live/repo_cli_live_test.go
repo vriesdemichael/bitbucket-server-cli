@@ -265,6 +265,994 @@ func TestLiveCLIRepoSettingsSurface(t *testing.T) {
 	}
 }
 
+func TestLiveCLIRepoPermissionsUserGrantDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	username := strings.TrimSpace(harness.config.BitbucketUsername)
+	if username == "" {
+		t.Skip("no username configured for permission dry-run live test")
+	}
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "security", "permissions", "users", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("permissions users list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "security", "permissions", "users", "grant", username, "REPO_WRITE")
+	if err != nil {
+		t.Fatalf("permissions users grant dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful planning mode, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.permission.user.grant"`) {
+		t.Fatalf("expected intent in dry-run output, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "security", "permissions", "users", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("permissions users list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no permission side-effect from dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIRepoPermissionsGroupGrantDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	group := "stash-users"
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "security", "permissions", "groups", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("permissions groups list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "security", "permissions", "groups", "grant", group, "REPO_READ")
+	if err != nil {
+		t.Fatalf("permissions groups grant dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.permission.group.grant"`) {
+		t.Fatalf("expected repo.permission.group.grant intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "security", "permissions", "groups", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("permissions groups list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no group permission side-effect from dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIRepoPermissionsUserRevokeDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "security", "permissions", "users", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("permissions users list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "security", "permissions", "users", "revoke", "dryrun-missing-user")
+	if err != nil {
+		t.Fatalf("permissions users revoke dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.permission.user.revoke"`) {
+		t.Fatalf("expected repo.permission.user.revoke intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "security", "permissions", "users", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("permissions users list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no user permission side-effect from revoke dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIRepoPermissionsGroupRevokeDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "security", "permissions", "groups", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("permissions groups list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "security", "permissions", "groups", "revoke", "dryrun-missing-group")
+	if err != nil {
+		t.Fatalf("permissions groups revoke dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.permission.group.revoke"`) {
+		t.Fatalf("expected repo.permission.group.revoke intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "security", "permissions", "groups", "list", "--limit", "200")
+	if err != nil {
+		t.Fatalf("permissions groups list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no group permission side-effect from revoke dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIRepoWebhookCreateDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "workflow", "webhooks", "list")
+	if err != nil {
+		t.Fatalf("webhooks list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	name := fmt.Sprintf("lt-dryrun-webhook-%d", time.Now().UnixNano()%100000)
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "workflow", "webhooks", "create", name, "http://localhost:65535/hook", "--event", "repo:refs_changed")
+	if err != nil {
+		t.Fatalf("webhook create dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful planning mode, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.webhook.create"`) {
+		t.Fatalf("expected repo.webhook.create intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "workflow", "webhooks", "list")
+	if err != nil {
+		t.Fatalf("webhooks list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no webhook side-effect from dry-run create\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIRepoPullRequestSettingsUpdateDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	settingsBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "pull-requests", "get")
+	if err != nil {
+		t.Fatalf("pull-request settings get before failed: %v\noutput: %s", err, settingsBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "pull-requests", "update", "--required-all-tasks-complete=true")
+	if err != nil {
+		t.Fatalf("pull-request settings update dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful planning mode, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.pull-request-settings.update"`) {
+		t.Fatalf("expected repo.pull-request-settings.update intent, got: %s", dryRunOutput)
+	}
+
+	settingsAfterOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "pull-requests", "get")
+	if err != nil {
+		t.Fatalf("pull-request settings get after failed: %v\noutput: %s", err, settingsAfterOutput)
+	}
+
+	if settingsBeforeOutput != settingsAfterOutput {
+		t.Fatalf("expected no pull-request settings side-effect from dry-run update\nbefore: %s\nafter: %s", settingsBeforeOutput, settingsAfterOutput)
+	}
+}
+
+func TestLiveCLIRepoPullRequestSettingsUpdateApproversDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	settingsBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "pull-requests", "get")
+	if err != nil {
+		t.Fatalf("pull-request settings get before failed: %v\noutput: %s", err, settingsBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "pull-requests", "update-approvers", "--count", "2")
+	if err != nil {
+		t.Fatalf("pull-request settings update-approvers dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful planning mode, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.pull-request-settings.update-approvers"`) {
+		t.Fatalf("expected update-approvers intent, got: %s", dryRunOutput)
+	}
+
+	settingsAfterOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "pull-requests", "get")
+	if err != nil {
+		t.Fatalf("pull-request settings get after failed: %v\noutput: %s", err, settingsAfterOutput)
+	}
+
+	if settingsBeforeOutput != settingsAfterOutput {
+		t.Fatalf("expected no pull-request settings side-effect from update-approvers dry-run\nbefore: %s\nafter: %s", settingsBeforeOutput, settingsAfterOutput)
+	}
+}
+
+func TestLiveCLIRepoPullRequestSettingsSetStrategyDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	settingsBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "pull-requests", "get")
+	if err != nil {
+		t.Fatalf("pull-request settings get before failed: %v\noutput: %s", err, settingsBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "pull-requests", "set-strategy", "merge-base")
+	if err != nil {
+		t.Fatalf("pull-request settings set-strategy dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.pull-request-settings.set-strategy"`) {
+		t.Fatalf("expected set-strategy intent, got: %s", dryRunOutput)
+	}
+
+	settingsAfterOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "pull-requests", "get")
+	if err != nil {
+		t.Fatalf("pull-request settings get after failed: %v\noutput: %s", err, settingsAfterOutput)
+	}
+
+	if settingsBeforeOutput != settingsAfterOutput {
+		t.Fatalf("expected no pull-request settings side-effect from set-strategy dry-run\nbefore: %s\nafter: %s", settingsBeforeOutput, settingsAfterOutput)
+	}
+}
+
+func TestLiveCLIRepoWebhookDeleteDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	createName := fmt.Sprintf("lt-dryrun-webhook-del-%d", time.Now().UnixNano()%100000)
+	createOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "workflow", "webhooks", "create", createName, "http://localhost:65535/hook", "--event", "repo:refs_changed")
+	if err != nil {
+		t.Fatalf("webhook create fixture failed: %v\noutput: %s", err, createOutput)
+	}
+	webhookID, ok := webhookIDFromCreateOutput(createOutput)
+	if !ok {
+		t.Fatalf("expected webhook id in create output, got: %s", createOutput)
+	}
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "workflow", "webhooks", "list")
+	if err != nil {
+		t.Fatalf("webhooks list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "workflow", "webhooks", "delete", webhookID)
+	if err != nil {
+		t.Fatalf("webhook delete dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.webhook.delete"`) {
+		t.Fatalf("expected repo.webhook.delete intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "repo", "settings", "workflow", "webhooks", "list")
+	if err != nil {
+		t.Fatalf("webhooks list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no webhook side-effect from delete dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "--json", "repo", "settings", "workflow", "webhooks", "delete", webhookID)
+}
+
+func TestLiveCLIPRCreateDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 2)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	branch := "feature/live-pr-dryrun-create"
+	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, "dryrun-pr-create.txt"); err != nil {
+		t.Fatalf("create branch failed: %v", err)
+	}
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "pr", "list", "--state", "all", "--source-branch", branch, "--target-branch", "master")
+	if err != nil {
+		t.Fatalf("pr list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "create", "--from-ref", branch, "--to-ref", "master", "--title", "Dry run PR")
+	if err != nil {
+		t.Fatalf("pr create dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"planning_mode": "stateful"`) {
+		t.Fatalf("expected stateful planning mode, got: %s", dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.create"`) {
+		t.Fatalf("expected pr.create intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "pr", "list", "--state", "all", "--source-branch", branch, "--target-branch", "master")
+	if err != nil {
+		t.Fatalf("pr list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no pull request side-effect from create dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIPRUpdateDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get before failed: %v\noutput: %s", err, beforeOutput)
+	}
+	beforeTitle := prFieldAsString(t, beforeOutput, "title")
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "update", pullRequestID, "--title", beforeTitle+" dry-run", "--version", "0")
+	if err != nil {
+		t.Fatalf("pr update dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.update"`) {
+		t.Fatalf("expected pr.update intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get after failed: %v\noutput: %s", err, afterOutput)
+	}
+	afterTitle := prFieldAsString(t, afterOutput, "title")
+	if beforeTitle != afterTitle {
+		t.Fatalf("expected no title side-effect from update dry-run\nbefore: %s\nafter: %s", beforeTitle, afterTitle)
+	}
+}
+
+func TestLiveCLIPRMergeDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get before failed: %v\noutput: %s", err, beforeOutput)
+	}
+	beforeState := prFieldAsString(t, beforeOutput, "state")
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "merge", pullRequestID, "--version", "0")
+	if err != nil {
+		t.Fatalf("pr merge dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.merge"`) {
+		t.Fatalf("expected pr.merge intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get after failed: %v\noutput: %s", err, afterOutput)
+	}
+	afterState := prFieldAsString(t, afterOutput, "state")
+	if beforeState != afterState {
+		t.Fatalf("expected no state side-effect from merge dry-run\nbefore: %s\nafter: %s", beforeState, afterState)
+	}
+}
+
+func TestLiveCLIPRReviewerAddDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	username := strings.TrimSpace(harness.config.BitbucketUsername)
+	if username == "" {
+		t.Skip("no username configured for reviewer dry-run live test")
+	}
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get before failed: %v\noutput: %s", err, beforeOutput)
+	}
+	beforeReviewers := prReviewersSnapshot(t, beforeOutput)
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "review", "reviewer", "add", pullRequestID, "--user", username)
+	if err != nil {
+		t.Fatalf("pr reviewer add dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.review.reviewer.add"`) {
+		t.Fatalf("expected pr.review.reviewer.add intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get after failed: %v\noutput: %s", err, afterOutput)
+	}
+	afterReviewers := prReviewersSnapshot(t, afterOutput)
+	if beforeReviewers != afterReviewers {
+		t.Fatalf("expected no reviewer side-effect from add dry-run\nbefore: %s\nafter: %s", beforeReviewers, afterReviewers)
+	}
+}
+
+func TestLiveCLIPRReviewerRemoveDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	username := strings.TrimSpace(harness.config.BitbucketUsername)
+	if username == "" {
+		t.Skip("no username configured for reviewer dry-run live test")
+	}
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get before failed: %v\noutput: %s", err, beforeOutput)
+	}
+	beforeReviewers := prReviewersSnapshot(t, beforeOutput)
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "review", "reviewer", "remove", pullRequestID, "--user", username)
+	if err != nil {
+		t.Fatalf("pr reviewer remove dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.review.reviewer.remove"`) {
+		t.Fatalf("expected pr.review.reviewer.remove intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get after failed: %v\noutput: %s", err, afterOutput)
+	}
+	afterReviewers := prReviewersSnapshot(t, afterOutput)
+	if beforeReviewers != afterReviewers {
+		t.Fatalf("expected no reviewer side-effect from remove dry-run\nbefore: %s\nafter: %s", beforeReviewers, afterReviewers)
+	}
+}
+
+func TestLiveCLIPRTaskCreateDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "task", "list", pullRequestID, "--state", "all", "--limit", "200")
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not_found") {
+			t.Skipf("pull request task endpoint unavailable in live environment: %v", err)
+		}
+		t.Fatalf("pr task list before failed: %v\noutput: %s", err, beforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "task", "create", pullRequestID, "--text", "dry-run task")
+	if err != nil {
+		t.Fatalf("pr task create dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.task.create"`) {
+		t.Fatalf("expected pr.task.create intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "task", "list", pullRequestID, "--state", "all", "--limit", "200")
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()), "not_found") {
+			t.Skipf("pull request task endpoint unavailable in live environment: %v", err)
+		}
+		t.Fatalf("pr task list after failed: %v\noutput: %s", err, afterOutput)
+	}
+
+	if beforeOutput != afterOutput {
+		t.Fatalf("expected no task side-effect from create dry-run\nbefore: %s\nafter: %s", beforeOutput, afterOutput)
+	}
+}
+
+func TestLiveCLIPRTaskDeleteDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	createTaskOutput, err := executeLiveCLI(t, "--json", "pr", "task", "create", pullRequestID, "--text", "fixture task for dry-run delete")
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()+" "+createTaskOutput), "not_found") {
+			t.Skipf("pull request task endpoint unavailable in live environment: %v", err)
+		}
+		t.Fatalf("pr task create fixture failed: %v\noutput: %s", err, createTaskOutput)
+	}
+
+	taskID := taskIDFromPRTaskOutput(t, createTaskOutput)
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "task", "list", pullRequestID, "--state", "all", "--limit", "200")
+	if err != nil {
+		t.Fatalf("pr task list before failed: %v\noutput: %s", err, beforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "task", "delete", pullRequestID, "--task", taskID)
+	if err != nil {
+		t.Fatalf("pr task delete dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.task.delete"`) {
+		t.Fatalf("expected pr.task.delete intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "task", "list", pullRequestID, "--state", "all", "--limit", "200")
+	if err != nil {
+		t.Fatalf("pr task list after failed: %v\noutput: %s", err, afterOutput)
+	}
+
+	if beforeOutput != afterOutput {
+		t.Fatalf("expected no task side-effect from delete dry-run\nbefore: %s\nafter: %s", beforeOutput, afterOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "pr", "task", "delete", pullRequestID, "--task", taskID)
+}
+
+func TestLiveCLIPRTaskUpdateDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	createTaskOutput, err := executeLiveCLI(t, "--json", "pr", "task", "create", pullRequestID, "--text", "fixture task for dry-run update")
+	if err != nil {
+		if strings.Contains(strings.ToLower(err.Error()+" "+createTaskOutput), "not_found") {
+			t.Skipf("pull request task endpoint unavailable in live environment: %v", err)
+		}
+		t.Fatalf("pr task create fixture failed: %v\noutput: %s", err, createTaskOutput)
+	}
+
+	taskID := taskIDFromPRTaskOutput(t, createTaskOutput)
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "task", "list", pullRequestID, "--state", "all", "--limit", "200")
+	if err != nil {
+		t.Fatalf("pr task list before failed: %v\noutput: %s", err, beforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "task", "update", pullRequestID, "--task", taskID, "--text", "dry-run updated text")
+	if err != nil {
+		t.Fatalf("pr task update dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.task.update"`) {
+		t.Fatalf("expected pr.task.update intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "task", "list", pullRequestID, "--state", "all", "--limit", "200")
+	if err != nil {
+		t.Fatalf("pr task list after failed: %v\noutput: %s", err, afterOutput)
+	}
+
+	if beforeOutput != afterOutput {
+		t.Fatalf("expected no task side-effect from update dry-run\nbefore: %s\nafter: %s", beforeOutput, afterOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "pr", "task", "delete", pullRequestID, "--task", taskID)
+}
+
+func TestLiveCLIPRDeclineDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get before failed: %v\noutput: %s", err, beforeOutput)
+	}
+	beforeState := prFieldAsString(t, beforeOutput, "state")
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "decline", pullRequestID, "--version", "0")
+	if err != nil {
+		t.Fatalf("pr decline dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.decline"`) {
+		t.Fatalf("expected pr.decline intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get after failed: %v\noutput: %s", err, afterOutput)
+	}
+	afterState := prFieldAsString(t, afterOutput, "state")
+	if beforeState != afterState {
+		t.Fatalf("expected no state side-effect from decline dry-run\nbefore: %s\nafter: %s", beforeState, afterState)
+	}
+}
+
+func TestLiveCLIPRReopenDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	declineOutput, err := executeLiveCLI(t, "--json", "pr", "decline", pullRequestID, "--version", "0")
+	if err != nil {
+		t.Fatalf("pr decline fixture failed: %v\noutput: %s", err, declineOutput)
+	}
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get before failed: %v\noutput: %s", err, beforeOutput)
+	}
+	beforeState := prFieldAsString(t, beforeOutput, "state")
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "reopen", pullRequestID, "--version", "1")
+	if err != nil {
+		t.Fatalf("pr reopen dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.reopen"`) {
+		t.Fatalf("expected pr.reopen intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get after failed: %v\noutput: %s", err, afterOutput)
+	}
+	afterState := prFieldAsString(t, afterOutput, "state")
+	if beforeState != afterState {
+		t.Fatalf("expected no state side-effect from reopen dry-run\nbefore: %s\nafter: %s", beforeState, afterState)
+	}
+}
+
+func TestLiveCLIPRApproveDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get before failed: %v\noutput: %s", err, beforeOutput)
+	}
+	beforeReviewers := prReviewersSnapshot(t, beforeOutput)
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "review", "approve", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr approve dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.review.approve"`) {
+		t.Fatalf("expected pr.review.approve intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get after failed: %v\noutput: %s", err, afterOutput)
+	}
+	afterReviewers := prReviewersSnapshot(t, afterOutput)
+	if beforeReviewers != afterReviewers {
+		t.Fatalf("expected no reviewer side-effect from approve dry-run\nbefore: %s\nafter: %s", beforeReviewers, afterReviewers)
+	}
+}
+
+func TestLiveCLIPRUnapproveDryRunNoSideEffect(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get before failed: %v\noutput: %s", err, beforeOutput)
+	}
+	beforeReviewers := prReviewersSnapshot(t, beforeOutput)
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "review", "unapprove", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr unapprove dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "pr.review.unapprove"`) {
+		t.Fatalf("expected pr.review.unapprove intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get after failed: %v\noutput: %s", err, afterOutput)
+	}
+	afterReviewers := prReviewersSnapshot(t, afterOutput)
+	if beforeReviewers != afterReviewers {
+		t.Fatalf("expected no reviewer side-effect from unapprove dry-run\nbefore: %s\nafter: %s", beforeReviewers, afterReviewers)
+	}
+}
+
+func TestLiveCLIRepoCommentCreateDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 2)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	branch := fmt.Sprintf("feature/live-comment-dryrun-%d", time.Now().UnixNano()%100000)
+	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, "dryrun-comment-fixture.txt"); err != nil {
+		t.Fatalf("create branch failed: %v", err)
+	}
+
+	pullRequestID, err := harness.createPullRequest(ctx, seeded.Key, repo.Slug, branch, "master")
+	if err != nil {
+		t.Fatalf("create pull request fixture failed: %v", err)
+	}
+
+	listBeforeOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "list", "--pr", pullRequestID, "--path", "dryrun-comment-fixture.txt", "--limit", "200")
+	if err != nil {
+		t.Fatalf("repo comment list before failed: %v\noutput: %s", err, listBeforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "comment", "create", "--pr", pullRequestID, "--text", "dry-run comment")
+	if err != nil {
+		t.Fatalf("repo comment create dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.comment.create"`) {
+		t.Fatalf("expected repo.comment.create intent, got: %s", dryRunOutput)
+	}
+
+	listAfterOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "list", "--pr", pullRequestID, "--path", "dryrun-comment-fixture.txt", "--limit", "200")
+	if err != nil {
+		t.Fatalf("repo comment list after failed: %v\noutput: %s", err, listAfterOutput)
+	}
+
+	if listBeforeOutput != listAfterOutput {
+		t.Fatalf("expected no comment side-effect from create dry-run\nbefore: %s\nafter: %s", listBeforeOutput, listAfterOutput)
+	}
+}
+
+func TestLiveCLIRepoCommentUpdateDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 2)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	branch := fmt.Sprintf("feature/live-comment-update-dryrun-%d", time.Now().UnixNano()%100000)
+	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, "dryrun-comment-update-fixture.txt"); err != nil {
+		t.Fatalf("create branch failed: %v", err)
+	}
+
+	pullRequestID, err := harness.createPullRequest(ctx, seeded.Key, repo.Slug, branch, "master")
+	if err != nil {
+		t.Fatalf("create pull request fixture failed: %v", err)
+	}
+
+	createOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "create", "--pr", pullRequestID, "--text", "fixture comment")
+	if err != nil {
+		t.Fatalf("create fixture comment failed: %v\noutput: %s", err, createOutput)
+	}
+	commentID, ok := commentIDFromCreateOutput(createOutput)
+	if !ok {
+		t.Fatalf("expected comment id in fixture output: %s", createOutput)
+	}
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "list", "--pr", pullRequestID, "--path", "dryrun-comment-update-fixture.txt", "--limit", "200")
+	if err != nil {
+		t.Fatalf("comment list before failed: %v\noutput: %s", err, beforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "comment", "update", "--pr", pullRequestID, "--id", commentID, "--text", "dry-run updated comment")
+	if err != nil {
+		t.Fatalf("repo comment update dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.comment.update"`) {
+		t.Fatalf("expected repo.comment.update intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "list", "--pr", pullRequestID, "--path", "dryrun-comment-update-fixture.txt", "--limit", "200")
+	if err != nil {
+		t.Fatalf("comment list after failed: %v\noutput: %s", err, afterOutput)
+	}
+
+	if beforeOutput != afterOutput {
+		t.Fatalf("expected no comment side-effect from update dry-run\nbefore: %s\nafter: %s", beforeOutput, afterOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "repo", "comment", "delete", "--pr", pullRequestID, "--id", commentID)
+}
+
+func TestLiveCLIRepoCommentDeleteDryRunNoSideEffect(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 2)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	branch := fmt.Sprintf("feature/live-comment-delete-dryrun-%d", time.Now().UnixNano()%100000)
+	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, "dryrun-comment-delete-fixture.txt"); err != nil {
+		t.Fatalf("create branch failed: %v", err)
+	}
+
+	pullRequestID, err := harness.createPullRequest(ctx, seeded.Key, repo.Slug, branch, "master")
+	if err != nil {
+		t.Fatalf("create pull request fixture failed: %v", err)
+	}
+
+	createOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "create", "--pr", pullRequestID, "--text", "fixture comment delete")
+	if err != nil {
+		t.Fatalf("create fixture comment failed: %v\noutput: %s", err, createOutput)
+	}
+	commentID, ok := commentIDFromCreateOutput(createOutput)
+	if !ok {
+		t.Fatalf("expected comment id in fixture output: %s", createOutput)
+	}
+
+	beforeOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "list", "--pr", pullRequestID, "--path", "dryrun-comment-delete-fixture.txt", "--limit", "200")
+	if err != nil {
+		t.Fatalf("comment list before failed: %v\noutput: %s", err, beforeOutput)
+	}
+
+	dryRunOutput, err := executeLiveCLI(t, "--json", "--dry-run", "repo", "comment", "delete", "--pr", pullRequestID, "--id", commentID)
+	if err != nil {
+		t.Fatalf("repo comment delete dry-run failed: %v\noutput: %s", err, dryRunOutput)
+	}
+	if !strings.Contains(dryRunOutput, `"intent": "repo.comment.delete"`) {
+		t.Fatalf("expected repo.comment.delete intent, got: %s", dryRunOutput)
+	}
+
+	afterOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "list", "--pr", pullRequestID, "--path", "dryrun-comment-delete-fixture.txt", "--limit", "200")
+	if err != nil {
+		t.Fatalf("comment list after failed: %v\noutput: %s", err, afterOutput)
+	}
+
+	if beforeOutput != afterOutput {
+		t.Fatalf("expected no comment side-effect from delete dry-run\nbefore: %s\nafter: %s", beforeOutput, afterOutput)
+	}
+
+	_, _ = executeLiveCLI(t, "repo", "comment", "delete", "--pr", pullRequestID, "--id", commentID)
+}
+
+func prepareOpenPRDryRunFixture(t *testing.T) (*liveHarness, seededProject, seededRepository, string) {
+	t.Helper()
+
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 2)
+	if err != nil {
+		t.Fatalf("seed project with repositories failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	branch := fmt.Sprintf("feature/live-pr-dryrun-%d", time.Now().UnixNano()%100000)
+	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, "dryrun-pr-fixture.txt"); err != nil {
+		t.Fatalf("create branch failed: %v", err)
+	}
+
+	pullRequestID, err := harness.createPullRequest(ctx, seeded.Key, repo.Slug, branch, "master")
+	if err != nil {
+		t.Fatalf("create pull request fixture failed: %v", err)
+	}
+
+	return harness, seeded, repo, pullRequestID
+}
+
+func prFieldAsString(t *testing.T, output, field string) string {
+	t.Helper()
+	payload := decodeJSONMap(t, output)
+	pullRequest, ok := payload["pull_request"].(map[string]any)
+	if !ok {
+		t.Fatalf("pull_request field missing from output: %s", output)
+	}
+	return asString(pullRequest[field])
+}
+
+func prReviewersSnapshot(t *testing.T, output string) string {
+	t.Helper()
+	payload := decodeJSONMap(t, output)
+	pullRequest, ok := payload["pull_request"].(map[string]any)
+	if !ok {
+		t.Fatalf("pull_request field missing from output: %s", output)
+	}
+	reviewers := pullRequest["reviewers"]
+	raw, err := json.Marshal(reviewers)
+	if err != nil {
+		t.Fatalf("failed to marshal reviewers snapshot: %v", err)
+	}
+	return string(raw)
+}
+
+func taskIDFromPRTaskOutput(t *testing.T, output string) string {
+	t.Helper()
+	payload := decodeJSONMap(t, output)
+	task, ok := payload["task"].(map[string]any)
+	if !ok {
+		t.Fatalf("task field missing from output: %s", output)
+	}
+	id, ok := numericOrStringID(task["id"])
+	if !ok {
+		t.Fatalf("task id missing from output: %s", output)
+	}
+	return id
+}
+
 func jsonArrayContainsSlug(t *testing.T, output string, slug string) bool {
 	t.Helper()
 

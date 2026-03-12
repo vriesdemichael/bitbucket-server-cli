@@ -1,0 +1,162 @@
+package cli
+
+import (
+	"testing"
+	"time"
+
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
+	pullrequestservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequest"
+)
+
+func TestBranchRestrictionDryRunHelpers(t *testing.T) {
+	readOnly := "read-only"
+	matcherID := "refs/heads/main"
+	matcherType := openapigenerated.RestRefRestrictionMatcherTypeId("BRANCH")
+	userA := "alice"
+	groupA := "devs"
+	keyID := int32(7)
+
+	restriction := openapigenerated.RestRefRestriction{
+		Type: &readOnly,
+		Matcher: &struct {
+			DisplayId *string `json:"displayId,omitempty"`
+			Id        *string `json:"id,omitempty"`
+			Type      *struct {
+				Id   *openapigenerated.RestRefRestrictionMatcherTypeId `json:"id,omitempty"`
+				Name *string                                           `json:"name,omitempty"`
+			} `json:"type,omitempty"`
+		}{
+			Id: &matcherID,
+			Type: &struct {
+				Id   *openapigenerated.RestRefRestrictionMatcherTypeId `json:"id,omitempty"`
+				Name *string                                           `json:"name,omitempty"`
+			}{Id: &matcherType},
+		},
+		Users:  &[]openapigenerated.RestApplicationUser{{Name: &userA}},
+		Groups: &[]string{groupA},
+		AccessKeys: &[]openapigenerated.RestSshAccessKey{{Key: &struct {
+			AlgorithmType     *string    "json:\"algorithmType,omitempty\""
+			BitLength         *int32     "json:\"bitLength,omitempty\""
+			CreatedDate       *time.Time "json:\"createdDate,omitempty\""
+			ExpiryDays        *int32     "json:\"expiryDays,omitempty\""
+			Fingerprint       *string    "json:\"fingerprint,omitempty\""
+			Id                *int32     "json:\"id,omitempty\""
+			Label             *string    "json:\"label,omitempty\""
+			LastAuthenticated *string    "json:\"lastAuthenticated,omitempty\""
+			Text              *string    "json:\"text,omitempty\""
+			Warning           *string    "json:\"warning,omitempty\""
+		}{Id: &keyID}}},
+	}
+
+	if !matchesRestrictionSignature(restriction, "read-only", "BRANCH", "refs/heads/main") {
+		t.Fatal("expected restriction signature to match")
+	}
+	if matchesRestrictionSignature(restriction, "no-deletes", "BRANCH", "refs/heads/main") {
+		t.Fatal("expected restriction signature mismatch on type")
+	}
+
+	if !matchesRestrictionUpdate(restriction, "read-only", "BRANCH", "refs/heads/main", []string{"alice"}, []string{"devs"}, []int32{7}) {
+		t.Fatal("expected restriction update equivalence")
+	}
+	if matchesRestrictionUpdate(restriction, "read-only", "BRANCH", "refs/heads/main", []string{"bob"}, []string{"devs"}, []int32{7}) {
+		t.Fatal("expected restriction update mismatch when users differ")
+	}
+
+	if got := normalizeBranchName("feature/test"); got != "refs/heads/feature/test" {
+		t.Fatalf("expected refs/heads/ prefix, got %q", got)
+	}
+	if got := normalizeBranchName("refs/heads/main"); got != "refs/heads/main" {
+		t.Fatalf("expected existing refs path unchanged, got %q", got)
+	}
+}
+
+func TestWebhookHelperFunctions(t *testing.T) {
+	payload := map[string]any{"values": []any{map[string]any{"id": float64(42), "name": "ci", "url": "http://example.invalid/hook"}}}
+
+	entries := webhookEntries(payload)
+	if len(entries) != 1 {
+		t.Fatalf("expected one webhook entry, got %d", len(entries))
+	}
+	if !webhookExistsByNameAndURL(payload, "CI", "http://example.invalid/hook") {
+		t.Fatal("expected webhook to match by name+url case-insensitively")
+	}
+	if !webhookExistsByID(payload, "42") {
+		t.Fatal("expected webhook to match by numeric id")
+	}
+	if webhookExistsByID(payload, "999") {
+		t.Fatal("did not expect webhook id 999 to exist")
+	}
+}
+
+func TestHookAndDryRunCommonHelpers(t *testing.T) {
+	hookKey := "com.example.hook"
+	hookName := "Example Hook"
+	hook := openapigenerated.RestRepositoryHook{Details: &openapigenerated.RepositoryHookDetails{Key: &hookKey, Name: &hookName}}
+
+	if _, ok := findHookByKey([]openapigenerated.RestRepositoryHook{hook}, " COM.EXAMPLE.HOOK "); !ok {
+		t.Fatal("expected to find hook by key")
+	}
+	if _, ok := findHookByKey([]openapigenerated.RestRepositoryHook{hook}, ""); ok {
+		t.Fatal("did not expect empty hook key to match")
+	}
+
+	summary := dryRunSummary{}
+	applyDryRunSummaryPredicted(&summary, "create")
+	if summary.CreateCount != 1 {
+		t.Fatalf("expected create count to be 1, got %+v", summary)
+	}
+	applyDryRunSummaryPredicted(&summary, "unknown")
+	if summary.UnknownCount != 1 {
+		t.Fatalf("expected unknown count to be 1 after unknown prediction, got %+v", summary)
+	}
+
+	normalized := normalizeJSONShape(struct {
+		Enabled bool `json:"enabled"`
+	}{Enabled: true})
+	object, ok := normalized.(map[string]any)
+	if !ok || object["enabled"] != true {
+		t.Fatalf("expected normalized JSON object with enabled=true, got %#v", normalized)
+	}
+}
+
+func TestReviewerAndPRDryRunHelpers(t *testing.T) {
+	conditionID := int32(11)
+	required := int32(1)
+	reviewer := "alice"
+	condition := openapigenerated.RestPullRequestCondition{Id: &conditionID, RequiredApprovals: &required, Reviewers: &[]openapigenerated.RestApplicationUser{{Name: &reviewer}}}
+
+	if !reviewerConditionExists([]openapigenerated.RestPullRequestCondition{condition}, "11") {
+		t.Fatal("expected reviewer condition to exist")
+	}
+	if _, ok := findReviewerCondition([]openapigenerated.RestPullRequestCondition{condition}, "99"); ok {
+		t.Fatal("did not expect reviewer condition id 99")
+	}
+
+	desired := openapigenerated.RestDefaultReviewersRequest{RequiredApprovals: &required, Reviewers: &[]openapigenerated.RestApplicationUser{{Name: &reviewer}}}
+	if !reviewerConditionEquivalentExists([]openapigenerated.RestPullRequestCondition{condition}, desired) {
+		t.Fatal("expected equivalent reviewer condition")
+	}
+	if !reviewerConditionUpdateEquivalent(condition, normalizeJSONShape(condition)) {
+		t.Fatal("expected update equivalence for normalized identical payload")
+	}
+
+	reviewers := []pullrequestservice.Reviewer{{Name: "alice", Status: "APPROVED"}, {Name: "bob", Approved: false}}
+	if !hasApprovedReviewer(reviewers) {
+		t.Fatal("expected approved reviewer to be detected")
+	}
+	if !hasReviewer(reviewers, " ALICE ") {
+		t.Fatal("expected reviewer lookup to be case-insensitive")
+	}
+
+	tasks := []pullrequestservice.Task{{ID: 7, Text: "same text", Resolved: false}}
+	if _, ok := findTask(tasks, "7"); !ok {
+		t.Fatal("expected task 7 to be found")
+	}
+	if !taskUpdateEquivalent(tasks[0], "same text", nil) {
+		t.Fatal("expected task update equivalence for unchanged text")
+	}
+	resolved := true
+	if taskUpdateEquivalent(tasks[0], "same text", &resolved) {
+		t.Fatal("expected task update mismatch when resolved flag changes")
+	}
+}
