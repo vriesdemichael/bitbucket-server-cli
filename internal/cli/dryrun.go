@@ -111,7 +111,6 @@ var dryRunProfiles = map[string]dryRunProfile{
 	"project permissions users revoke":             {Intent: "project.permission.user.revoke", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
 	"project permissions groups grant":             {Intent: "project.permission.group.grant", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
 	"project permissions groups revoke":            {Intent: "project.permission.group.revoke", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"bulk apply":                                   {Intent: "bulk.apply", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
 }
 
 var dryRunPassthroughPaths = map[string]struct{}{
@@ -218,7 +217,7 @@ func registerGlobalDryRunInterceptors(root *cobra.Command, options *rootOptions)
 					return originalRun(cmd, args)
 				}
 
-				return apperrors.New(apperrors.KindNotImplemented, fmt.Sprintf("dry-run is not implemented for %s", path), nil)
+				return dryRunUnsupportedError(path)
 			}
 		}
 
@@ -260,11 +259,19 @@ func dryRunCommandPath(command *cobra.Command) string {
 	return strings.TrimSpace(path)
 }
 
+func dryRunUnsupportedError(path string) error {
+	if strings.EqualFold(strings.TrimSpace(path), "bulk apply") {
+		return apperrors.New(apperrors.KindValidation, "bulk apply does not support --dry-run; use bulk plan to preview operations", nil)
+	}
+
+	return apperrors.New(apperrors.KindNotImplemented, fmt.Sprintf("dry-run is not implemented for %s", path), nil)
+}
+
 func newDryRunPreview(profile dryRunProfile, command *cobra.Command, args []string) dryRunPreview {
 	target := map[string]any{}
 	repository := ""
 	if command != nil {
-		if flag := command.Flags().Lookup("repo"); flag != nil {
+		if flag := command.Flag("repo"); flag != nil {
 			repository = strings.TrimSpace(flag.Value.String())
 		}
 	}
