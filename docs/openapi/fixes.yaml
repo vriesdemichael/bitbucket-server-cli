@@ -1,5 +1,5 @@
 version: 1
-updated_at: "2026-02-26"
+updated_at: "2026-03-12"
 source_openapi: docs/reference/atlassian/bitbucket-9.4-openapi.json
 fixes:
   - id: OPENAPI-001
@@ -74,3 +74,24 @@ fixes:
     verification:
       commands:
         - go test -tags=live ./tests/integration/live -run TestOpenAPIParity
+
+  - id: OPENAPI-005
+    area: pull-request-settings-required-approvers
+    description: Support legacy integer payload fallback for requiredApprovers updates.
+    reference:
+      type: endpoint
+      value: /api/latest/projects/{projectKey}/repos/{repositorySlug}/settings/pull-requests
+      upstream_issue: OpenAPI models requiredApprovers as an object, but some live instances reject object payloads and only accept an integer
+    change:
+      files:
+        - internal/services/reposettings/service.go
+        - internal/services/reposettings/service_test.go
+      detail: >
+        Update flow sends the modern object payload first ({enabled,count}) and falls back to
+        the legacy integer payload when the server returns a validation-style payload error.
+        This preserves compatibility with environments where the documented object contract
+        is not accepted at runtime.
+    verification:
+      commands:
+        - go test ./internal/services/reposettings -run TestUpdateRepositoryPullRequestRequiredApproversCount
+        - go test -tags=live ./tests/integration/live -run TestLiveRepoSettingsUpdatePullRequestRequiredApprovers
