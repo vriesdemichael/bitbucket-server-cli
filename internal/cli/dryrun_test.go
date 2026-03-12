@@ -50,7 +50,7 @@ func TestIsServerMutatingPath(t *testing.T) {
 	}
 }
 
-func TestRegisterGlobalDryRunInterceptorsProfilePreview(t *testing.T) {
+func TestRegisterGlobalDryRunInterceptorsBulkApplyRejected(t *testing.T) {
 	options := &rootOptions{DryRun: true, JSON: true}
 	root := &cobra.Command{Use: "bbsc", SilenceErrors: true, SilenceUsage: true}
 	root.PersistentFlags().BoolVar(&options.DryRun, "dry-run", false, "")
@@ -75,19 +75,18 @@ func TestRegisterGlobalDryRunInterceptorsProfilePreview(t *testing.T) {
 	root.SetErr(buffer)
 	root.SetArgs([]string{"--dry-run", "--json", "bulk", "apply"})
 
-	if err := root.Execute(); err != nil {
-		t.Fatalf("dry-run preview execution failed: %v", err)
+	err := root.Execute()
+	if err == nil {
+		t.Fatal("expected bulk apply dry-run to be rejected")
 	}
 	if originalCalled {
 		t.Fatal("expected command execution to be intercepted in dry-run mode")
 	}
-
-	output := buffer.String()
-	if !strings.Contains(output, `"planning_mode": "static"`) {
-		t.Fatalf("expected static planning mode in output, got: %s", output)
+	if apperrors.KindOf(err) != apperrors.KindValidation {
+		t.Fatalf("expected validation kind, got: %v", apperrors.KindOf(err))
 	}
-	if !strings.Contains(output, `"intent": "bulk.apply"`) {
-		t.Fatalf("expected bulk.apply intent in output, got: %s", output)
+	if !strings.Contains(err.Error(), "bulk apply does not support --dry-run; use bulk plan to preview operations") {
+		t.Fatalf("expected bulk apply guidance in error, got: %v", err)
 	}
 }
 
@@ -223,6 +222,30 @@ func TestNewDryRunPreviewIncludesRepositoryAndArgs(t *testing.T) {
 	args, ok := preview.Items[0].Target["args"].([]string)
 	if !ok || len(args) != 3 {
 		t.Fatalf("expected args target, got: %#v", preview.Items[0].Target["args"])
+	}
+}
+
+func TestNewDryRunPreviewIncludesInheritedRepositoryFlag(t *testing.T) {
+	root := &cobra.Command{Use: "bbsc"}
+	root.PersistentFlags().String("repo", "", "")
+	if err := root.PersistentFlags().Set("repo", "PRJ/inherited"); err != nil {
+		t.Fatalf("set repo flag failed: %v", err)
+	}
+
+	projectCmd := &cobra.Command{Use: "project"}
+	updateCmd := &cobra.Command{Use: "update"}
+	projectCmd.AddCommand(updateCmd)
+	root.AddCommand(projectCmd)
+
+	preview := newDryRunPreview(dryRunProfile{
+		Intent:       "project.update",
+		Action:       "update",
+		PlanningMode: planningModeStatic,
+		Capability:   capabilityPartial,
+	}, updateCmd, []string{"PRJ"})
+
+	if preview.Items[0].Target["repository"] != "PRJ/inherited" {
+		t.Fatalf("expected inherited repository target, got: %#v", preview.Items[0].Target["repository"])
 	}
 }
 
