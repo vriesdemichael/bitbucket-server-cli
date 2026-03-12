@@ -25,13 +25,23 @@ type Dependencies struct {
 	WriteJSON   func(io.Writer, any) error
 }
 
+const jsonContractVersion = "v1"
+
 func New(deps Dependencies) *cobra.Command {
 	if deps.LoadConfig == nil {
 		deps.LoadConfig = config.LoadFromEnv
 	}
 	if deps.WriteJSON == nil {
 		deps.WriteJSON = func(writer io.Writer, payload any) error {
-			encoded, err := json.MarshalIndent(payload, "", "  ")
+			envelope := map[string]any{
+				"version": jsonContractVersion,
+				"data":    payload,
+				"meta": map[string]any{
+					"contract": "bbsc.machine",
+				},
+			}
+
+			encoded, err := json.MarshalIndent(envelope, "", "  ")
 			if err != nil {
 				return apperrors.New(apperrors.KindInternal, "failed to encode JSON output", err)
 			}

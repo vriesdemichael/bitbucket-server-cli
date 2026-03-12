@@ -653,21 +653,54 @@ func executeLiveCLI(t *testing.T, args ...string) (string, error) {
 func decodeJSONMap(t *testing.T, value string) map[string]any {
 	t.Helper()
 
+	var envelope struct {
+		Version string         `json:"version"`
+		Data    map[string]any `json:"data"`
+	}
+
+	if err := json.Unmarshal([]byte(value), &envelope); err != nil {
+		t.Fatalf("expected json object output, got parse error %v for: %s", err, value)
+	}
+
+	if strings.TrimSpace(envelope.Version) == "" {
+		t.Fatalf("expected json envelope version in output: %s", value)
+	}
+
+	if envelope.Data == nil {
+		t.Fatalf("expected json envelope data object in output: %s", value)
+	}
+
+	return envelope.Data
+}
+
+func decodeJSONData(t *testing.T, value string, target any) {
+	t.Helper()
+
 	payload := map[string]any{}
 	if err := json.Unmarshal([]byte(value), &payload); err != nil {
 		t.Fatalf("expected json object output, got parse error %v for: %s", err, value)
 	}
 
-	return payload
+	rawData, ok := payload["data"]
+	if !ok {
+		t.Fatalf("expected data field in envelope output: %s", value)
+	}
+
+	encodedData, err := json.Marshal(rawData)
+	if err != nil {
+		t.Fatalf("failed to re-encode envelope data: %v", err)
+	}
+
+	if err := json.Unmarshal(encodedData, target); err != nil {
+		t.Fatalf("failed to decode envelope data payload: %v for output: %s", err, value)
+	}
 }
 
 func jsonArrayContainsKey(t *testing.T, output string, key string) bool {
 	t.Helper()
 
 	items := make([]map[string]any, 0)
-	if err := json.Unmarshal([]byte(output), &items); err != nil {
-		t.Fatalf("expected json array output, got parse error %v for: %s", err, output)
-	}
+	decodeJSONData(t, output, &items)
 
 	for _, item := range items {
 		if asString(item["key"]) == key {
@@ -682,9 +715,7 @@ func jsonArrayContainsExternalID(t *testing.T, output string, externalID string)
 	t.Helper()
 
 	items := make([]map[string]any, 0)
-	if err := json.Unmarshal([]byte(output), &items); err != nil {
-		t.Fatalf("expected json array output, got parse error %v for: %s", err, output)
-	}
+	decodeJSONData(t, output, &items)
 
 	for _, item := range items {
 		if asString(item["externalId"]) == externalID {

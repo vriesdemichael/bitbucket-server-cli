@@ -50,7 +50,7 @@ func TestStatusJSONUsesHostOverride(t *testing.T) {
 	}
 
 	var parsed map[string]string
-	if err := json.Unmarshal(buffer.Bytes(), &parsed); err != nil {
+	if err := decodeJSONEnvelopeData(buffer.Bytes(), &parsed); err != nil {
 		t.Fatalf("expected json output, got %q (%v)", buffer.String(), err)
 	}
 
@@ -60,6 +60,25 @@ func TestStatusJSONUsesHostOverride(t *testing.T) {
 	if parsed["auth_mode"] != "none" {
 		t.Fatalf("expected auth_mode none, got %q", parsed["auth_mode"])
 	}
+}
+
+func decodeJSONEnvelopeData(raw []byte, target any) error {
+	envelope := map[string]any{}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		return err
+	}
+
+	rawData, ok := envelope["data"]
+	if !ok {
+		return json.Unmarshal(raw, target)
+	}
+
+	encodedData, err := json.Marshal(rawData)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(encodedData, target)
 }
 
 func TestStatusMissingDependenciesReturnError(t *testing.T) {

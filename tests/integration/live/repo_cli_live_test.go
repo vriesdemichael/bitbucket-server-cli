@@ -1340,9 +1340,39 @@ func numericOrStringID(value any) (string, bool) {
 }
 
 func unmarshalJSONObject(value string, target *map[string]any) error {
-	return json.Unmarshal([]byte(value), target)
+	envelope := map[string]any{}
+	if err := json.Unmarshal([]byte(value), &envelope); err != nil {
+		return err
+	}
+
+	rawData, ok := envelope["data"]
+	if !ok {
+		return fmt.Errorf("missing data field")
+	}
+
+	encodedData, err := json.Marshal(rawData)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(encodedData, target)
 }
 
 func unmarshalJSONArray(value string, target *[]map[string]any) error {
-	return json.Unmarshal([]byte(value), target)
+	envelope := map[string]any{}
+	if err := json.Unmarshal([]byte(value), &envelope); err != nil {
+		return err
+	}
+
+	rawData, ok := envelope["data"]
+	if !ok {
+		return fmt.Errorf("missing data field")
+	}
+
+	encodedData, err := json.Marshal(rawData)
+	if err != nil {
+		return err
+	}
+
+	return json.Unmarshal(encodedData, target)
 }
