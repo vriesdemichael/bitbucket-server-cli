@@ -21,7 +21,7 @@ import (
 )
 
 const (
-	APIVersion      = "bbsc.io/v1alpha1"
+	APIVersion      = "bb.io/v1alpha1"
 	PlanKind        = "BulkPlan"
 	ApplyStatusKind = "BulkApplyStatus"
 

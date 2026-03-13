@@ -150,7 +150,7 @@
       "additionalProperties": false,
       "properties": {
         "apiVersion": {
-          "const": "bbsc.io/v1alpha1"
+          "const": "bb.io/v1alpha1"
         },
         "operations": {
           "items": {
@@ -480,7 +480,7 @@
   "description": "Schema for multi-repository bulk policy files. JSON Schema can validate equivalent YAML documents.",
   "properties": {
     "apiVersion": {
-      "const": "bbsc.io/v1alpha1"
+      "const": "bb.io/v1alpha1"
     },
     "operations": {
       "items": {

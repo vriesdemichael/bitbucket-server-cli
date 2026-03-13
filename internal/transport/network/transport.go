@@ -15,7 +15,7 @@ type SafeTransport struct {
 }
 
 func (t *SafeTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	if os.Getenv("BBSC_BLOCK_EXTERNAL_NETWORK") == "1" {
+	if os.Getenv("BB_BLOCK_EXTERNAL_NETWORK") == "1" {
 		host := req.URL.Hostname()
 		if host != "127.0.0.1" && host != "localhost" && host != "::1" {
 			return nil, fmt.Errorf("external network access is disabled during tests (attempted to reach %s)", host)

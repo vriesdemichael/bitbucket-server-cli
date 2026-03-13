@@ -9,7 +9,7 @@ import (
 
 func configureDryRunEnv(t *testing.T, serverURL, projectKey, repoSlug string) {
 	t.Helper()
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", serverURL)
 	t.Setenv("BITBUCKET_PROJECT_KEY", projectKey)
 	t.Setenv("BITBUCKET_REPO_SLUG", repoSlug)

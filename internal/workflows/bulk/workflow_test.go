@@ -563,7 +563,7 @@ func TestDescribeOperation(t *testing.T) {
 func TestParsePolicyYAMLAndLoadPlanJSON(t *testing.T) {
 	t.Run("valid policy", func(t *testing.T) {
 		raw := []byte(`
-apiVersion: bbsc.io/v1alpha1
+apiVersion: bb.io/v1alpha1
 selector:
   projectKey: PRJ
 operations:
@@ -581,7 +581,7 @@ operations:
 
 	t.Run("invalid schema policy", func(t *testing.T) {
 		raw := []byte(`
-apiVersion: bbsc.io/v1alpha1
+apiVersion: bb.io/v1alpha1
 selector:
   projectKey: PRJ
 operations:

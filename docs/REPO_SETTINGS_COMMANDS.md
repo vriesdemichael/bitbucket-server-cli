@@ -4,14 +4,14 @@ This document captures the initial issue #1 UX contract for repository settings 
 
 ## Command tree (initial slice)
 
-- `bbsc repo settings security permissions users list [--repo PROJECT/slug] [--limit N]`
-- `bbsc repo settings security permissions users grant <username> <REPO_READ|REPO_WRITE|REPO_ADMIN> [--repo PROJECT/slug]`
-- `bbsc repo settings workflow webhooks list [--repo PROJECT/slug]`
-- `bbsc repo settings workflow webhooks create <name> <url> [--event ...] [--active] [--repo PROJECT/slug]`
-- `bbsc repo settings workflow webhooks delete <webhook-id> [--repo PROJECT/slug]`
-- `bbsc repo settings pull-requests get [--repo PROJECT/slug]`
-- `bbsc repo settings pull-requests update --required-all-tasks-complete=<bool> [--repo PROJECT/slug]`
-- `bbsc repo settings pull-requests update-approvers --count <N> [--repo PROJECT/slug]`
+- `bb repo settings security permissions users list [--repo PROJECT/slug] [--limit N]`
+- `bb repo settings security permissions users grant <username> <REPO_READ|REPO_WRITE|REPO_ADMIN> [--repo PROJECT/slug]`
+- `bb repo settings workflow webhooks list [--repo PROJECT/slug]`
+- `bb repo settings workflow webhooks create <name> <url> [--event ...] [--active] [--repo PROJECT/slug]`
+- `bb repo settings workflow webhooks delete <webhook-id> [--repo PROJECT/slug]`
+- `bb repo settings pull-requests get [--repo PROJECT/slug]`
+- `bb repo settings pull-requests update --required-all-tasks-complete=<bool> [--repo PROJECT/slug]`
+- `bb repo settings pull-requests update-approvers --count <N> [--repo PROJECT/slug]`
 
 Repository selection contract:
 
@@ -21,7 +21,7 @@ Repository selection contract:
 
 Notes:
 
-- Inference uses authenticated server contexts from stored auth/login profiles; switch active default host with `bbsc auth server use [host]` or `--host`.
+- Inference uses authenticated server contexts from stored auth/login profiles; switch active default host with `bb auth server use [host]` or `--host`.
 - If multiple remotes resolve to different repositories, commands fail with an explicit ambiguity error and require `--repo` (or host disambiguation).
 - Inferred repository context is applied to env and `--repo` flag state so commands that mark `--repo` required still execute.
 

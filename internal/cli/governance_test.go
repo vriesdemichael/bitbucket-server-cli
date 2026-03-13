@@ -14,7 +14,7 @@ import (
 )
 
 func TestReviewerCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -55,7 +55,7 @@ func TestReviewerCLI(t *testing.T) {
 }
 
 func TestHookCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -108,7 +108,7 @@ func TestHookCLI(t *testing.T) {
 }
 
 func TestProjectPermissionsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -173,7 +173,7 @@ func TestProjectPermissionsCLI(t *testing.T) {
 }
 
 func TestReviewerCLIErrors(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusForbidden)
 		_, _ = writer.Write([]byte(`{"errors":[{"message":"forbidden"}]}`))
@@ -190,7 +190,7 @@ func TestReviewerCLIErrors(t *testing.T) {
 }
 
 func TestHookCLIErrors(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -206,7 +206,7 @@ func TestHookCLIErrors(t *testing.T) {
 }
 
 func TestProjectPermissionsCLIErrors(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusBadRequest)
 	}))
@@ -222,7 +222,7 @@ func TestProjectPermissionsCLIErrors(t *testing.T) {
 }
 
 func TestRepoScopedGovernanceCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -275,7 +275,7 @@ func TestRepoScopedGovernanceCLI(t *testing.T) {
 }
 
 func TestRevokeAndStrategyCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -322,7 +322,7 @@ func TestRevokeAndStrategyCLI(t *testing.T) {
 }
 
 func TestHookConfigureCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/h1/settings" {
@@ -350,7 +350,7 @@ func TestHookConfigureCLI(t *testing.T) {
 }
 
 func TestHookConfigureFileAndStdinCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/h1/settings" {
@@ -385,7 +385,7 @@ func TestHookConfigureFileAndStdinCLI(t *testing.T) {
 }
 
 func TestReviewerConditionCreateCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPost && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/condition" {
@@ -413,7 +413,7 @@ func TestReviewerConditionCreateCLI(t *testing.T) {
 }
 
 func TestProjectPermissionsRevokeCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodDelete && (request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users" || request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/groups") {
@@ -445,7 +445,7 @@ func TestProjectPermissionsRevokeCLI(t *testing.T) {
 }
 
 func TestRepoSettingsPermissionsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -480,7 +480,7 @@ func TestRepoSettingsPermissionsCLI(t *testing.T) {
 }
 
 func TestRepoSettingsPullRequestsAdditionalCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/settings/pull-requests" {
@@ -509,7 +509,7 @@ func TestRepoSettingsPullRequestsAdditionalCLI(t *testing.T) {
 }
 
 func TestHumanOutputGovernanceCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -547,7 +547,7 @@ func TestHumanOutputGovernanceCLI(t *testing.T) {
 }
 
 func TestProjectPermissionsRevokeErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNotFound)
 	}))
@@ -571,7 +571,7 @@ func TestProjectPermissionsRevokeErrorsCLI(t *testing.T) {
 }
 
 func TestHookEnableDisableErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -593,7 +593,7 @@ func TestHookEnableDisableErrorsCLI(t *testing.T) {
 }
 
 func TestReviewerConditionDeleteErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNotFound)
 	}))
@@ -610,7 +610,7 @@ func TestReviewerConditionDeleteErrorsCLI(t *testing.T) {
 }
 
 func TestRepoSettingsPullRequestsHumanCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{"status":"ok"}`))
@@ -629,7 +629,7 @@ func TestRepoSettingsPullRequestsHumanCLI(t *testing.T) {
 }
 
 func TestReviewerCLIAdditional(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/conditions" {
@@ -649,7 +649,7 @@ func TestReviewerCLIAdditional(t *testing.T) {
 }
 
 func TestHookCLIAdditional(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/h1/settings" {
@@ -675,7 +675,7 @@ func TestHookCLIAdditional(t *testing.T) {
 }
 
 func TestRepoScopedGovernanceCLIAdditional(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -723,7 +723,7 @@ func TestRepoScopedGovernanceCLIAdditional(t *testing.T) {
 }
 
 func TestProjectCoreCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -759,7 +759,7 @@ func TestProjectCoreCLI(t *testing.T) {
 }
 
 func TestReviewerConditionCreateUpdateRepoCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -788,7 +788,7 @@ func TestReviewerConditionCreateUpdateRepoCLI(t *testing.T) {
 }
 
 func TestRepoSettingsWorkflowWebhooksCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -824,7 +824,7 @@ func TestRepoSettingsWorkflowWebhooksCLI(t *testing.T) {
 }
 
 func TestRepoSettingsPullRequestsErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusUnauthorized)
 	}))
@@ -846,7 +846,7 @@ func TestRepoSettingsPullRequestsErrorsCLI(t *testing.T) {
 }
 
 func TestHookConfigureBranchesCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/h1/settings" {
@@ -876,7 +876,7 @@ func TestHookConfigureBranchesCLI(t *testing.T) {
 }
 
 func TestReviewerConditionRepoBranchesCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodDelete && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/repos/demo/condition/1" {
@@ -901,7 +901,7 @@ func TestReviewerConditionRepoBranchesCLI(t *testing.T) {
 }
 
 func TestHookConfigureFileErrorCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost")
 	command := NewRootCommand()
 	command.SetArgs([]string{"hook", "configure", "h1", "--config-file", "nonexistent.json", "--project", "PRJ"})
@@ -911,7 +911,7 @@ func TestHookConfigureFileErrorCLI(t *testing.T) {
 }
 
 func TestHookEnableDisableHumanCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{"enabled":true}`))
@@ -930,7 +930,7 @@ func TestHookEnableDisableHumanCLI(t *testing.T) {
 }
 
 func TestProjectPermissionsListPaginationCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	var userCount atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
@@ -950,7 +950,7 @@ func TestProjectPermissionsListPaginationCLI(t *testing.T) {
 }
 
 func TestHookConfigureNoSettingsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/h1/settings" {
@@ -969,7 +969,7 @@ func TestHookConfigureNoSettingsCLI(t *testing.T) {
 }
 
 func TestPRReviewerCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/pull-requests/30/participants/u1" {
@@ -994,7 +994,7 @@ func TestPRReviewerCLI(t *testing.T) {
 }
 
 func TestReviewerConditionCreateProjectCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPost && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/condition" {
@@ -1014,7 +1014,7 @@ func TestReviewerConditionCreateProjectCLI(t *testing.T) {
 }
 
 func TestHookConfigureFileSuccessCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/h1/settings" {
@@ -1036,7 +1036,7 @@ func TestHookConfigureFileSuccessCLI(t *testing.T) {
 }
 
 func TestProjectConfigErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "://invalid")
 
 	commands := [][]string{
@@ -1063,7 +1063,7 @@ func TestProjectConfigErrorsCLI(t *testing.T) {
 }
 
 func TestProjectHumanCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -1093,7 +1093,7 @@ func TestProjectHumanCLI(t *testing.T) {
 }
 
 func TestHookConfigureRepoGetCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/settings/hooks/h1/settings" {
@@ -1112,7 +1112,7 @@ func TestHookConfigureRepoGetCLI(t *testing.T) {
 }
 
 func TestReviewerConditionCreateRepoSuccessCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPost && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/repos/demo/condition" {
@@ -1132,7 +1132,7 @@ func TestReviewerConditionCreateRepoSuccessCLI(t *testing.T) {
 }
 
 func TestProjectCoreCLIErrors(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusBadRequest)
 	}))
@@ -1159,7 +1159,7 @@ func TestProjectCoreCLIErrors(t *testing.T) {
 }
 
 func TestReviewerConditionCreateInvalidJSONCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	command := NewRootCommand()
 	command.SetArgs([]string{"reviewer", "condition", "create", "{invalid}"})
 	if err := command.Execute(); err == nil {
@@ -1168,7 +1168,7 @@ func TestReviewerConditionCreateInvalidJSONCLI(t *testing.T) {
 }
 
 func TestHookEnableDisableRepoErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNotFound)
 	}))
@@ -1190,7 +1190,7 @@ func TestHookEnableDisableRepoErrorsCLI(t *testing.T) {
 }
 
 func TestHookConfigureRepoErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusUnauthorized)
 	}))
@@ -1212,7 +1212,7 @@ func TestHookConfigureRepoErrorsCLI(t *testing.T) {
 }
 
 func TestHookConfigureFileInvalidJSONCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		http.NotFound(writer, request)
 	}))
@@ -1231,7 +1231,7 @@ func TestHookConfigureFileInvalidJSONCLI(t *testing.T) {
 }
 
 func TestProjectListFilterCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[{"key":"PRJ","name":"Project"}]}`))
@@ -1246,7 +1246,7 @@ func TestProjectListFilterCLI(t *testing.T) {
 }
 
 func TestProjectListEmptyCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[]}`))
@@ -1261,7 +1261,7 @@ func TestProjectListEmptyCLI(t *testing.T) {
 }
 
 func TestReviewerConditionListEmptyCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`[]`))
@@ -1276,7 +1276,7 @@ func TestReviewerConditionListEmptyCLI(t *testing.T) {
 }
 
 func TestHookListEmptyCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[]}`))
@@ -1317,7 +1317,7 @@ func TestRootHelpersCLI(t *testing.T) {
 }
 
 func TestReviewerConditionListHumanNotEmptyCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`[{"id":1}]`))
@@ -1332,7 +1332,7 @@ func TestReviewerConditionListHumanNotEmptyCLI(t *testing.T) {
 }
 
 func TestHookConfigureStdinSuccessCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPut && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/h1/settings" {
@@ -1353,7 +1353,7 @@ func TestHookConfigureStdinSuccessCLI(t *testing.T) {
 }
 
 func TestReviewerConditionUpdateCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPut {
@@ -1378,7 +1378,7 @@ func TestReviewerConditionUpdateCLI(t *testing.T) {
 }
 
 func TestPRCoreCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -1441,7 +1441,7 @@ func TestPRCoreCLI(t *testing.T) {
 }
 
 func TestPRApproveCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/pull-requests/30/participants/admin" {
@@ -1465,7 +1465,7 @@ func TestPRApproveCLI(t *testing.T) {
 }
 
 func TestReviewerConditionUpdateProjectFallbackCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPut && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/condition/1" {
@@ -1485,7 +1485,7 @@ func TestReviewerConditionUpdateProjectFallbackCLI(t *testing.T) {
 }
 
 func TestHookConfigureProjectGetCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks/h1/settings" {
@@ -1505,7 +1505,7 @@ func TestHookConfigureProjectGetCLI(t *testing.T) {
 }
 
 func TestHookConfigureRepoArgCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPut && strings.Contains(request.URL.Path, "settings") {
@@ -1524,7 +1524,7 @@ func TestHookConfigureRepoArgCLI(t *testing.T) {
 }
 
 func TestHookListDisabledHumanCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[{"enabled":false,"details":{"key":"h2","name":"Hook 2"}}]}`))
@@ -1539,7 +1539,7 @@ func TestHookListDisabledHumanCLI(t *testing.T) {
 }
 
 func TestPRMergeErrorCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusConflict)
 		_, _ = writer.Write([]byte(`{"errors":[{"message":"conflict"}]}`))
@@ -1556,7 +1556,7 @@ func TestPRMergeErrorCLI(t *testing.T) {
 }
 
 func TestHookConfigureEmptyFileCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost")
 	command := NewRootCommand()
 	tmpFile := filepath.Join(t.TempDir(), "empty.json")
@@ -1568,7 +1568,7 @@ func TestHookConfigureEmptyFileCLI(t *testing.T) {
 }
 
 func TestPullRequestRepoResolveFallbackCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
@@ -1580,7 +1580,7 @@ func TestPullRequestRepoResolveFallbackCLI(t *testing.T) {
 }
 
 func TestReviewerConditionDeleteFallbackCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodDelete && strings.Contains(request.URL.Path, "condition/1") {
@@ -1617,7 +1617,7 @@ func TestSafeHelpersNonNilCLI(t *testing.T) {
 }
 
 func TestMoreCLIErrorPaths(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -1694,7 +1694,7 @@ func TestMoreCLIErrorPaths(t *testing.T) {
 }
 
 func TestReviewerConditionUpdateFallbackCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPut && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/repos/demo/condition/1" {
@@ -1713,7 +1713,7 @@ func TestReviewerConditionUpdateFallbackCLI(t *testing.T) {
 }
 
 func TestReviewerConditionUpdateInvalidJSONCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	command := NewRootCommand()
 	command.SetArgs([]string{"reviewer", "condition", "update", "1", "{invalid}"})
 	if err := command.Execute(); err == nil {
@@ -1722,7 +1722,7 @@ func TestReviewerConditionUpdateInvalidJSONCLI(t *testing.T) {
 }
 
 func TestHookCLIBranchesAdditional(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -1781,7 +1781,7 @@ func TestHookCLIBranchesAdditional(t *testing.T) {
 }
 
 func TestReviewerCLIBranchesAdditional(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -1832,7 +1832,7 @@ func TestReviewerCLIBranchesAdditional(t *testing.T) {
 }
 
 func TestCLIAllRemainingBranches(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost")
 
 	// This test tries to hit all the "err != nil" branches in loadConfigAndClient and resolveRepositoryReference
@@ -1908,7 +1908,7 @@ func TestCLIAllRemainingBranches(t *testing.T) {
 }
 
 func TestPRCoreUpdateDeclineReopenCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -1971,7 +1971,7 @@ func TestPRCoreUpdateDeclineReopenCLI(t *testing.T) {
 }
 
 func TestPRCoreConfigErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "://invalid") // Cause config to fail due to invalid URL
 
 	commands := [][]string{
@@ -2004,7 +2004,7 @@ func TestPRCoreConfigErrorsCLI(t *testing.T) {
 }
 
 func TestPRCoreErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -2058,7 +2058,7 @@ func TestPRCoreErrorsCLI(t *testing.T) {
 }
 
 func TestPRSubCommandsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
@@ -2110,7 +2110,7 @@ func TestPRSubCommandsCLI(t *testing.T) {
 }
 
 func TestRepoSettingsPermissionsErrorsCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusInternalServerError)
 	}))
@@ -2144,7 +2144,7 @@ func TestRepoSettingsPermissionsErrorsCLI(t *testing.T) {
 }
 
 func TestRepoSettingsPermissionsMissingConfigCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "://invalid")
 
 	// Ensure config load fails

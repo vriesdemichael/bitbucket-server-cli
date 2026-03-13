@@ -11,7 +11,7 @@ import (
 )
 
 func TestHookConfigureMutualExclusionCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost")
 	command := NewRootCommand()
 	command.SetArgs([]string{"hook", "configure", "h1", "{}", "--config-file", "some.json", "--project", "PRJ"})
@@ -25,7 +25,7 @@ func TestHookConfigureMutualExclusionCLI(t *testing.T) {
 }
 
 func TestReviewerConditionCreateMutualExclusionCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost")
 	command := NewRootCommand()
 	command.SetArgs([]string{"reviewer", "condition", "create", "{}", "--config-file", "some.json", "--project", "PRJ"})
@@ -39,7 +39,7 @@ func TestReviewerConditionCreateMutualExclusionCLI(t *testing.T) {
 }
 
 func TestReviewerConditionUpdateMutualExclusionCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost")
 	command := NewRootCommand()
 	command.SetArgs([]string{"reviewer", "condition", "update", "1", "{}", "--config-file", "some.json", "--project", "PRJ"})
@@ -53,7 +53,7 @@ func TestReviewerConditionUpdateMutualExclusionCLI(t *testing.T) {
 }
 
 func TestReviewerConditionCreateFileAndStdinCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPost && strings.Contains(request.URL.Path, "condition") {
@@ -88,7 +88,7 @@ func TestReviewerConditionCreateFileAndStdinCLI(t *testing.T) {
 }
 
 func TestReviewerConditionUpdateFileAndStdinCLI(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json")
 		if request.Method == http.MethodPut && strings.Contains(request.URL.Path, "condition/1") {

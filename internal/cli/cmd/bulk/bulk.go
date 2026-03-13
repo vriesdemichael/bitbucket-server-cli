@@ -217,7 +217,7 @@ func writeJSONFile(filePath string, payload any) error {
 }
 
 func statusStoreDir() (string, error) {
-	if custom := strings.TrimSpace(os.Getenv("BBSC_BULK_STATUS_DIR")); custom != "" {
+	if custom := strings.TrimSpace(os.Getenv("BB_BULK_STATUS_DIR")); custom != "" {
 		return custom, nil
 	}
 
@@ -270,7 +270,7 @@ func writeStatusHuman(writer io.Writer, status bulkworkflow.ApplyStatus) {
 			fmt.Fprintf(writer, "  - %s\t%s\t%s\n", operation.Status, operation.Type, operation.Error)
 		}
 	}
-	fmt.Fprintf(writer, "Inspect saved status with: bbsc bulk status %s\n", status.OperationID)
+	fmt.Fprintf(writer, "Inspect saved status with: bb bulk status %s\n", status.OperationID)
 }
 
 func applyFailureError(status bulkworkflow.ApplyStatus) error {

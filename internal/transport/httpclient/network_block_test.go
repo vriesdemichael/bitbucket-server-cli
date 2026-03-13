@@ -9,7 +9,7 @@ import (
 )
 
 func TestExternalNetworkBlocking(t *testing.T) {
-	t.Setenv("BBSC_BLOCK_EXTERNAL_NETWORK", "1")
+	t.Setenv("BB_BLOCK_EXTERNAL_NETWORK", "1")
 	client := NewFromConfig(config.AppConfig{BitbucketURL: "http://external.invalid"})
 	
 	err := client.GetJSON(context.Background(), "/any", nil, nil)

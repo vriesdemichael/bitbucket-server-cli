@@ -196,10 +196,10 @@ jobs:
           mkdir -p dist
 
           VERSION_NO_V="${VERSION#v}"
-          BINARY_NAME="bbsc${BINARY_EXT}"
-          ARCHIVE_BASENAME="bbsc_${VERSION_NO_V}_${GOOS}_${GOARCH}"
+          BINARY_NAME="bb${BINARY_EXT}"
+          ARCHIVE_BASENAME="bb_${VERSION_NO_V}_${GOOS}_${GOARCH}"
 
-          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -o "$BINARY_NAME" ./cmd/bbsc
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -o "$BINARY_NAME" ./cmd/bb
 
           if [[ "$ARCHIVE" == "zip" ]]; then
             ARCHIVE_NAME="${ARCHIVE_BASENAME}.zip"

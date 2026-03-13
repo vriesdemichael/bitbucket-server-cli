@@ -12,8 +12,8 @@ import (
 )
 
 func TestExecuteRootCommandWithoutDiagnostics(t *testing.T) {
-	t.Setenv("BBSC_LOG_LEVEL", "")
-	t.Setenv("BBSC_LOG_FORMAT", "")
+	t.Setenv("BB_LOG_LEVEL", "")
+	t.Setenv("BB_LOG_FORMAT", "")
 
 	cmd := &cobra.Command{Use: "test", RunE: func(command *cobra.Command, args []string) error {
 		return apperrors.New(apperrors.KindValidation, "invalid input", nil)
@@ -32,8 +32,8 @@ func TestExecuteRootCommandWithoutDiagnostics(t *testing.T) {
 }
 
 func TestExecuteRootCommandWithDiagnosticsJSONL(t *testing.T) {
-	t.Setenv("BBSC_LOG_LEVEL", "error")
-	t.Setenv("BBSC_LOG_FORMAT", "jsonl")
+	t.Setenv("BB_LOG_LEVEL", "error")
+	t.Setenv("BB_LOG_FORMAT", "jsonl")
 
 	cmd := &cobra.Command{Use: "test", RunE: func(command *cobra.Command, args []string) error {
 		return apperrors.New(apperrors.KindValidation, "invalid input", nil)
@@ -71,8 +71,8 @@ func TestExecuteRootCommandWithDiagnosticsJSONL(t *testing.T) {
 }
 
 func TestKindFallbackForPlainErrors(t *testing.T) {
-	t.Setenv("BBSC_LOG_LEVEL", "error")
-	t.Setenv("BBSC_LOG_FORMAT", "jsonl")
+	t.Setenv("BB_LOG_LEVEL", "error")
+	t.Setenv("BB_LOG_FORMAT", "jsonl")
 
 	cmd := &cobra.Command{Use: "test", RunE: func(command *cobra.Command, args []string) error {
 		return errors.New("plain failure")
@@ -96,8 +96,8 @@ func TestKindFallbackForPlainErrors(t *testing.T) {
 }
 
 func TestExecuteRootCommandSuccess(t *testing.T) {
-	t.Setenv("BBSC_LOG_LEVEL", "")
-	t.Setenv("BBSC_LOG_FORMAT", "")
+	t.Setenv("BB_LOG_LEVEL", "")
+	t.Setenv("BB_LOG_FORMAT", "")
 
 	cmd := &cobra.Command{Use: "test", RunE: func(command *cobra.Command, args []string) error {
 		return nil
@@ -115,8 +115,8 @@ func TestExecuteRootCommandSuccess(t *testing.T) {
 
 func TestLoggerFromEnvironmentBranches(t *testing.T) {
 	t.Run("partial config uses defaults", func(t *testing.T) {
-		t.Setenv("BBSC_LOG_LEVEL", "")
-		t.Setenv("BBSC_LOG_FORMAT", "jsonl")
+		t.Setenv("BB_LOG_LEVEL", "")
+		t.Setenv("BB_LOG_FORMAT", "jsonl")
 
 		buffer := &bytes.Buffer{}
 		logger, enabled := loggerFromEnvironment(buffer)
@@ -131,8 +131,8 @@ func TestLoggerFromEnvironmentBranches(t *testing.T) {
 	})
 
 	t.Run("invalid level disables logger", func(t *testing.T) {
-		t.Setenv("BBSC_LOG_LEVEL", "trace")
-		t.Setenv("BBSC_LOG_FORMAT", "jsonl")
+		t.Setenv("BB_LOG_LEVEL", "trace")
+		t.Setenv("BB_LOG_FORMAT", "jsonl")
 
 		buffer := &bytes.Buffer{}
 		logger, enabled := loggerFromEnvironment(buffer)
@@ -147,8 +147,8 @@ func TestLoggerFromEnvironmentBranches(t *testing.T) {
 	})
 
 	t.Run("invalid format disables logger", func(t *testing.T) {
-		t.Setenv("BBSC_LOG_LEVEL", "error")
-		t.Setenv("BBSC_LOG_FORMAT", "yaml")
+		t.Setenv("BB_LOG_LEVEL", "error")
+		t.Setenv("BB_LOG_FORMAT", "yaml")
 
 		buffer := &bytes.Buffer{}
 		_, enabled := loggerFromEnvironment(buffer)

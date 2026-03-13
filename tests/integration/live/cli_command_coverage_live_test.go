@@ -392,9 +392,9 @@ func TestLiveCLIBuildRequiredAndInsightsHumanOutput(t *testing.T) {
 }
 
 func TestLiveCLIAuthStoredConfigFlow(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc-config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "0")
+	configPath := filepath.Join(t.TempDir(), "bb-config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "0")
 	t.Setenv("BITBUCKET_URL", "")
 	t.Setenv("BITBUCKET_TOKEN", "")
 	t.Setenv("BITBUCKET_USERNAME", "")
@@ -487,7 +487,7 @@ func TestLiveCLIPRListAndIssueCommandUnavailable(t *testing.T) {
 
 func TestLiveCLIAdminHealthOutputs(t *testing.T) {
 	harness := newLiveHarness(t)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", harness.config.BitbucketURL)
 	t.Setenv("BITBUCKET_USERNAME", harness.config.BitbucketUsername)
 	t.Setenv("BITBUCKET_PASSWORD", harness.config.BitbucketPassword)
@@ -628,7 +628,7 @@ func createRequiredBuildCheckWithRetry(t *testing.T, body string) (string, bool)
 func configureLiveCLIEnv(t *testing.T, harness *liveHarness, projectKey, repositorySlug string) {
 	t.Helper()
 
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", harness.config.BitbucketURL)
 	t.Setenv("BITBUCKET_PROJECT_KEY", projectKey)
 	t.Setenv("BITBUCKET_REPO_SLUG", repositorySlug)

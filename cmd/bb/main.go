@@ -47,8 +47,8 @@ func emitCommandFailureDiagnostic(err error, stderr io.Writer) {
 }
 
 func loggerFromEnvironment(stderr io.Writer) (*diagnostics.Logger, bool) {
-	rawLevel := strings.TrimSpace(os.Getenv("BBSC_LOG_LEVEL"))
-	rawFormat := strings.TrimSpace(os.Getenv("BBSC_LOG_FORMAT"))
+	rawLevel := strings.TrimSpace(os.Getenv("BB_LOG_LEVEL"))
+	rawFormat := strings.TrimSpace(os.Getenv("BB_LOG_FORMAT"))
 	enabled := rawLevel != "" || rawFormat != ""
 	if !enabled {
 		return diagnostics.NewLogger(diagnostics.Config{}, io.Discard), false

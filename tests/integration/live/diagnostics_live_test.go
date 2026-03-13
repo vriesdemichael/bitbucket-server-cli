@@ -14,8 +14,8 @@ import (
 func TestLiveDiagnosticsJSONLOnStderr(t *testing.T) {
 	harness := newLiveHarness(t)
 	configureLiveCLIEnv(t, harness, harness.config.ProjectKey, "")
-	t.Setenv("BBSC_LOG_LEVEL", "debug")
-	t.Setenv("BBSC_LOG_FORMAT", "jsonl")
+	t.Setenv("BB_LOG_LEVEL", "debug")
+	t.Setenv("BB_LOG_FORMAT", "jsonl")
 
 	command := cli.NewRootCommand()
 	stdout := &bytes.Buffer{}

@@ -20,7 +20,7 @@ import (
 
 func init() {
 	// Block external network access during tests by default
-	os.Setenv("BBSC_BLOCK_EXTERNAL_NETWORK", "1")
+	os.Setenv("BB_BLOCK_EXTERNAL_NETWORK", "1")
 }
 
 func TestHealthAuthenticated(t *testing.T) {

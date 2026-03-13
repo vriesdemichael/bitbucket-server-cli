@@ -52,7 +52,7 @@ func TestIsServerMutatingPath(t *testing.T) {
 
 func TestRegisterGlobalDryRunInterceptorsBulkApplyRejected(t *testing.T) {
 	options := &rootOptions{DryRun: true, JSON: true}
-	root := &cobra.Command{Use: "bbsc", SilenceErrors: true, SilenceUsage: true}
+	root := &cobra.Command{Use: "bb", SilenceErrors: true, SilenceUsage: true}
 	root.PersistentFlags().BoolVar(&options.DryRun, "dry-run", false, "")
 	root.PersistentFlags().BoolVar(&options.JSON, "json", false, "")
 
@@ -92,7 +92,7 @@ func TestRegisterGlobalDryRunInterceptorsBulkApplyRejected(t *testing.T) {
 
 func TestRegisterGlobalDryRunInterceptorsProfilePassthroughWhenDisabled(t *testing.T) {
 	options := &rootOptions{DryRun: false}
-	root := &cobra.Command{Use: "bbsc", SilenceErrors: true, SilenceUsage: true}
+	root := &cobra.Command{Use: "bb", SilenceErrors: true, SilenceUsage: true}
 	root.PersistentFlags().BoolVar(&options.DryRun, "dry-run", false, "")
 
 	expectedErr := errors.New("original execution")
@@ -120,7 +120,7 @@ func TestRegisterGlobalDryRunInterceptorsProfilePassthroughWhenDisabled(t *testi
 
 func TestRegisterGlobalDryRunInterceptorsNonMutatingPassthrough(t *testing.T) {
 	options := &rootOptions{DryRun: true}
-	root := &cobra.Command{Use: "bbsc", SilenceErrors: true, SilenceUsage: true}
+	root := &cobra.Command{Use: "bb", SilenceErrors: true, SilenceUsage: true}
 	root.PersistentFlags().BoolVar(&options.DryRun, "dry-run", false, "")
 
 	expectedErr := errors.New("read path invoked")
@@ -148,12 +148,12 @@ func TestRegisterGlobalDryRunInterceptorsNonMutatingPassthrough(t *testing.T) {
 
 func TestRegisterGlobalDryRunInterceptorsNilSafety(t *testing.T) {
 	registerGlobalDryRunInterceptors(nil, &rootOptions{})
-	registerGlobalDryRunInterceptors(&cobra.Command{Use: "bbsc"}, nil)
+	registerGlobalDryRunInterceptors(&cobra.Command{Use: "bb"}, nil)
 }
 
 func TestRegisterGlobalDryRunInterceptorsPassthroughPath(t *testing.T) {
 	options := &rootOptions{DryRun: true}
-	root := &cobra.Command{Use: "bbsc", SilenceErrors: true, SilenceUsage: true}
+	root := &cobra.Command{Use: "bb", SilenceErrors: true, SilenceUsage: true}
 	root.PersistentFlags().BoolVar(&options.DryRun, "dry-run", false, "")
 
 	expectedErr := errors.New("branch delete executed")
@@ -226,7 +226,7 @@ func TestNewDryRunPreviewIncludesRepositoryAndArgs(t *testing.T) {
 }
 
 func TestNewDryRunPreviewIncludesInheritedRepositoryFlag(t *testing.T) {
-	root := &cobra.Command{Use: "bbsc"}
+	root := &cobra.Command{Use: "bb"}
 	root.PersistentFlags().String("repo", "", "")
 	if err := root.PersistentFlags().Set("repo", "PRJ/inherited"); err != nil {
 		t.Fatalf("set repo flag failed: %v", err)
@@ -451,7 +451,7 @@ func TestDryRunCommandPath(t *testing.T) {
 	if dryRunCommandPath(nil) != "" {
 		t.Fatal("expected empty path for nil command")
 	}
-	command := &cobra.Command{Use: "bbsc"}
+	command := &cobra.Command{Use: "bb"}
 	sub := &cobra.Command{Use: "project"}
 	leaf := &cobra.Command{Use: "create"}
 	command.AddCommand(sub)
@@ -461,14 +461,14 @@ func TestDryRunCommandPath(t *testing.T) {
 		t.Fatalf("expected command path 'project create', got: %q", got)
 	}
 
-	if got := fmt.Sprintf("%s", dryRunCommandPath(command)); got != "bbsc" {
-		t.Fatalf("expected root path to remain bbsc, got: %q", got)
+	if got := fmt.Sprintf("%s", dryRunCommandPath(command)); got != "bb" {
+		t.Fatalf("expected root path to remain bb, got: %q", got)
 	}
 }
 
 func TestRegisterGlobalDryRunInterceptorsNotImplemented(t *testing.T) {
 	options := &rootOptions{DryRun: true}
-	root := &cobra.Command{Use: "bbsc"}
+	root := &cobra.Command{Use: "bb"}
 	root.PersistentFlags().BoolVar(&options.DryRun, "dry-run", false, "")
 
 	mutatingWithoutProfile := &cobra.Command{

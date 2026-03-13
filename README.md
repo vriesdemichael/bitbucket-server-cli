@@ -78,29 +78,29 @@ Coverage/reporting workflow:
 
 Download artifacts from the release page for a specific version:
 
-- `bbsc_<version>_linux_amd64.tar.gz`
-- `bbsc_<version>_linux_arm64.tar.gz`
-- `bbsc_<version>_darwin_amd64.tar.gz`
-- `bbsc_<version>_darwin_arm64.tar.gz`
-- `bbsc_<version>_windows_amd64.zip`
-- `bbsc_<version>_windows_arm64.zip`
+- `bb_<version>_linux_amd64.tar.gz`
+- `bb_<version>_linux_arm64.tar.gz`
+- `bb_<version>_darwin_amd64.tar.gz`
+- `bb_<version>_darwin_arm64.tar.gz`
+- `bb_<version>_windows_amd64.zip`
+- `bb_<version>_windows_arm64.zip`
 - `sha256sums.txt`
 
 Example (Linux amd64, version `v0.1.0`):
 
 - `VERSION=v0.1.0`
-- `curl -LO "https://github.com/vriesdemichael/bitbucket-server-cli/releases/download/${VERSION}/bbsc_${VERSION#v}_linux_amd64.tar.gz"`
+- `curl -LO "https://github.com/vriesdemichael/bitbucket-server-cli/releases/download/${VERSION}/bb_${VERSION#v}_linux_amd64.tar.gz"`
 - `curl -LO "https://github.com/vriesdemichael/bitbucket-server-cli/releases/download/${VERSION}/sha256sums.txt"`
 - `sha256sum -c sha256sums.txt --ignore-missing`
-- `tar -xzf "bbsc_${VERSION#v}_linux_amd64.tar.gz"`
-- `chmod +x bbsc`
-- `./bbsc --help`
+- `tar -xzf "bb_${VERSION#v}_linux_amd64.tar.gz"`
+- `chmod +x bb`
+- `./bb --help`
 
 Optional provenance verification (GitHub CLI):
 
-- `gh attestation verify bbsc_${VERSION#v}_linux_amd64.tar.gz --repo vriesdemichael/bitbucket-server-cli`
+- `gh attestation verify bb_${VERSION#v}_linux_amd64.tar.gz --repo vriesdemichael/bitbucket-server-cli`
 
-Source-based fallback remains available via `go run ./cmd/bbsc --help`.
+Source-based fallback remains available via `go run ./cmd/bb --help`.
 
 Runtime environment variables:
 
@@ -108,13 +108,13 @@ Runtime environment variables:
 - `BITBUCKET_TOKEN` (optional)
 - `BITBUCKET_USERNAME` + `BITBUCKET_PASSWORD` (optional basic auth; `BITBUCKET_USER` is accepted as alias for username)
 - `ADMIN_USER` + `ADMIN_PASSWORD` fallback for local setup compatibility
-- `BBSC_CA_FILE` (optional path to PEM CA bundle for custom trust chains)
-- `BBSC_INSECURE_SKIP_VERIFY` (optional bool, default `false`; disables TLS cert verification for local/dev only)
-- `BBSC_REQUEST_TIMEOUT` (optional Go duration, default `20s`)
-- `BBSC_RETRY_COUNT` (optional non-negative integer, default `2`)
-- `BBSC_RETRY_BACKOFF` (optional Go duration, default `250ms`)
-- `BBSC_LOG_LEVEL` (optional: `error|warn|info|debug`, default `error`)
-- `BBSC_LOG_FORMAT` (optional: `text|jsonl`, default `text`)
+- `BB_CA_FILE` (optional path to PEM CA bundle for custom trust chains)
+- `BB_INSECURE_SKIP_VERIFY` (optional bool, default `false`; disables TLS cert verification for local/dev only)
+- `BB_REQUEST_TIMEOUT` (optional Go duration, default `20s`)
+- `BB_RETRY_COUNT` (optional non-negative integer, default `2`)
+- `BB_RETRY_BACKOFF` (optional Go duration, default `250ms`)
+- `BB_LOG_LEVEL` (optional: `error|warn|info|debug`, default `error`)
+- `BB_LOG_FORMAT` (optional: `text|jsonl`, default `text`)
 
 Equivalent global CLI flags (highest precedence):
 
@@ -129,13 +129,13 @@ Equivalent global CLI flags (highest precedence):
 
 Authentication workflow:
 
-- `go run ./cmd/bbsc auth login --host http://localhost:7990 --username admin --password admin`
-- `go run ./cmd/bbsc auth status`
-- `go run ./cmd/bbsc auth server list`
-- `go run ./cmd/bbsc auth server use --host http://localhost:7990`
-- `go run ./cmd/bbsc --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
-- `go run ./cmd/bbsc --log-level debug auth status`
-- `go run ./cmd/bbsc --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl`
+- `go run ./cmd/bb auth login --host http://localhost:7990 --username admin --password admin`
+- `go run ./cmd/bb auth status`
+- `go run ./cmd/bb auth server list`
+- `go run ./cmd/bb auth server use --host http://localhost:7990`
+- `go run ./cmd/bb --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
+- `go run ./cmd/bb --log-level debug auth status`
+- `go run ./cmd/bb --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl`
 
 Dry-run behavior:
 
@@ -149,9 +149,9 @@ Dry-run behavior:
 Repository context behavior:
 
 - `--repo PROJECT/slug` always has highest precedence.
-- When `--repo` is omitted, bbsc tries to infer repository context from local git remotes that match an authenticated host profile.
+- When `--repo` is omitted, bb tries to infer repository context from local git remotes that match an authenticated host profile.
 - Inference also populates the `--repo` flag internally, so commands that mark `--repo` as required continue to work without explicitly passing it.
-- If multiple remotes map to different repositories, bbsc returns an ambiguity error and asks you to pass `--repo` and/or select a server with `auth server use --host`.
+- If multiple remotes map to different repositories, bb returns an ambiguity error and asks you to pass `--repo` and/or select a server with `auth server use --host`.
 - Non-repository directories (or remotes that do not match authenticated hosts) fall back to the normal repository-required validation message.
 
 Diagnostics and supportability notes:
@@ -163,33 +163,33 @@ Diagnostics and supportability notes:
 
 JSON output contract (`--json`):
 
-- Every machine-mode response is wrapped in a versioned envelope: `{ "version": "v1", "data": <command payload>, "meta": { "contract": "bbsc.machine" } }`.
+- Every machine-mode response is wrapped in a versioned envelope: `{ "version": "v2", "data": <command payload>, "meta": { "contract": "bb.machine" } }`.
 - `data` preserves the existing command-specific shape (arrays/objects/scalars) inside the envelope.
-- Backward-compatible changes for `v1`: additive fields only.
+- Backward-compatible changes for `v2`: additive fields only.
 - Breaking changes (field removal/rename/type changes or envelope shape changes) require a new contract version and migration notes.
-- `go run ./cmd/bbsc auth logout`
-- `go run ./cmd/bbsc diff refs main feature --repo TEST/my-repo`
-- `go run ./cmd/bbsc diff pr 123 --repo TEST/my-repo --patch`
-- `go run ./cmd/bbsc diff commit <sha> --repo TEST/my-repo --path seed.txt`
-- `go run ./cmd/bbsc repo comment list --repo TEST/my-repo --commit <sha> --path seed.txt`
-- `go run ./cmd/bbsc repo comment create --repo TEST/my-repo --pr 123 --text "Looks good"`
-- `go run ./cmd/bbsc repo comment update --repo TEST/my-repo --commit <sha> --id 42 --text "Updated text"`
-- `go run ./cmd/bbsc repo comment delete --repo TEST/my-repo --pr 123 --id 42`
-- `go run ./cmd/bbsc tag list --repo TEST/my-repo --limit 50 --order-by ALPHABETICAL`
-- `go run ./cmd/bbsc tag create v1.2.3 --repo TEST/my-repo --start-point <sha> --message "release v1.2.3"`
-- `go run ./cmd/bbsc tag view v1.2.3 --repo TEST/my-repo`
-- `go run ./cmd/bbsc tag delete v1.2.3 --repo TEST/my-repo`
-- `go run ./cmd/bbsc build status set <sha> --key ci/main --state SUCCESSFUL --url https://ci.example/build/42`
-- `go run ./cmd/bbsc build status get <sha> --order-by NEWEST --limit 25`
-- `go run ./cmd/bbsc build status stats <sha> --include-unique`
-- `go run ./cmd/bbsc build required list --repo TEST/my-repo`
-- `go run ./cmd/bbsc build required create --repo TEST/my-repo --body '{"buildParentKeys":["ci"],"refMatcher":{"id":"refs/heads/master"}}'`
-- `go run ./cmd/bbsc insights report set <sha> lint --repo TEST/my-repo --body '{"title":"Lint","result":"PASS","data":[{"title":"warnings","type":"NUMBER","value":{"value":0}}]}'`
-- `go run ./cmd/bbsc insights report get <sha> lint --repo TEST/my-repo`
-- `go run ./cmd/bbsc insights annotation add <sha> lint --repo TEST/my-repo --body '[{"externalId":"lint-1","message":"Fix warning","severity":"MEDIUM","path":"seed.txt","line":1}]'`
-- `go run ./cmd/bbsc bulk plan -f docs/examples/bulk-policy.yaml -o .tmp/bulk-plan.json`
-- `go run ./cmd/bbsc bulk apply --from-plan .tmp/bulk-plan.json`
-- `go run ./cmd/bbsc bulk status <operation-id>`
+- `go run ./cmd/bb auth logout`
+- `go run ./cmd/bb diff refs main feature --repo TEST/my-repo`
+- `go run ./cmd/bb diff pr 123 --repo TEST/my-repo --patch`
+- `go run ./cmd/bb diff commit <sha> --repo TEST/my-repo --path seed.txt`
+- `go run ./cmd/bb repo comment list --repo TEST/my-repo --commit <sha> --path seed.txt`
+- `go run ./cmd/bb repo comment create --repo TEST/my-repo --pr 123 --text "Looks good"`
+- `go run ./cmd/bb repo comment update --repo TEST/my-repo --commit <sha> --id 42 --text "Updated text"`
+- `go run ./cmd/bb repo comment delete --repo TEST/my-repo --pr 123 --id 42`
+- `go run ./cmd/bb tag list --repo TEST/my-repo --limit 50 --order-by ALPHABETICAL`
+- `go run ./cmd/bb tag create v1.2.3 --repo TEST/my-repo --start-point <sha> --message "release v1.2.3"`
+- `go run ./cmd/bb tag view v1.2.3 --repo TEST/my-repo`
+- `go run ./cmd/bb tag delete v1.2.3 --repo TEST/my-repo`
+- `go run ./cmd/bb build status set <sha> --key ci/main --state SUCCESSFUL --url https://ci.example/build/42`
+- `go run ./cmd/bb build status get <sha> --order-by NEWEST --limit 25`
+- `go run ./cmd/bb build status stats <sha> --include-unique`
+- `go run ./cmd/bb build required list --repo TEST/my-repo`
+- `go run ./cmd/bb build required create --repo TEST/my-repo --body '{"buildParentKeys":["ci"],"refMatcher":{"id":"refs/heads/master"}}'`
+- `go run ./cmd/bb insights report set <sha> lint --repo TEST/my-repo --body '{"title":"Lint","result":"PASS","data":[{"title":"warnings","type":"NUMBER","value":{"value":0}}]}'`
+- `go run ./cmd/bb insights report get <sha> lint --repo TEST/my-repo`
+- `go run ./cmd/bb insights annotation add <sha> lint --repo TEST/my-repo --body '[{"externalId":"lint-1","message":"Fix warning","severity":"MEDIUM","path":"seed.txt","line":1}]'`
+- `go run ./cmd/bb bulk plan -f docs/examples/bulk-policy.yaml -o .tmp/bulk-plan.json`
+- `go run ./cmd/bb bulk apply --from-plan .tmp/bulk-plan.json`
+- `go run ./cmd/bb bulk status <operation-id>`
 - Bulk JSON Schemas: `docs/reference/schemas/bulk-policy.schema.json`, `docs/reference/schemas/bulk-plan.schema.json`, `docs/reference/schemas/bulk-apply-status.schema.json`
 
 Bulk policy workflow:
@@ -198,7 +198,7 @@ Bulk policy workflow:
 - Selector support: `projectKey`, `repoPattern`, and explicit `repositories`
 - Initial operation types: `repo.permission.user.grant`, `repo.permission.group.grant`, `repo.webhook.create`, `repo.pull-request-settings.required-all-tasks-complete`, `repo.pull-request-settings.required-approvers-count`, `build.required.create`
 - `bulk plan` performs no writes and emits a deterministic reviewed plan artifact with a `planHash`; this is the preview/dry-run mechanism for bulk workflows
-- `bulk apply` executes only operations embedded in the reviewed plan and persists result status under the local BBSC config directory (override with `BBSC_BULK_STATUS_DIR`)
+- `bulk apply` executes only operations embedded in the reviewed plan and persists result status under the local BB config directory (override with `BB_BULK_STATUS_DIR`)
 - Example policy: `docs/examples/bulk-policy.yaml`
 - Schema export command: `go run ./tools/bulk-schema-export -out docs/reference/schemas`
 
@@ -207,7 +207,7 @@ Runtime config precedence:
 1. CLI flags
 2. Environment variables / `.env`
 3. Git remote inference (repo + host context, when `--repo` is omitted and a unique authenticated remote match exists)
-4. Stored config (`~/.config/bbsc/config.yaml`) + keyring/fallback secrets
+4. Stored config (`~/.config/bb/config.yaml`) + keyring/fallback secrets
 5. Built-in defaults
 
 API reference source:

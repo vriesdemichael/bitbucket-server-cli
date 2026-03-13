@@ -133,10 +133,10 @@ func (h *liveHarness) pushCommitsToRepository(projectKey, repositorySlug string,
 	if err := runGit(tempDir, "checkout", "-b", "master"); err != nil {
 		return fmt.Errorf("git checkout master failed: %w", err)
 	}
-	if err := runGit(tempDir, "config", "user.name", "bbsc-live-test"); err != nil {
+	if err := runGit(tempDir, "config", "user.name", "bb-live-test"); err != nil {
 		return fmt.Errorf("git config user.name failed: %w", err)
 	}
-	if err := runGit(tempDir, "config", "user.email", "bbsc-live-test@example.local"); err != nil {
+	if err := runGit(tempDir, "config", "user.email", "bb-live-test@example.local"); err != nil {
 		return fmt.Errorf("git config user.email failed: %w", err)
 	}
 
@@ -178,10 +178,10 @@ func (h *liveHarness) pushCommitOnBranch(projectKey, repositorySlug, branch, fil
 	if err := runGit(tempDir, "init"); err != nil {
 		return fmt.Errorf("git init failed: %w", err)
 	}
-	if err := runGit(tempDir, "config", "user.name", "bbsc-live-test"); err != nil {
+	if err := runGit(tempDir, "config", "user.name", "bb-live-test"); err != nil {
 		return fmt.Errorf("git config user.name failed: %w", err)
 	}
-	if err := runGit(tempDir, "config", "user.email", "bbsc-live-test@example.local"); err != nil {
+	if err := runGit(tempDir, "config", "user.email", "bb-live-test@example.local"); err != nil {
 		return fmt.Errorf("git config user.email failed: %w", err)
 	}
 

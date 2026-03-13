@@ -62,13 +62,13 @@ func TestBulkPlanApplyAndStatusCommands(t *testing.T) {
 
 	tempDir := t.TempDir()
 	statusDir := filepath.Join(tempDir, "status")
-	t.Setenv("BBSC_BULK_STATUS_DIR", statusDir)
-	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(tempDir, "config.yaml"))
+	t.Setenv("BB_BULK_STATUS_DIR", statusDir)
+	t.Setenv("BB_CONFIG_PATH", filepath.Join(tempDir, "config.yaml"))
 
 	policyPath := filepath.Join(tempDir, "policy.yaml")
 	planPath := filepath.Join(tempDir, "plan.json")
 	policy := strings.Join([]string{
-		"apiVersion: bbsc.io/v1alpha1",
+		"apiVersion: bb.io/v1alpha1",
 		"selector:",
 		"  projectKey: PRJ",
 		"  repoPattern: repo-*",
@@ -162,8 +162,8 @@ func TestBulkApplyReturnsStructuredFailure(t *testing.T) {
 	defer server.Close()
 
 	tempDir := t.TempDir()
-	t.Setenv("BBSC_BULK_STATUS_DIR", filepath.Join(tempDir, "status"))
-	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(tempDir, "config.yaml"))
+	t.Setenv("BB_BULK_STATUS_DIR", filepath.Join(tempDir, "status"))
+	t.Setenv("BB_CONFIG_PATH", filepath.Join(tempDir, "config.yaml"))
 
 	planner := bulkworkflow.NewPlanner(fakeCatalog{repositories: map[string][]repository.Repository{
 		"PRJ": {{ProjectKey: "PRJ", Slug: "repo-a", Name: "Repo A"}},
@@ -233,7 +233,7 @@ func TestBulkCommandErrorPaths(t *testing.T) {
 	})
 
 	t.Run("status missing operation", func(t *testing.T) {
-		t.Setenv("BBSC_BULK_STATUS_DIR", tempDir)
+		t.Setenv("BB_BULK_STATUS_DIR", tempDir)
 		cmd := New(deps)
 		cmd.SetArgs([]string{"status", "missing-op"})
 		if err := cmd.Execute(); err == nil {
@@ -244,7 +244,7 @@ func TestBulkCommandErrorPaths(t *testing.T) {
 
 func TestBulkHumanOutput(t *testing.T) {
 	tempDir := t.TempDir()
-	t.Setenv("BBSC_BULK_STATUS_DIR", tempDir)
+	t.Setenv("BB_BULK_STATUS_DIR", tempDir)
 
 	deps := Dependencies{
 		JSONEnabled: func() bool { return false },
@@ -265,7 +265,7 @@ func TestBulkHumanOutput(t *testing.T) {
 
 		policyPath := filepath.Join(tempDir, "p.yaml")
 		_ = os.WriteFile(policyPath, []byte(`
-apiVersion: bbsc.io/v1alpha1
+apiVersion: bb.io/v1alpha1
 selector:
   projectKey: P
 operations:
@@ -355,8 +355,8 @@ func TestParseErrorKindCoverage(t *testing.T) {
 }
 
 func TestStatusStoreDirDefault(t *testing.T) {
-	t.Setenv("BBSC_BULK_STATUS_DIR", "")
-	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(t.TempDir(), "config.yaml"))
+	t.Setenv("BB_BULK_STATUS_DIR", "")
+	t.Setenv("BB_CONFIG_PATH", filepath.Join(t.TempDir(), "config.yaml"))
 	dir, err := statusStoreDir()
 	if err != nil || !strings.Contains(dir, "bulk-status") {
 		t.Fatalf("expected bulk-status path, got %s (%v)", dir, err)
@@ -364,7 +364,7 @@ func TestStatusStoreDirDefault(t *testing.T) {
 }
 
 func TestStatusStoreDirEnv(t *testing.T) {
-	t.Setenv("BBSC_BULK_STATUS_DIR", "/tmp/bulk")
+	t.Setenv("BB_BULK_STATUS_DIR", "/tmp/bulk")
 	dir, err := statusStoreDir()
 	if err != nil || dir != "/tmp/bulk" {
 		t.Fatalf("expected /tmp/bulk, got %s (%v)", dir, err)
