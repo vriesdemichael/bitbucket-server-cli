@@ -139,7 +139,7 @@ Equivalent global CLI flags (highest precedence):
 
 Authentication workflow:
 
-- `bb auth login --host https://bitbucket.acme.corp --username your.name --token <personal-access-token>`
+- `bb auth login --host https://bitbucket.acme.corp --token "$BB_TOKEN"`
 - `bb auth status`
 - `bb auth server list`
 - `bb auth server use --host https://bitbucket.acme.corp`
