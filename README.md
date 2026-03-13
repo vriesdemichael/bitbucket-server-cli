@@ -21,6 +21,7 @@ Common commands:
 - `task --list`
 - `task quality:validate-decisions`
 - `task docs:refresh-openapi`
+- `task docs:validate`
 - `task models:generate`
 - `task models:verify`
 - `task client:generate`
@@ -73,6 +74,13 @@ Coverage/reporting workflow:
 	- Generates a `sha256sums.txt` manifest for all packaged artifacts
 	- Publishes GitHub-native build provenance attestations for release artifacts
 	- Generates rich release notes from Conventional Commit history (breaking changes + commit/compare links), emits `changelog.json`, tags the commit, and publishes a GitHub release with attached artifacts
+	- Publishes versioned docs to GitHub Pages (`gh-pages`) via `mike` with `latest` alias
+
+Docs versioning/publishing:
+
+- Built docs content is versioned by release tag (for example `v0.1.0`) and aliased to `latest`.
+- Publication is wired into the release workflow and runs when a release is produced.
+- Non-release changes are validated via CI (`task docs:build`) and pre-push (`task docs:validate`).
 
 ## Binary installation (GitHub releases)
 

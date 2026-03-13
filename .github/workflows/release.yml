@@ -174,6 +174,17 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+
       - name: Validate version input
         env:
           VERSION: ${{ needs.determine-version.outputs.version }}
@@ -443,3 +454,12 @@ jobs:
           else
             gh release create "$VERSION" --title "$VERSION" --notes-file RELEASE_NOTES.md dist/* changelog.json
           fi
+
+      - name: Publish versioned docs to GitHub Pages branch
+        env:
+          VERSION: ${{ needs.determine-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          task docs:deploy-version VERSION="$VERSION"
