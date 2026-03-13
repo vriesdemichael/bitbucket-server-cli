@@ -179,6 +179,33 @@ jobs:
             COVERAGE_MAX_UNCOVERED_SMALL_PATCH="$COVERAGE_MAX_UNCOVERED_SMALL_PATCH" \
             COVERAGE_MIN_CONTRACT="$COVERAGE_MIN_CONTRACT"
 
+  docs-site:
+    name: Docs Site
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+
+      - name: Build docs site
+        run: task docs:build
+
   ci-complete:
     name: CI Complete
     runs-on: ubuntu-latest
@@ -187,6 +214,7 @@ jobs:
       - adr-validation
       - unit-tests
       - coverage-report-policy
+      - docs-site
     if: always()
     steps:
       - name: Verify all required CI jobs passed
@@ -195,8 +223,10 @@ jobs:
           ADR_VALIDATION_RESULT: ${{ needs.adr-validation.result }}
           UNIT_TESTS_RESULT: ${{ needs.unit-tests.result }}
           COVERAGE_REPORT_POLICY_RESULT: ${{ needs.coverage-report-policy.result }}
+          DOCS_SITE_RESULT: ${{ needs.docs-site.result }}
         run: |
           [[ "$LINEAR_HISTORY_RESULT" == "success" ]]
           [[ "$ADR_VALIDATION_RESULT" == "success" ]]
           [[ "$UNIT_TESTS_RESULT" == "success" ]]
           [[ "$COVERAGE_REPORT_POLICY_RESULT" == "success" ]]
+          [[ "$DOCS_SITE_RESULT" == "success" ]]
