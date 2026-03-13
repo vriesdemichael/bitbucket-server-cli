@@ -6,6 +6,7 @@ vars:
   BITBUCKET_OPENAPI_TARGET: docs/reference/atlassian/bitbucket-9.4-openapi.json
   BITBUCKET_OPENAPI_TMP: .tmp/bitbucket-9.4-openapi.json
   BITBUCKET_OPENAPI_SANITIZED_TMP: .tmp/bitbucket-9.4-openapi.sanitized.json
+  DOCS_PROJECT_DIR: docs
   COVERAGE_BASE_REF: origin/main
   COVERAGE_MIN_GLOBAL_COMBINED: "85"
   COVERAGE_MIN_PATCH: "85"
@@ -25,6 +26,25 @@ tasks:
       - curl -fsSL '{{.BITBUCKET_OPENAPI_URL}}' -o '{{.BITBUCKET_OPENAPI_TMP}}'
       - python3 -c "import json; d=json.load(open('.tmp/bitbucket-9.4-openapi.json', 'r', encoding='utf-8')); assert d.get('openapi') == '3.0.1', 'unexpected openapi version'; assert d.get('info', {}).get('version') == '9.4', 'unexpected API version'; print('validated openapi paths=' + str(len(d.get('paths', {}))))"
       - cp '{{.BITBUCKET_OPENAPI_TMP}}' '{{.BITBUCKET_OPENAPI_TARGET}}'
+
+  docs:build:
+    desc: Build MkDocs site with strict checks
+    cmds:
+      - uv run --project '{{.DOCS_PROJECT_DIR}}' mkdocs build --strict
+
+  docs:serve:
+    desc: Serve MkDocs site locally
+    cmds:
+      - uv run --project '{{.DOCS_PROJECT_DIR}}' mkdocs serve --dev-addr 127.0.0.1:8000
+
+  docs:deploy-version:
+    desc: Deploy versioned docs to gh-pages via mike (requires VERSION)
+    requires:
+      vars:
+        - VERSION
+    cmds:
+      - uv run --project '{{.DOCS_PROJECT_DIR}}' mike deploy --push --update-aliases {{.VERSION}} latest
+      - uv run --project '{{.DOCS_PROJECT_DIR}}' mike set-default --push latest
 
   models:generate:
     desc: Generate Go models from vendored Bitbucket 9.4 OpenAPI spec

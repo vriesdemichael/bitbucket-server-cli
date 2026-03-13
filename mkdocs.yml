@@ -1,0 +1,36 @@
+site_name: Bitbucket Server CLI
+site_description: CLI automation for Bitbucket Server and Data Center
+site_url: https://vriesdemichael.github.io/bitbucket-server-cli/
+repo_url: https://github.com/vriesdemichael/bitbucket-server-cli
+repo_name: vriesdemichael/bitbucket-server-cli
+docs_dir: docs/site
+site_dir: site
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      accent: teal
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: teal
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
+
+nav:
+  - Home: index.md
+  - Quickstart: quickstart.md
+  - Command Focus: command-focus.md
