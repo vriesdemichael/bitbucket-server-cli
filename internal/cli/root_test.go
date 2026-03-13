@@ -38,6 +38,10 @@ func (stub inferenceGitBackendStub) Clone(context.Context, string, git.CloneOpti
 	return nil
 }
 
+func (stub inferenceGitBackendStub) AddRemote(context.Context, string, git.Remote) error {
+	return nil
+}
+
 func (stub inferenceGitBackendStub) Fetch(context.Context, string, git.FetchOptions) error {
 	return nil
 }

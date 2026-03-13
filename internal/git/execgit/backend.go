@@ -48,6 +48,9 @@ func (backend *Backend) Clone(ctx context.Context, repositoryURL string, options
 	if options.Depth > 0 {
 		args = append(args, "--depth", fmt.Sprintf("%d", options.Depth))
 	}
+	if len(options.ExtraArgs) > 0 {
+		args = append(args, options.ExtraArgs...)
+	}
 
 	_, err := backend.run(ctx, runOptions{args: args})
 	return err
@@ -64,6 +67,25 @@ func (backend *Backend) Fetch(ctx context.Context, repositoryDirectory string, o
 	}
 
 	_, err := backend.run(ctx, runOptions{cwd: repositoryDirectory, args: args})
+	return err
+}
+
+func (backend *Backend) AddRemote(ctx context.Context, repositoryDirectory string, remote git.Remote) error {
+	if strings.TrimSpace(repositoryDirectory) == "" {
+		return apperrors.New(apperrors.KindValidation, "repository directory cannot be empty", nil)
+	}
+
+	name := strings.TrimSpace(remote.Name)
+	if name == "" {
+		return apperrors.New(apperrors.KindValidation, "remote name cannot be empty", nil)
+	}
+
+	remoteURL := strings.TrimSpace(remote.URL)
+	if remoteURL == "" {
+		return apperrors.New(apperrors.KindValidation, "remote URL cannot be empty", nil)
+	}
+
+	_, err := backend.run(ctx, runOptions{cwd: repositoryDirectory, args: []string{"remote", "add", name, remoteURL}})
 	return err
 }
 

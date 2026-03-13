@@ -6,6 +6,7 @@ type CloneOptions struct {
 	Directory string
 	Branch    string
 	Depth     int
+	ExtraArgs []string
 }
 
 type FetchOptions struct {
@@ -24,6 +25,7 @@ type Remote struct {
 type Backend interface {
 	Version(ctx context.Context) (string, error)
 	Clone(ctx context.Context, repositoryURL string, options CloneOptions) error
+	AddRemote(ctx context.Context, repositoryDirectory string, remote Remote) error
 	Fetch(ctx context.Context, repositoryDirectory string, options FetchOptions) error
 	Checkout(ctx context.Context, repositoryDirectory string, options CheckoutOptions) error
 	RepositoryRoot(ctx context.Context, workingDirectory string) (string, error)

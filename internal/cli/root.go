@@ -71,6 +71,7 @@ func NewRootCommand() *cobra.Command {
 	rootCmd.AddCommand(newProjectCommand(options))
 	rootCmd.AddCommand(newReviewerCommand(options))
 	rootCmd.AddCommand(newHookCommand(options))
+	rootCmd.AddCommand(newBrowseCommand(options))
 	rootCmd.AddCommand(newSearchCommand(options))
 
 	registerGlobalDryRunInterceptors(rootCmd, options)

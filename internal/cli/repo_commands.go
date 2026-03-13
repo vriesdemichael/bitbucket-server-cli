@@ -60,6 +60,7 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 	repoCmd.AddCommand(newRepoSettingsCommand(options))
 	repoCmd.AddCommand(newRepoCommentCommand(options))
 	repoCmd.AddCommand(newRepoBrowseCommand(options))
+	repoCmd.AddCommand(newRepoCloneCommand(options))
 	repoCmd.AddCommand(newRepoAdminCommand(options))
 
 	return repoCmd

@@ -6,6 +6,9 @@
 It combines scriptable machine output, safe dry-run planning, and high-coverage live-behavior
 validation against real Bitbucket APIs.
 
+It is designed as the `gh`-style CLI experience for Bitbucket Server/Data Center, including
+repository cloning and browser navigation ergonomics tailored to Bitbucket-hosted projects.
+
 ## Why teams adopt `bb`
 
 - **Operationally safe by default**: dry-run planning for server mutations and explicit bulk plan/apply workflows.
@@ -21,6 +24,7 @@ validation against real Bitbucket APIs.
 - Work with pull requests, comments, build statuses, and merge checks.
 - Run project/admin operations and cross-repository search.
 - Apply policy-driven multi-repository changes via bulk plan/review/apply workflows.
+- Clone repositories and open repository pages quickly (`bb repo clone`, `bb browse`).
 
 ## Quick start
 
@@ -40,6 +44,8 @@ Authenticate and run first commands:
 ```bash
 bb auth login --host https://bitbucket.acme.corp --token "$BB_TOKEN"
 bb auth status
+bb repo clone PLATFORM/api
+bb browse --repo PLATFORM/api
 bb search repos --limit 20
 bb --json auth status
 ```
