@@ -32,6 +32,12 @@ tasks:
     cmds:
       - uv run --project '{{.DOCS_PROJECT_DIR}}' mkdocs build --strict
 
+  docs:validate:
+    desc: Validate MkDocs configuration/content without publishing
+    cmds:
+      - mkdir -p .tmp
+      - uv run --project '{{.DOCS_PROJECT_DIR}}' mkdocs build --strict --site-dir .tmp/mkdocs-validate
+
   docs:serve:
     desc: Serve MkDocs site locally
     cmds:
@@ -45,6 +51,14 @@ tasks:
     cmds:
       - uv run --project '{{.DOCS_PROJECT_DIR}}' mike deploy --push --update-aliases {{.VERSION}} latest
       - uv run --project '{{.DOCS_PROJECT_DIR}}' mike set-default --push latest
+
+  docs:bootstrap-pages:
+    desc: Bootstrap initial gh-pages docs publish (requires VERSION)
+    requires:
+      vars:
+        - VERSION
+    cmds:
+      - task docs:deploy-version VERSION={{.VERSION}}
 
   models:generate:
     desc: Generate Go models from vendored Bitbucket 9.4 OpenAPI spec
