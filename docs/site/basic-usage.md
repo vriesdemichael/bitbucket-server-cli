@@ -86,7 +86,7 @@ Runtime precedence order:
 4. Stored config (`~/.config/bb/config.yaml`) + keyring/fallback secrets
 5. Built-in defaults
 
-Authentication mode priority is token/basic first for day-to-day workflows; OAuth is optional and additive.
+Supported day-to-day authentication modes are token and basic auth.
 
 ## Quick examples
 
