@@ -35,6 +35,8 @@ bb auth status
 ## First useful commands
 
 ```bash
+bb repo clone PLATFORM/api
+bb browse --repo PLATFORM/api
 bb search repos --limit 20
 bb search prs --state OPEN
 bb --json auth status

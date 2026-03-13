@@ -20,6 +20,11 @@ func TestCloneValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected validation error")
 	}
+
+	err = backend.Clone(context.Background(), "https://example.local/scm/PRJ/repo.git", git.CloneOptions{Directory: ""})
+	if err == nil {
+		t.Fatal("expected validation error for empty clone directory")
+	}
 }
 
 func TestVersion(t *testing.T) {
@@ -54,6 +59,21 @@ func TestFetchAndCheckoutValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected validation error for empty checkout ref")
 	}
+
+	err = backend.AddRemote(context.Background(), "", git.Remote{Name: "upstream", URL: "https://example.local/scm/PRJ/upstream.git"})
+	if err == nil {
+		t.Fatal("expected validation error for empty add-remote directory")
+	}
+
+	err = backend.AddRemote(context.Background(), ".", git.Remote{Name: "", URL: "https://example.local/scm/PRJ/upstream.git"})
+	if err == nil {
+		t.Fatal("expected validation error for empty remote name")
+	}
+
+	err = backend.AddRemote(context.Background(), ".", git.Remote{Name: "upstream", URL: ""})
+	if err == nil {
+		t.Fatal("expected validation error for empty remote URL")
+	}
 }
 
 func TestRunValidationAndFailure(t *testing.T) {
@@ -77,6 +97,11 @@ func TestRunValidationAndFailure(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "git definitely-not-a-git-command failed") {
 		t.Fatalf("unexpected error message: %v", err)
+	}
+
+	_, err = backend.run(context.Background(), runOptions{cwd: "/path/that/does/not/exist", args: []string{"status"}})
+	if err == nil {
+		t.Fatal("expected run failure for invalid working directory")
 	}
 }
 
@@ -153,6 +178,18 @@ func TestCloneAndCheckoutAgainstLocalRepo(t *testing.T) {
 	}
 	if remotes[0].Name != "origin" {
 		t.Fatalf("expected origin remote first, got: %+v", remotes)
+	}
+
+	if err := backend.AddRemote(context.Background(), cloneDir, git.Remote{Name: "upstream", URL: remoteDir}); err != nil {
+		t.Fatalf("expected add remote to succeed, got: %v", err)
+	}
+
+	remotes, err = backend.ListRemotes(context.Background(), cloneDir)
+	if err != nil {
+		t.Fatalf("expected list remotes after add to succeed, got: %v", err)
+	}
+	if len(remotes) < 2 {
+		t.Fatalf("expected remotes after add, got: %+v", remotes)
 	}
 }
 

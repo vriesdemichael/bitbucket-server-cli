@@ -1,6 +1,7 @@
 # Bitbucket Server CLI
 
 `bb` is a Go CLI for automating Bitbucket Server/Data Center workflows.
+It is positioned as the `gh`-style CLI for Bitbucket Server/Data Center teams.
 
 This docs site is the release-versioned public reference for installation, usage patterns,
 full command help, advanced workflows, JSON schemas, and architecture decision records.
