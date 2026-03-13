@@ -30,6 +30,9 @@ The command reference page is generated from Cobra help output, so usage/flags m
 - If `--repo` is omitted, `bb` can infer repository context from local git remotes that match authenticated hosts.
 - If multiple remotes match different repositories, `bb` returns an ambiguity error and asks for explicit selection.
 
+See [Advanced: Repository Discovery and Server Switching](advanced/repository-discovery-and-server-switching.md)
+for remote URL formats, precedence, ambiguity handling, and multi-server workflows.
+
 ## Dry-run behavior and scope
 
 - `--dry-run` applies to server-mutating Bitbucket commands.
@@ -56,6 +59,23 @@ See [Advanced: Dry-Run Planning](advanced/dry-run-planning.md) for safety and co
 - `data` contains the command-specific payload shape.
 - Contract changes are additive within version `v2`; breaking changes require a version bump.
 
+Example machine output (`bb --json auth status`):
+
+```json
+{
+  "version": "v2",
+  "data": {
+    "bitbucket_url": "https://bitbucket.acme.corp",
+    "bitbucket_version_target": "9.4.16",
+    "auth_mode": "token",
+    "auth_source": "stored/default"
+  },
+  "meta": {
+    "contract": "bb.machine"
+  }
+}
+```
+
 ## Config and auth precedence
 
 Runtime precedence order:
@@ -66,6 +86,8 @@ Runtime precedence order:
 4. Stored config (`~/.config/bb/config.yaml`) + keyring/fallback secrets
 5. Built-in defaults
 
+Authentication mode priority is token/basic first for day-to-day workflows; OAuth is optional and additive.
+
 ## Quick examples
 
 ```bash
@@ -73,4 +95,10 @@ bb --json auth status
 bb search repos --name demo --limit 20
 bb tag list --repo TEST/my-repo --limit 50
 bb --dry-run project create --key DEMO --name "Demo Project"
+```
+
+Example human output (`bb auth status`):
+
+```text
+Target Bitbucket: https://bitbucket.acme.corp (expected version 9.4.16, auth=token, source=stored/default)
 ```

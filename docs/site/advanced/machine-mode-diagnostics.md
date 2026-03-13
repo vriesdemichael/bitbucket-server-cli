@@ -36,3 +36,27 @@ bb --json --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl
 1. Use `--json` and parse only the `data` payload needed for automation.
 2. Keep diagnostics in separate stderr capture.
 3. Validate bulk artifacts against published schemas when integrating with CI.
+
+## Error kinds and exit codes
+
+Command failures use deterministic exit codes by error kind.
+
+- `validation` -> exit code `2`
+- `authentication` or `authorization` -> exit code `3`
+- `not_found` -> exit code `4`
+- `conflict` -> exit code `5`
+- `transient` -> exit code `10`
+- `not_implemented` -> exit code `11`
+- `permanent` and `internal` (or unknown) -> exit code `1`
+
+Example failure behavior:
+
+```bash
+bb repo view --repo BADFORMAT
+echo $?
+```
+
+```text
+validation: --repo must be in PROJECT/slug format
+2
+```
