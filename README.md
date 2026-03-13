@@ -22,6 +22,7 @@ Common commands:
 - `task quality:validate-decisions`
 - `task docs:refresh-openapi`
 - `task docs:validate`
+- `task docs:bootstrap-pages VERSION=v0.1.0`
 - `task models:generate`
 - `task models:verify`
 - `task client:generate`
@@ -81,6 +82,7 @@ Docs versioning/publishing:
 - Built docs content is versioned by release tag (for example `v0.1.0`) and aliased to `latest`.
 - Publication is wired into the release workflow and runs when a release is produced.
 - Non-release changes are validated via CI (`task docs:build`) and pre-push (`task docs:validate`).
+- First-time setup helper: `task docs:bootstrap-pages VERSION=<first-release-tag>` to create/populate `gh-pages` before enabling GitHub Pages settings.
 
 ## Binary installation (GitHub releases)
 

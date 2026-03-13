@@ -9,7 +9,7 @@ pre-commit:
 pre-push:
   parallel: false
   commands:
-    docs-validate:
+    01-docs-validate:
       run: task docs:validate
-    coverage-report-verify:
+    02-coverage-report-verify:
       run: task quality:coverage:report:verify
