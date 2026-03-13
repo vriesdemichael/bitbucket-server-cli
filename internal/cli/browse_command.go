@@ -22,10 +22,12 @@ var commitSHARegex = regexp.MustCompile(`^[0-9a-fA-F]{7,40}$`)
 type browseTargetKind string
 
 const (
-	browseTargetHome   browseTargetKind = "home"
-	browseTargetPR     browseTargetKind = "pull_request"
-	browseTargetCommit browseTargetKind = "commit"
-	browseTargetPath   browseTargetKind = "path"
+	browseTargetHome     browseTargetKind = "home"
+	browseTargetSettings browseTargetKind = "settings"
+	browseTargetReleases browseTargetKind = "releases"
+	browseTargetPR       browseTargetKind = "pull_request"
+	browseTargetCommit   browseTargetKind = "commit"
+	browseTargetPath     browseTargetKind = "path"
 )
 
 func newBrowseCommand(options *rootOptions) *cobra.Command {
@@ -78,6 +80,7 @@ func newBrowseCommand(options *rootOptions) *cobra.Command {
 					"target": map[string]any{
 						"kind":   string(target.kind),
 						"arg":    target.rawArg,
+						"number": target.number,
 						"path":   target.path,
 						"line":   target.line,
 						"branch": target.branch,
@@ -126,6 +129,7 @@ type browseTarget struct {
 
 	path   string
 	line   int
+	number int
 	branch string
 	commit string
 	blame  bool
@@ -161,9 +165,9 @@ func resolveBrowseTarget(args []string, opts browseResolveOptions) (browseTarget
 	}
 
 	if opts.settings {
-		target.kind = "settings"
+		target.kind = browseTargetSettings
 	} else if opts.releases {
-		target.kind = "releases"
+		target.kind = browseTargetReleases
 	}
 
 	if target.kind != browseTargetHome {
@@ -194,7 +198,7 @@ func resolveBrowseTarget(args []string, opts browseResolveOptions) (browseTarget
 			return browseTarget{}, apperrors.New(apperrors.KindValidation, "number targets cannot be combined with --branch, --commit, or --blame", nil)
 		}
 		target.kind = browseTargetPR
-		target.line = id
+		target.number = id
 		return target, nil
 	}
 
@@ -250,12 +254,12 @@ func buildBitbucketBrowseURL(baseURL, projectKey, slug string, target browseTarg
 	repoPrefix := fmt.Sprintf("%s/projects/%s/repos/%s", basePath, url.PathEscape(trimmedProject), url.PathEscape(trimmedSlug))
 
 	switch target.kind {
-	case "settings":
+	case browseTargetSettings:
 		parsed.Path = repoPrefix + "/settings"
-	case "releases":
+	case browseTargetReleases:
 		parsed.Path = repoPrefix + "/tags"
 	case browseTargetPR:
-		parsed.Path = fmt.Sprintf("%s/pull-requests/%d", repoPrefix, target.line)
+		parsed.Path = fmt.Sprintf("%s/pull-requests/%d", repoPrefix, target.number)
 	case browseTargetCommit:
 		parsed.Path = fmt.Sprintf("%s/commits/%s", repoPrefix, url.PathEscape(target.commit))
 	case browseTargetPath:

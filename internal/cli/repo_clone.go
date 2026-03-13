@@ -47,7 +47,7 @@ func newRepoCloneCommand(options *rootOptions) *cobra.Command {
 				return err
 			}
 
-			cloneURL, err := buildBitbucketCloneURL(cloneHost, repo.ProjectKey, repo.Slug)
+			cloneURL, err := buildCloneURL(args[0], usedURLInput, cloneHost, repo)
 			if err != nil {
 				return err
 			}
@@ -139,32 +139,61 @@ func resolveRepositoryCloneInput(input string, cfg config.AppConfig) (repository
 		return repositorySelector{ProjectKey: projectKey, Slug: slug}, normalizeCloneHost(trimmed, host), true, nil
 	}
 
-	repo, err := parseRepositorySelector(trimmed)
+	repo, parsedSelector, err := parseCloneSelector(trimmed, cfg.ProjectKey)
 	if err != nil {
-		if !strings.Contains(err.Error(), "PROJECT/slug") {
-			return repositorySelector{}, "", false, err
-		}
-		if strings.Contains(trimmed, "/") {
-			return repositorySelector{}, "", false, err
-		}
-
-		if strings.TrimSpace(cfg.BitbucketURL) == "" {
-			return repositorySelector{}, "", false, apperrors.New(apperrors.KindValidation, "BITBUCKET_URL is required to clone repositories by slug", nil)
-		}
-
-		project := strings.TrimSpace(cfg.ProjectKey)
-		if project == "" {
-			return repositorySelector{}, "", false, apperrors.New(apperrors.KindValidation, "repository requires PROJECT/slug or BITBUCKET_PROJECT_KEY when only slug is provided", nil)
-		}
-
-		repo = repositorySelector{ProjectKey: project, Slug: trimmed}
+		return repositorySelector{}, "", false, err
 	}
 
 	if strings.TrimSpace(cfg.BitbucketURL) == "" {
-		return repositorySelector{}, "", false, apperrors.New(apperrors.KindValidation, "BITBUCKET_URL is required to clone repositories by PROJECT/slug", nil)
+		if parsedSelector == cloneSelectorProjectSlug {
+			return repositorySelector{}, "", false, apperrors.New(apperrors.KindValidation, "BITBUCKET_URL is required to clone repositories by PROJECT/slug", nil)
+		}
+		return repositorySelector{}, "", false, apperrors.New(apperrors.KindValidation, "BITBUCKET_URL is required to clone repositories by slug", nil)
 	}
 
 	return repo, strings.TrimSpace(cfg.BitbucketURL), false, nil
+}
+
+type cloneSelectorKind int
+
+const (
+	cloneSelectorProjectSlug cloneSelectorKind = iota
+	cloneSelectorSlugOnly
+)
+
+func parseCloneSelector(value, defaultProjectKey string) (repositorySelector, cloneSelectorKind, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return repositorySelector{}, cloneSelectorProjectSlug, apperrors.New(apperrors.KindValidation, "repository must be in PROJECT/slug format or a slug with BITBUCKET_PROJECT_KEY set", nil)
+	}
+
+	parts := strings.Split(trimmed, "/")
+	if len(parts) == 1 {
+		project := strings.TrimSpace(defaultProjectKey)
+		if project == "" {
+			return repositorySelector{}, cloneSelectorSlugOnly, apperrors.New(apperrors.KindValidation, "repository must be in PROJECT/slug format when BITBUCKET_PROJECT_KEY is not set", nil)
+		}
+		return repositorySelector{ProjectKey: project, Slug: trimmed}, cloneSelectorSlugOnly, nil
+	}
+
+	if len(parts) != 2 {
+		return repositorySelector{}, cloneSelectorProjectSlug, apperrors.New(apperrors.KindValidation, "repository must be in PROJECT/slug format", nil)
+	}
+
+	projectKey := strings.TrimSpace(parts[0])
+	slug := strings.TrimSpace(parts[1])
+	if projectKey == "" || slug == "" {
+		return repositorySelector{}, cloneSelectorProjectSlug, apperrors.New(apperrors.KindValidation, "repository must be in PROJECT/slug format", nil)
+	}
+
+	return repositorySelector{ProjectKey: projectKey, Slug: slug}, cloneSelectorProjectSlug, nil
+}
+
+func buildCloneURL(rawInput string, usedURLInput bool, cloneHost string, repo repositorySelector) (string, error) {
+	if usedURLInput && strings.Contains(strings.TrimSpace(rawInput), "://") {
+		return strings.TrimSpace(rawInput), nil
+	}
+	return buildBitbucketCloneURL(cloneHost, repo.ProjectKey, repo.Slug)
 }
 
 func splitCloneDirectoryAndExtraArgs(defaultDirectory string, values []string) (string, []string) {
