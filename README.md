@@ -1,6 +1,6 @@
 # bitbucket-server-cli
 
-[![codecov](https://codecov.io/gh/vriesdemichael/bitbucket-server-cli/branch/main/graph/badge.svg)](https://codecov.io/gh/vriesdemichael/bitbucket-server-cli)
+[![codecov](https://codecov.io/gh/vriesdemichael/bitbucket-server-cli/branch/main/graph/badge.svg?flag=combined_scoped)](https://codecov.io/gh/vriesdemichael/bitbucket-server-cli?flag=combined_scoped)
 
 Go CLI and client for Bitbucket Server/Data Center automation with **live-behavior testing** against Atlassian Bitbucket `9.4.16`.
 
@@ -50,9 +50,9 @@ Coverage/reporting workflow:
 - CI verification (committed artifact only): `task quality:coverage:report:verify:committed`
 - committed report file: `docs/quality/coverage-report.json`
 - generated operation contract manifest: `docs/quality/generated-operation-contracts.json`
-- Codecov upload sources in CI are committed combined profiles: `docs/quality/coverage.combined.raw.out` and `docs/quality/coverage.combined.scoped.out`
-- Codecov reports two combined views via flags in `codecov.yml`: `combined_raw` and `combined_scoped`
-- Codecov components in `codecov.yml` split coverage views by `generated-client`, `internal-api`, `cmd`, and `tools`
+- Codecov upload source in CI is the committed scoped combined profile: `docs/quality/coverage.combined.scoped.out`
+- Codecov badge/status is pinned to `combined_scoped` and excludes generated code paths
+- Codecov components in `codecov.yml` split coverage views by `internal-api`, `cmd`, and `tools` for scoped reporting
 - Live + combined metrics remain enforced by committed artifacts generated locally via Task hooks/workflow
 - CI threshold configuration is code-based via `.github/coverage-thresholds.env` (`CI_COVERAGE_MIN_GLOBAL_COMBINED`, `CI_COVERAGE_MIN_PATCH`, `CI_COVERAGE_MIN_PATCH_LINES`, `CI_COVERAGE_MAX_UNCOVERED_SMALL_PATCH`, `CI_COVERAGE_MIN_CONTRACT`)
 - CI ADR floors are enforced even when variables are configured: global >= 85 and patch >= 85
@@ -63,7 +63,7 @@ Coverage/reporting workflow:
 	- Runs on pull requests to `main` and pushes to `main`
 	- Executes `task quality:validate-decisions`
 	- Executes `task test:go:safe` (targeted non-live package scope: `cmd/...`, `internal/...`, `tools/...`)
-	- Uploads committed combined raw/scoped coverage profiles to Codecov
+	- Uploads committed combined scoped coverage profile to Codecov
 	- Executes `task quality:coverage:report:verify:committed` with configurable CI thresholds (subject to ADR floor minimums)
 	- Publishes a final aggregate check named `CI Complete` (recommended PR required check)
 	- Does not run `test:live` because live integration tests require Bitbucket/Postgres infrastructure
