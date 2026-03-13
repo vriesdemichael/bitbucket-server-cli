@@ -114,7 +114,7 @@ Optional provenance verification (GitHub CLI):
 
 Runtime environment variables:
 
-- `BITBUCKET_URL` (default `http://localhost:7990`)
+- `BITBUCKET_URL` (default `http://localhost:7990`; usually set to your corporate Bitbucket URL)
 - `BITBUCKET_TOKEN` (optional)
 - `BITBUCKET_USERNAME` + `BITBUCKET_PASSWORD` (optional basic auth; `BITBUCKET_USER` is accepted as alias for username)
 - `ADMIN_USER` + `ADMIN_PASSWORD` fallback for local setup compatibility
@@ -139,10 +139,10 @@ Equivalent global CLI flags (highest precedence):
 
 Authentication workflow:
 
-- `bb auth login --host http://localhost:7990 --username admin --password admin`
+- `bb auth login --host https://bitbucket.acme.corp --username your.name --token <personal-access-token>`
 - `bb auth status`
 - `bb auth server list`
-- `bb auth server use --host http://localhost:7990`
+- `bb auth server use --host https://bitbucket.acme.corp`
 - `bb --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
 - `bb --log-level debug auth status`
 - `bb --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl`

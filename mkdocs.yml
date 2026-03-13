@@ -44,6 +44,7 @@ nav:
       - JSON Schemas: reference/schemas.md
   - Advanced Topics:
       - Overview: advanced/index.md
+      - Repository Discovery and Server Switching: advanced/repository-discovery-and-server-switching.md
       - Bulk Operations: advanced/bulk-operations.md
       - Dry-Run Planning: advanced/dry-run-planning.md
       - Machine Mode and Diagnostics: advanced/machine-mode-diagnostics.md
