@@ -195,7 +195,7 @@ jobs:
         uses: arduino/setup-task@v2
 
       - name: Build docs site
-        run: task docs:build
+        run: task docs:validate
 
   ci-complete:
     name: CI Complete
