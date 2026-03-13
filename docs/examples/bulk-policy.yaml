@@ -1,3 +1,4 @@
+# yaml-language-server: $schema=../reference/schemas/bulk-policy.schema.json
 apiVersion: bb.io/v1alpha1
 selector:
   projectKey: TEST

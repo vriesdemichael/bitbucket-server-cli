@@ -21,6 +21,8 @@ Common commands:
 - `task --list`
 - `task quality:validate-decisions`
 - `task docs:refresh-openapi`
+- `task docs:generate`
+- `task docs:verify-generated`
 - `task docs:validate`
 - `task docs:bootstrap-pages VERSION=v0.1.0`
 - `task models:generate`
@@ -103,14 +105,12 @@ Example (Linux amd64, version `v0.1.0`):
 - `curl -LO "https://github.com/vriesdemichael/bitbucket-server-cli/releases/download/${VERSION}/sha256sums.txt"`
 - `sha256sum -c sha256sums.txt --ignore-missing`
 - `tar -xzf "bb_${VERSION#v}_linux_amd64.tar.gz"`
-- `chmod +x bb`
-- `./bb --help`
+- `install -m 0755 bb /usr/local/bin/bb`
+- `bb --help`
 
 Optional provenance verification (GitHub CLI):
 
 - `gh attestation verify bb_${VERSION#v}_linux_amd64.tar.gz --repo vriesdemichael/bitbucket-server-cli`
-
-Source-based fallback remains available via `go run ./cmd/bb --help`.
 
 Runtime environment variables:
 
@@ -139,13 +139,13 @@ Equivalent global CLI flags (highest precedence):
 
 Authentication workflow:
 
-- `go run ./cmd/bb auth login --host http://localhost:7990 --username admin --password admin`
-- `go run ./cmd/bb auth status`
-- `go run ./cmd/bb auth server list`
-- `go run ./cmd/bb auth server use --host http://localhost:7990`
-- `go run ./cmd/bb --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
-- `go run ./cmd/bb --log-level debug auth status`
-- `go run ./cmd/bb --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl`
+- `bb auth login --host http://localhost:7990 --username admin --password admin`
+- `bb auth status`
+- `bb auth server list`
+- `bb auth server use --host http://localhost:7990`
+- `bb --request-timeout 45s --retry-count 4 --retry-backoff 500ms auth status`
+- `bb --log-level debug auth status`
+- `bb --log-level warn --log-format jsonl auth status 2> diagnostics.jsonl`
 
 Dry-run behavior:
 
@@ -177,29 +177,29 @@ JSON output contract (`--json`):
 - `data` preserves the existing command-specific shape (arrays/objects/scalars) inside the envelope.
 - Backward-compatible changes for `v2`: additive fields only.
 - Breaking changes (field removal/rename/type changes or envelope shape changes) require a new contract version and migration notes.
-- `go run ./cmd/bb auth logout`
-- `go run ./cmd/bb diff refs main feature --repo TEST/my-repo`
-- `go run ./cmd/bb diff pr 123 --repo TEST/my-repo --patch`
-- `go run ./cmd/bb diff commit <sha> --repo TEST/my-repo --path seed.txt`
-- `go run ./cmd/bb repo comment list --repo TEST/my-repo --commit <sha> --path seed.txt`
-- `go run ./cmd/bb repo comment create --repo TEST/my-repo --pr 123 --text "Looks good"`
-- `go run ./cmd/bb repo comment update --repo TEST/my-repo --commit <sha> --id 42 --text "Updated text"`
-- `go run ./cmd/bb repo comment delete --repo TEST/my-repo --pr 123 --id 42`
-- `go run ./cmd/bb tag list --repo TEST/my-repo --limit 50 --order-by ALPHABETICAL`
-- `go run ./cmd/bb tag create v1.2.3 --repo TEST/my-repo --start-point <sha> --message "release v1.2.3"`
-- `go run ./cmd/bb tag view v1.2.3 --repo TEST/my-repo`
-- `go run ./cmd/bb tag delete v1.2.3 --repo TEST/my-repo`
-- `go run ./cmd/bb build status set <sha> --key ci/main --state SUCCESSFUL --url https://ci.example/build/42`
-- `go run ./cmd/bb build status get <sha> --order-by NEWEST --limit 25`
-- `go run ./cmd/bb build status stats <sha> --include-unique`
-- `go run ./cmd/bb build required list --repo TEST/my-repo`
-- `go run ./cmd/bb build required create --repo TEST/my-repo --body '{"buildParentKeys":["ci"],"refMatcher":{"id":"refs/heads/master"}}'`
-- `go run ./cmd/bb insights report set <sha> lint --repo TEST/my-repo --body '{"title":"Lint","result":"PASS","data":[{"title":"warnings","type":"NUMBER","value":{"value":0}}]}'`
-- `go run ./cmd/bb insights report get <sha> lint --repo TEST/my-repo`
-- `go run ./cmd/bb insights annotation add <sha> lint --repo TEST/my-repo --body '[{"externalId":"lint-1","message":"Fix warning","severity":"MEDIUM","path":"seed.txt","line":1}]'`
-- `go run ./cmd/bb bulk plan -f docs/examples/bulk-policy.yaml -o .tmp/bulk-plan.json`
-- `go run ./cmd/bb bulk apply --from-plan .tmp/bulk-plan.json`
-- `go run ./cmd/bb bulk status <operation-id>`
+- `bb auth logout`
+- `bb diff refs main feature --repo TEST/my-repo`
+- `bb diff pr 123 --repo TEST/my-repo --patch`
+- `bb diff commit <sha> --repo TEST/my-repo --path seed.txt`
+- `bb repo comment list --repo TEST/my-repo --commit <sha> --path seed.txt`
+- `bb repo comment create --repo TEST/my-repo --pr 123 --text "Looks good"`
+- `bb repo comment update --repo TEST/my-repo --commit <sha> --id 42 --text "Updated text"`
+- `bb repo comment delete --repo TEST/my-repo --pr 123 --id 42`
+- `bb tag list --repo TEST/my-repo --limit 50 --order-by ALPHABETICAL`
+- `bb tag create v1.2.3 --repo TEST/my-repo --start-point <sha> --message "release v1.2.3"`
+- `bb tag view v1.2.3 --repo TEST/my-repo`
+- `bb tag delete v1.2.3 --repo TEST/my-repo`
+- `bb build status set <sha> --key ci/main --state SUCCESSFUL --url https://ci.example/build/42`
+- `bb build status get <sha> --order-by NEWEST --limit 25`
+- `bb build status stats <sha> --include-unique`
+- `bb build required list --repo TEST/my-repo`
+- `bb build required create --repo TEST/my-repo --body '{"buildParentKeys":["ci"],"refMatcher":{"id":"refs/heads/master"}}'`
+- `bb insights report set <sha> lint --repo TEST/my-repo --body '{"title":"Lint","result":"PASS","data":[{"title":"warnings","type":"NUMBER","value":{"value":0}}]}'`
+- `bb insights report get <sha> lint --repo TEST/my-repo`
+- `bb insights annotation add <sha> lint --repo TEST/my-repo --body '[{"externalId":"lint-1","message":"Fix warning","severity":"MEDIUM","path":"seed.txt","line":1}]'`
+- `bb bulk plan -f docs/examples/bulk-policy.yaml -o .tmp/bulk-plan.json`
+- `bb bulk apply --from-plan .tmp/bulk-plan.json`
+- `bb bulk status <operation-id>`
 - Bulk JSON Schemas: `docs/reference/schemas/bulk-policy.schema.json`, `docs/reference/schemas/bulk-plan.schema.json`, `docs/reference/schemas/bulk-apply-status.schema.json`
 
 Bulk policy workflow:
@@ -210,7 +210,7 @@ Bulk policy workflow:
 - `bulk plan` performs no writes and emits a deterministic reviewed plan artifact with a `planHash`; this is the preview/dry-run mechanism for bulk workflows
 - `bulk apply` executes only operations embedded in the reviewed plan and persists result status under the local BB config directory (override with `BB_BULK_STATUS_DIR`)
 - Example policy: `docs/examples/bulk-policy.yaml`
-- Schema export command: `go run ./tools/bulk-schema-export -out docs/reference/schemas`
+- Schema export command: `task docs:export-bulk-schemas`
 
 Runtime config precedence:
 

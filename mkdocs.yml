@@ -30,7 +30,21 @@ markdown_extensions:
   - pymdownx.superfences
   - pymdownx.inlinehilite
 
+validation:
+  nav:
+    omitted_files: ignore
+
 nav:
   - Home: index.md
-  - Quickstart: quickstart.md
-  - Command Focus: command-focus.md
+  - Installation and Quickstart: installation-and-quickstart.md
+  - Basic Usage: basic-usage.md
+  - Command Reference:
+      - Overview: reference/overview.md
+      - All Commands: reference/commands/index.md
+      - JSON Schemas: reference/schemas.md
+  - Advanced Topics:
+      - Overview: advanced/index.md
+      - Bulk Operations: advanced/bulk-operations.md
+      - Dry-Run Planning: advanced/dry-run-planning.md
+      - Machine Mode and Diagnostics: advanced/machine-mode-diagnostics.md
+  - ADR Records: adr/index.md

@@ -30,13 +30,45 @@ tasks:
   docs:build:
     desc: Build MkDocs site with strict checks
     cmds:
+      - task: docs:generate
       - uv run --project '{{.DOCS_PROJECT_DIR}}' mkdocs build --strict
 
   docs:validate:
     desc: Validate MkDocs configuration/content without publishing
     cmds:
       - mkdir -p .tmp
+      - task: docs:generate
       - uv run --project '{{.DOCS_PROJECT_DIR}}' mkdocs build --strict --site-dir .tmp/mkdocs-validate
+
+  docs:export-command-reference:
+    desc: Export generated command reference markdown from Cobra command tree
+    cmd: go run ./tools/cli-docs-export -out docs/site/reference/commands/index.md
+
+  docs:export-adr-markdown:
+    desc: Export ADR markdown pages from decision YAML records
+    cmd: go run ./tools/adr-markdown-export -in docs/decisions -out docs/site/adr
+
+  docs:publish-bulk-schemas:
+    desc: Publish bulk JSON schema files into MkDocs docs directory
+    cmds:
+      - mkdir -p docs/site/reference/schemas
+      - cp docs/reference/schemas/bulk-policy.schema.json docs/site/reference/schemas/bulk-policy.schema.json
+      - cp docs/reference/schemas/bulk-plan.schema.json docs/site/reference/schemas/bulk-plan.schema.json
+      - cp docs/reference/schemas/bulk-apply-status.schema.json docs/site/reference/schemas/bulk-apply-status.schema.json
+
+  docs:generate:
+    desc: Generate all docs artifacts committed to repo
+    cmds:
+      - task: docs:export-command-reference
+      - task: docs:export-adr-markdown
+      - task: docs:export-bulk-schemas
+      - task: docs:publish-bulk-schemas
+
+  docs:verify-generated:
+    desc: Verify generated docs artifacts are up to date
+    cmds:
+      - task: docs:generate
+      - git diff --exit-code -- docs/site/reference/commands/index.md docs/site/adr docs/reference/schemas docs/site/reference/schemas
 
   docs:serve:
     desc: Serve MkDocs site locally
