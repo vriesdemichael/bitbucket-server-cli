@@ -27,6 +27,7 @@ gh attestation verify bb_${VERSION#v}_linux_amd64.tar.gz --repo vriesdemichael/b
 ## Authenticate to Bitbucket
 
 ```bash
+bb auth token-url --host https://bitbucket.acme.corp
 bb auth login --host https://bitbucket.acme.corp --token "$BB_TOKEN"
 bb auth status
 ```

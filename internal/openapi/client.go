@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -101,7 +102,9 @@ func (transport *retryTransport) RoundTrip(request *http.Request) (*http.Respons
 			}
 			if attempt < transport.retries {
 				transport.logger.Warn("http request failed", fields)
-				time.Sleep(time.Duration(attempt+1) * transport.baseBackoff)
+				if sleepErr := sleepWithContext(request.Context(), time.Duration(attempt+1)*transport.baseBackoff); sleepErr != nil {
+					return nil, sleepErr
+				}
 				continue
 			}
 			transport.logger.Error("http request failed", fields)
@@ -119,6 +122,7 @@ func (transport *retryTransport) RoundTrip(request *http.Request) (*http.Respons
 
 		if response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500 {
 			lastResponse = response
+			retryDelay := retryDelayFromResponse(response.Header, attempt, transport.baseBackoff)
 			fields := map[string]any{
 				"method":      request.Method,
 				"endpoint":    request.URL.Path,
@@ -126,12 +130,15 @@ func (transport *retryTransport) RoundTrip(request *http.Request) (*http.Respons
 				"attempt":     attempt + 1,
 				"retry_count": transport.retries,
 				"duration_ms": time.Since(started).Milliseconds(),
+				"retry_delay": retryDelay.String(),
 			}
 			if attempt < transport.retries {
 				transport.logger.Warn("http retriable response", fields)
 				_, _ = io.Copy(io.Discard, response.Body)
 				_ = response.Body.Close()
-				time.Sleep(time.Duration(attempt+1) * transport.baseBackoff)
+				if sleepErr := sleepWithContext(request.Context(), retryDelay); sleepErr != nil {
+					return nil, sleepErr
+				}
 				continue
 			}
 			transport.logger.Error("http retriable response", fields)
@@ -145,4 +152,48 @@ func (transport *retryTransport) RoundTrip(request *http.Request) (*http.Respons
 	}
 
 	return nil, lastError
+}
+
+func retryDelayFromResponse(headers http.Header, attempt int, fallbackBase time.Duration) time.Duration {
+	if fallbackBase <= 0 {
+		fallbackBase = 250 * time.Millisecond
+	}
+
+	if headers != nil {
+		retryAfter := strings.TrimSpace(headers.Get("Retry-After"))
+		if retryAfter != "" {
+			if seconds, err := strconv.Atoi(retryAfter); err == nil {
+				if seconds < 0 {
+					seconds = 0
+				}
+				return time.Duration(seconds) * time.Second
+			}
+
+			if retryAt, err := http.ParseTime(retryAfter); err == nil {
+				delay := time.Until(retryAt)
+				if delay < 0 {
+					return 0
+				}
+				return delay
+			}
+		}
+	}
+
+	return time.Duration(attempt+1) * fallbackBase
+}
+
+func sleepWithContext(ctx context.Context, delay time.Duration) error {
+	if delay <= 0 {
+		return nil
+	}
+
+	timer := time.NewTimer(delay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }

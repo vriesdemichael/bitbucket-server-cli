@@ -274,6 +274,32 @@ func TestGetJSONOutputTargetType(t *testing.T) {
 	}
 }
 
+func TestWriteJSONMethods(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Method != http.MethodPost && request.Method != http.MethodPut && request.Method != http.MethodDelete {
+			writer.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	client := NewFromConfig(config.AppConfig{BitbucketURL: server.URL})
+	client.retries = 0
+
+	var payload map[string]any
+	if err := client.PostJSON(context.Background(), "/rest/api/latest/test", nil, map[string]string{"name": "a"}, &payload); err != nil {
+		t.Fatalf("post json failed: %v", err)
+	}
+	if err := client.PutJSON(context.Background(), "/rest/api/latest/test", nil, map[string]string{"name": "a"}, &payload); err != nil {
+		t.Fatalf("put json failed: %v", err)
+	}
+	if err := client.DeleteJSON(context.Background(), "/rest/api/latest/test", nil, map[string]string{"name": "a"}, &payload); err != nil {
+		t.Fatalf("delete json failed: %v", err)
+	}
+}
+
 func TestGetJSONTransportAndRetryExhaustion(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusOK)
@@ -316,6 +342,62 @@ func TestGetJSONTooManyRequestsRetryExhaustion(t *testing.T) {
 	}
 	if attempts.Load() != 3 {
 		t.Fatalf("expected 3 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestGetJSONTooManyRequestsUsesRetryAfter(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		attempt := attempts.Add(1)
+		if attempt == 1 {
+			writer.Header().Set("Retry-After", "0")
+			writer.WriteHeader(http.StatusTooManyRequests)
+			_, _ = writer.Write([]byte("rate limited"))
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"ok":true}`))
+	}))
+	defer server.Close()
+
+	client := NewFromConfig(config.AppConfig{BitbucketURL: server.URL})
+	client.retries = 1
+	client.backoff = time.Hour
+
+	ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+	defer cancel()
+
+	var payload map[string]any
+	err := client.GetJSON(ctx, "/rest/api/latest/test", nil, &payload)
+	if err != nil {
+		t.Fatalf("expected request to honor Retry-After and succeed, got: %v", err)
+	}
+	if attempts.Load() != 2 {
+		t.Fatalf("expected 2 attempts, got %d", attempts.Load())
+	}
+}
+
+func TestGetJSONRetryCanceledDuringBackoff(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.WriteHeader(http.StatusServiceUnavailable)
+		_, _ = writer.Write([]byte("temporary"))
+	}))
+	defer server.Close()
+
+	client := NewFromConfig(config.AppConfig{BitbucketURL: server.URL})
+	client.retries = 1
+	client.backoff = time.Hour
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	var payload map[string]any
+	err := client.GetJSON(ctx, "/rest/api/latest/test", nil, &payload)
+	if err == nil {
+		t.Fatal("expected retry cancellation error")
+	}
+	if apperrors.ExitCode(err) != 10 {
+		t.Fatalf("expected transient exit code 10, got %d (%v)", apperrors.ExitCode(err), err)
 	}
 }
 
@@ -379,6 +461,108 @@ func TestHealthTransportAndPermanentErrorBranches(t *testing.T) {
 
 		if !strings.Contains(buffer.String(), "health probe returned retriable status") {
 			t.Fatalf("expected retriable health diagnostics output, got: %s", buffer.String())
+		}
+	})
+
+	t.Run("retriable status honors retry-after", func(t *testing.T) {
+		var attempts atomic.Int32
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			attempt := attempts.Add(1)
+			if attempt == 1 {
+				writer.Header().Set("Retry-After", "0")
+				writer.WriteHeader(http.StatusTooManyRequests)
+				return
+			}
+			writer.WriteHeader(http.StatusOK)
+		}))
+		defer server.Close()
+
+		client := NewFromConfig(config.AppConfig{BitbucketURL: server.URL})
+		client.retries = 1
+		client.backoff = time.Hour
+
+		ctx, cancel := context.WithTimeout(context.Background(), 250*time.Millisecond)
+		defer cancel()
+
+		health, err := client.Health(ctx)
+		if err != nil {
+			t.Fatalf("expected health retry to succeed, got: %v", err)
+		}
+		if !health.Healthy {
+			t.Fatalf("expected healthy status after retry, got: %+v", health)
+		}
+		if attempts.Load() != 2 {
+			t.Fatalf("expected 2 attempts, got %d", attempts.Load())
+		}
+	})
+
+	t.Run("retriable status canceled during backoff", func(t *testing.T) {
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			writer.WriteHeader(http.StatusTooManyRequests)
+		}))
+		defer server.Close()
+
+		client := NewFromConfig(config.AppConfig{BitbucketURL: server.URL})
+		client.retries = 1
+		client.backoff = time.Hour
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		defer cancel()
+
+		_, err := client.Health(ctx)
+		if err == nil {
+			t.Fatal("expected transient cancellation error")
+		}
+		if apperrors.ExitCode(err) != 10 {
+			t.Fatalf("expected transient exit code 10, got %d (%v)", apperrors.ExitCode(err), err)
+		}
+	})
+}
+
+func TestRetryDelayFromResponse(t *testing.T) {
+	t.Run("uses retry-after seconds", func(t *testing.T) {
+		delay := retryDelayFromResponse(http.Header{"Retry-After": []string{"2"}}, 0, time.Millisecond)
+		if delay != 2*time.Second {
+			t.Fatalf("expected 2s delay, got %s", delay)
+		}
+	})
+
+	t.Run("uses retry-after http date", func(t *testing.T) {
+		retryAt := time.Now().Add(2 * time.Second).UTC().Format(http.TimeFormat)
+		delay := retryDelayFromResponse(http.Header{"Retry-After": []string{retryAt}}, 0, time.Millisecond)
+		if delay <= 0 || delay > 3*time.Second {
+			t.Fatalf("expected positive delay <=3s, got %s", delay)
+		}
+	})
+
+	t.Run("falls back on invalid retry-after", func(t *testing.T) {
+		delay := retryDelayFromResponse(http.Header{"Retry-After": []string{"invalid"}}, 1, 200*time.Millisecond)
+		if delay != 400*time.Millisecond {
+			t.Fatalf("expected fallback delay 400ms, got %s", delay)
+		}
+	})
+
+	t.Run("returns zero for past retry-after date", func(t *testing.T) {
+		retryAt := time.Now().Add(-2 * time.Second).UTC().Format(http.TimeFormat)
+		delay := retryDelayFromResponse(http.Header{"Retry-After": []string{retryAt}}, 0, time.Millisecond)
+		if delay != 0 {
+			t.Fatalf("expected zero delay for past date, got %s", delay)
+		}
+	})
+}
+
+func TestSleepWithContext(t *testing.T) {
+	t.Run("returns nil for zero delay", func(t *testing.T) {
+		if err := sleepWithContext(context.Background(), 0); err != nil {
+			t.Fatalf("expected nil error for zero delay, got %v", err)
+		}
+	})
+
+	t.Run("returns context canceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if err := sleepWithContext(ctx, time.Second); err == nil {
+			t.Fatal("expected canceled context error")
 		}
 	})
 }

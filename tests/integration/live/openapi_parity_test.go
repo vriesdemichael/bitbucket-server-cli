@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
@@ -250,22 +251,7 @@ func cleanupParityData(ctx context.Context, cfg config.AppConfig, seeded parityS
 }
 
 func newGeneratedClient(cfg config.AppConfig) (*openapigenerated.ClientWithResponses, error) {
-	serverURL := strings.TrimRight(cfg.BitbucketURL, "/") + "/rest"
-
-	return openapigenerated.NewClientWithResponses(
-		serverURL,
-		openapigenerated.WithHTTPClient(&http.Client{Timeout: 20 * time.Second}),
-		openapigenerated.WithRequestEditorFn(func(_ context.Context, request *http.Request) error {
-			if cfg.BitbucketToken != "" {
-				request.Header.Set("Authorization", "Bearer "+cfg.BitbucketToken)
-				return nil
-			}
-			if cfg.BitbucketUsername != "" && cfg.BitbucketPassword != "" {
-				request.SetBasicAuth(cfg.BitbucketUsername, cfg.BitbucketPassword)
-			}
-			return nil
-		}),
-	)
+	return openapi.NewClientWithResponsesFromConfig(cfg)
 }
 
 func normalizeRepoKeys(repos []repository.Repository) []string {

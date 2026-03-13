@@ -2,8 +2,11 @@ package auth
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -11,7 +14,21 @@ import (
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 )
+
+type fakeUsersClient struct {
+	response *openapigenerated.GetUsers2Response
+	err      error
+}
+
+func (client *fakeUsersClient) GetUsers2WithResponse(ctx context.Context, params *openapigenerated.GetUsers2Params, reqEditors ...openapigenerated.RequestEditorFn) (*openapigenerated.GetUsers2Response, error) {
+	if client.err != nil {
+		return nil, client.err
+	}
+	return client.response, nil
+}
 
 func TestStatusJSONUsesHostOverride(t *testing.T) {
 	t.Setenv("BITBUCKET_URL", "http://initial.example")
@@ -407,4 +424,227 @@ func TestServerListIncludesUsernameForBasicAuth(t *testing.T) {
 	if !strings.Contains(buffer.String(), "user=alice") {
 		t.Fatalf("expected username in server list output, got: %s", buffer.String())
 	}
+}
+
+func TestTokenURLCommand(t *testing.T) {
+	t.Run("human output with explicit host", func(t *testing.T) {
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return false },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+		})
+
+		buffer := &bytes.Buffer{}
+		cmd.SetOut(buffer)
+		cmd.SetErr(buffer)
+		cmd.SetArgs([]string{"token-url", "--host", "https://bitbucket.acme.corp"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("token-url command failed: %v", err)
+		}
+		if !strings.Contains(buffer.String(), "https://bitbucket.acme.corp/plugins/servlet/access-tokens/manage") {
+			t.Fatalf("expected PAT URL in output, got: %s", buffer.String())
+		}
+	})
+
+	t.Run("json output with config host fallback", func(t *testing.T) {
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return true },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{BitbucketURL: "http://localhost:7990"}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+		})
+
+		buffer := &bytes.Buffer{}
+		cmd.SetOut(buffer)
+		cmd.SetErr(buffer)
+		cmd.SetArgs([]string{"token-url"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("token-url json command failed: %v", err)
+		}
+		if !strings.Contains(buffer.String(), `"token_url": "http://localhost:7990/plugins/servlet/access-tokens/manage"`) {
+			t.Fatalf("expected token_url in json output, got: %s", buffer.String())
+		}
+	})
+
+	t.Run("invalid host returns validation error", func(t *testing.T) {
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return false },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+		})
+
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"token-url", "--host", "://bad"})
+		if err := cmd.Execute(); err == nil {
+			t.Fatal("expected validation error for invalid host")
+		}
+	})
+}
+
+func TestIdentityCommand(t *testing.T) {
+	t.Run("human output", func(t *testing.T) {
+		displayName := "Automation User"
+		email := "automation@example.local"
+		name := "svc-automation"
+		slug := "svc-automation"
+		id := int32(42)
+		userType := openapigenerated.RestApplicationUserTypeNORMAL
+		active := true
+
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return false },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{BitbucketURL: "http://example.local:7990"}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+			NewUsersClient: func(cfg config.AppConfig) (usersClient, error) {
+				return &fakeUsersClient{response: &openapigenerated.GetUsers2Response{
+					HTTPResponse: &http.Response{StatusCode: 200},
+					ApplicationjsonCharsetUTF8200: &openapigenerated.RestApplicationUser{
+						DisplayName:  &displayName,
+						EmailAddress: &email,
+						Name:         &name,
+						Slug:         &slug,
+						Id:           &id,
+						Type:         &userType,
+						Active:       &active,
+					},
+				}}, nil
+			},
+		})
+
+		buffer := &bytes.Buffer{}
+		cmd.SetOut(buffer)
+		cmd.SetErr(buffer)
+		cmd.SetArgs([]string{"identity"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("identity command failed: %v", err)
+		}
+		if !strings.Contains(buffer.String(), "Automation User") || !strings.Contains(buffer.String(), "name=svc-automation") {
+			t.Fatalf("expected identity summary output, got: %s", buffer.String())
+		}
+	})
+
+	t.Run("json output", func(t *testing.T) {
+		name := "svc-bot"
+		slug := "svc-bot"
+		active := true
+
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return true },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{BitbucketURL: "http://example.local:7990"}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+			NewUsersClient: func(cfg config.AppConfig) (usersClient, error) {
+				return &fakeUsersClient{response: &openapigenerated.GetUsers2Response{
+					HTTPResponse:                  &http.Response{StatusCode: 200},
+					ApplicationjsonCharsetUTF8200: &openapigenerated.RestApplicationUser{Name: &name, Slug: &slug, Active: &active},
+				}}, nil
+			},
+		})
+
+		buffer := &bytes.Buffer{}
+		cmd.SetOut(buffer)
+		cmd.SetErr(buffer)
+		cmd.SetArgs([]string{"identity"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("identity json command failed: %v", err)
+		}
+		if !strings.Contains(buffer.String(), `"slug": "svc-bot"`) {
+			t.Fatalf("expected identity slug in json output, got: %s", buffer.String())
+		}
+	})
+
+	t.Run("api failure surfaces error", func(t *testing.T) {
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return false },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{BitbucketURL: "http://example.local:7990"}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+			NewUsersClient: func(cfg config.AppConfig) (usersClient, error) {
+				return &fakeUsersClient{err: errors.New("boom")}, nil
+			},
+		})
+
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"whoami"})
+		if err := cmd.Execute(); err == nil {
+			t.Fatal("expected identity lookup error")
+		}
+	})
+
+	t.Run("host override setenv failure returns error", func(t *testing.T) {
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return false },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{BitbucketURL: "http://example.local:7990"}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+			NewUsersClient: func(cfg config.AppConfig) (usersClient, error) {
+				return &fakeUsersClient{}, nil
+			},
+		})
+
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"identity", "--host", string([]byte{'a', 0, 'b'})})
+		if err := cmd.Execute(); err == nil {
+			t.Fatal("expected host override validation error")
+		}
+	})
+
+	t.Run("identity status error is mapped", func(t *testing.T) {
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return false },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{BitbucketURL: "http://example.local:7990"}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+			NewUsersClient: func(cfg config.AppConfig) (usersClient, error) {
+				return &fakeUsersClient{response: &openapigenerated.GetUsers2Response{HTTPResponse: &http.Response{StatusCode: 401}, Body: []byte("unauthorized")}}, nil
+			},
+		})
+
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs([]string{"identity"})
+		err := cmd.Execute()
+		if err == nil {
+			t.Fatal("expected mapped auth error")
+		}
+		if apperrors.ExitCode(err) != 3 {
+			t.Fatalf("expected auth error exit code 3, got %d (%v)", apperrors.ExitCode(err), err)
+		}
+	})
+
+	t.Run("human summary fallback unknown", func(t *testing.T) {
+		if got := identityHumanSummary(authIdentity{}); !strings.Contains(got, "unknown") {
+			t.Fatalf("expected unknown fallback, got %q", got)
+		}
+	})
 }
