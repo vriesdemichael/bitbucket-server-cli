@@ -3,12 +3,6 @@ codecov:
 
 component_management:
   individual_components:
-    - component_id: generated_client
-      name: generated-client
-      paths:
-        - internal/openapi/generated/**
-        - internal/models/generated/**
-
     - component_id: internal_api
       name: internal-api
       flag_regexes:
@@ -42,13 +36,6 @@ coverage:
           - "!internal/openapi/generated/**"
           - "!internal/models/generated/**"
         target: auto
-      combined_raw:
-        flags:
-          - combined_raw
-        paths:
-          - cmd/**
-          - internal/**
-        target: auto
       combined_scoped:
         flags:
           - combined_scoped
@@ -67,13 +54,6 @@ coverage:
           - "!internal/openapi/generated/**"
           - "!internal/models/generated/**"
         target: auto
-      combined_raw:
-        flags:
-          - combined_raw
-        paths:
-          - cmd/**
-          - internal/**
-        target: auto
       combined_scoped:
         flags:
           - combined_scoped
@@ -88,3 +68,5 @@ ignore:
   - docs/**
   - docker/**
   - tests/**
+  - internal/openapi/generated/**
+  - internal/models/generated/**
