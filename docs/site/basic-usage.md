@@ -94,7 +94,7 @@ Supported day-to-day authentication modes are token and basic auth.
 ```bash
 bb --json auth status
 bb repo clone TEST/my-repo
-bb browse --repo TEST/my-repo --path src/main.go
+bb browse --repo TEST/my-repo src/main.go
 bb search repos --name demo --limit 20
 bb tag list --repo TEST/my-repo --limit 50
 bb --dry-run project create --key DEMO --name "Demo Project"
