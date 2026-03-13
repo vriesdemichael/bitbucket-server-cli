@@ -30,7 +30,7 @@ This page and linked ADR pages are generated from `docs/decisions/*.yaml` by `ta
 - [ADR 019: Configuration and secret handling policy](019-configuration-and-secret-handling-policy.md) (`development`, `accepted`)
 - [ADR 020: Execgit as default Git backend](020-execgit-as-default-git-backend.md) (`architecture`, `accepted`)
 - [ADR 021: Persistent auth configuration and keyring storage](021-persistent-auth-configuration-and-keyring-storage.md) (`architecture`, `accepted`)
-- [ADR 022: Auth mode priority and OAuth optionality](022-auth-mode-priority-and-oauth-optionality.md) (`architecture`, `accepted`)
+- [ADR 022: Auth mode priority and token-first policy](022-auth-mode-priority-and-oauth-optionality.md) (`architecture`, `accepted`)
 - [ADR 023: Long-term planning via GitHub issues](023-long-term-planning-via-github-issues.md) (`development`, `accepted`)
 - [ADR 024: Use .tmp directory for agent temporary files](024-use-tmp-directory-for-agent-temporary-files.md) (`development`, `accepted`)
 - [ADR 025: Git discipline and branch management](025-git-discipline-and-branch-management.md) (`development`, `accepted`)

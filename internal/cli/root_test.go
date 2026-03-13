@@ -2886,6 +2886,74 @@ func TestAuthStatusHostOverrideAndHumanLoginLogout(t *testing.T) {
 	}
 }
 
+func TestAuthTokenURLCommand(t *testing.T) {
+	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+
+	human := NewRootCommand()
+	humanBuffer := &bytes.Buffer{}
+	human.SetOut(humanBuffer)
+	human.SetErr(humanBuffer)
+	human.SetArgs([]string{"auth", "token-url", "--host", "https://bitbucket.acme.corp"})
+	if err := human.Execute(); err != nil {
+		t.Fatalf("auth token-url human failed: %v", err)
+	}
+	if !strings.Contains(humanBuffer.String(), "https://bitbucket.acme.corp/plugins/servlet/access-tokens/manage") {
+		t.Fatalf("expected PAT URL in human output, got: %s", humanBuffer.String())
+	}
+
+	jsonCmd := NewRootCommand()
+	jsonBuffer := &bytes.Buffer{}
+	jsonCmd.SetOut(jsonBuffer)
+	jsonCmd.SetErr(jsonBuffer)
+	jsonCmd.SetArgs([]string{"--json", "auth", "token-url"})
+	if err := jsonCmd.Execute(); err != nil {
+		t.Fatalf("auth token-url json failed: %v", err)
+	}
+	if !strings.Contains(jsonBuffer.String(), `"token_url": "http://localhost:7990/plugins/servlet/access-tokens/manage"`) {
+		t.Fatalf("expected token_url in json output, got: %s", jsonBuffer.String())
+	}
+}
+
+func TestAuthIdentityCommand(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.URL.Path != "/rest/api/latest/users" {
+			http.NotFound(writer, request)
+			return
+		}
+		writer.Header().Set("Content-Type", "application/json")
+		_, _ = writer.Write([]byte(`{"name":"svc-bot","slug":"svc-bot","displayName":"Service Bot","emailAddress":"svc-bot@example.local","id":91,"type":"SERVICE","active":true}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_TOKEN", "token-123")
+
+	command := NewRootCommand()
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "auth", "identity", "--host", server.URL})
+	if err := command.Execute(); err != nil {
+		t.Fatalf("auth identity json failed: %v", err)
+	}
+	if !strings.Contains(buffer.String(), `"slug": "svc-bot"`) {
+		t.Fatalf("expected identity slug in output, got: %s", buffer.String())
+	}
+
+	human := NewRootCommand()
+	humanBuffer := &bytes.Buffer{}
+	human.SetOut(humanBuffer)
+	human.SetErr(humanBuffer)
+	human.SetArgs([]string{"auth", "whoami", "--host", server.URL})
+	if err := human.Execute(); err != nil {
+		t.Fatalf("auth whoami failed: %v", err)
+	}
+	if !strings.Contains(humanBuffer.String(), "Authenticated user:") {
+		t.Fatalf("expected identity human output, got: %s", humanBuffer.String())
+	}
+
+}
+
 func TestResolveRepositoryReferenceWrappers(t *testing.T) {
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
 	cfg := config.AppConfig{ProjectKey: "TEST"}

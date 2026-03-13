@@ -7,12 +7,14 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -258,28 +260,71 @@ func (h *liveHarness) createPullRequest(ctx context.Context, projectKey, reposit
 		request.SetBasicAuth(h.config.BitbucketUsername, h.config.BitbucketPassword)
 	}
 
-	response, err := http.DefaultClient.Do(request)
-	if err != nil {
-		return "", fmt.Errorf("create pull request call failed: %w", err)
+	retries := h.config.RetryCount
+	if retries < 0 {
+		retries = 0
 	}
-	defer response.Body.Close()
+	backoff := h.config.RetryBackoff
+	if backoff <= 0 {
+		backoff = 250 * time.Millisecond
+	}
 
 	var parsed struct {
 		Id any `json:"id"`
 	}
-	if decodeErr := json.NewDecoder(response.Body).Decode(&parsed); decodeErr != nil {
-		return "", fmt.Errorf("decode pull request response: %w", decodeErr)
+
+	for attempt := 0; attempt <= retries; attempt++ {
+		activeRequest := request
+		if attempt > 0 {
+			clone := request.Clone(ctx)
+			clone.Body = io.NopCloser(bytes.NewReader(rawPayload))
+			activeRequest = clone
+		}
+
+		response, callErr := http.DefaultClient.Do(activeRequest)
+		if callErr != nil {
+			if attempt == retries {
+				return "", fmt.Errorf("create pull request call failed: %w", callErr)
+			}
+			time.Sleep(time.Duration(attempt+1) * backoff)
+			continue
+		}
+
+		body, readErr := io.ReadAll(response.Body)
+		_ = response.Body.Close()
+		if readErr != nil {
+			if attempt == retries {
+				return "", fmt.Errorf("read pull request response: %w", readErr)
+			}
+			time.Sleep(time.Duration(attempt+1) * backoff)
+			continue
+		}
+
+		if response.StatusCode == http.StatusTooManyRequests || response.StatusCode >= 500 {
+			if attempt == retries {
+				return "", fmt.Errorf("create pull request returned status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+			}
+			delay := retryAfterFromHeaders(response.Header, attempt, backoff)
+			time.Sleep(delay)
+			continue
+		}
+
+		if response.StatusCode < 200 || response.StatusCode >= 300 {
+			return "", fmt.Errorf("create pull request returned status %d: %s", response.StatusCode, strings.TrimSpace(string(body)))
+		}
+
+		if decodeErr := json.Unmarshal(body, &parsed); decodeErr != nil {
+			return "", fmt.Errorf("decode pull request response: %w", decodeErr)
+		}
+
+		if parsed.Id == nil {
+			return "", fmt.Errorf("create pull request response missing id")
+		}
+
+		return fmt.Sprintf("%v", parsed.Id), nil
 	}
 
-	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return "", fmt.Errorf("create pull request returned status %d", response.StatusCode)
-	}
-
-	if parsed.Id == nil {
-		return "", fmt.Errorf("create pull request response missing id")
-	}
-
-	return fmt.Sprintf("%v", parsed.Id), nil
+	return "", fmt.Errorf("create pull request failed after retries")
 }
 
 func (h *liveHarness) listCommitIDs(ctx context.Context, projectKey, repositorySlug string, limit int) ([]string, error) {
@@ -331,12 +376,157 @@ func repositoryPushURL(cfg config.AppConfig, projectKey, repositorySlug string) 
 }
 
 func runGit(directory string, args ...string) error {
-	command := exec.Command("git", args...)
-	command.Dir = directory
-	command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
-	output, err := command.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("git %s failed: %v: %s", strings.Join(args, " "), err, strings.TrimSpace(string(output)))
+	const maxRetries = 4
+	const baseBackoff = 500 * time.Millisecond
+
+	var lastErr error
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		command := exec.Command("git", args...)
+		command.Dir = directory
+		command.Env = append(os.Environ(), "GIT_TERMINAL_PROMPT=0")
+		output, err := command.CombinedOutput()
+		if err == nil {
+			return nil
+		}
+
+		message := strings.TrimSpace(string(output))
+		lastErr = fmt.Errorf("git %s failed: %v: %s", strings.Join(args, " "), err, message)
+
+		if attempt >= maxRetries || !isRetriableGitRateLimit(message, args) {
+			break
+		}
+
+		delay := retryAfterFromGitOutput(message)
+		if delay <= 0 {
+			delay = time.Duration(attempt+1) * baseBackoff
+		}
+		time.Sleep(delay)
 	}
-	return nil
+
+	return lastErr
+}
+
+func isRetriableGitRateLimit(message string, args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+
+	command := strings.ToLower(strings.TrimSpace(args[0]))
+	if command != "push" && command != "fetch" && command != "pull" && command != "clone" {
+		return false
+	}
+
+	lowered := strings.ToLower(message)
+	return strings.Contains(lowered, "error: 429") || strings.Contains(lowered, "http 429") || strings.Contains(lowered, "status 429")
+}
+
+func retryAfterFromGitOutput(message string) time.Duration {
+	retryAfterRegex := regexp.MustCompile(`(?i)retry-after\s*[:=]\s*([^\s]+)`)
+	if match := retryAfterRegex.FindStringSubmatch(message); len(match) == 2 {
+		value := strings.TrimSpace(match[1])
+		if seconds, err := strconv.Atoi(value); err == nil {
+			if seconds < 0 {
+				seconds = 0
+			}
+			return time.Duration(seconds) * time.Second
+		}
+		if retryAt, err := http.ParseTime(value); err == nil {
+			delay := time.Until(retryAt)
+			if delay < 0 {
+				return 0
+			}
+			return delay
+		}
+	}
+
+	lines := strings.Split(message, "\n")
+	for _, rawLine := range lines {
+		line := strings.TrimSpace(rawLine)
+		if line == "" {
+			continue
+		}
+
+		if strings.Contains(strings.ToLower(line), "retry-after") {
+			parts := strings.SplitN(line, ":", 2)
+			if len(parts) != 2 {
+				continue
+			}
+			value := strings.TrimSpace(parts[1])
+			if seconds, err := strconv.Atoi(value); err == nil {
+				if seconds < 0 {
+					seconds = 0
+				}
+				return time.Duration(seconds) * time.Second
+			}
+			if retryAt, err := http.ParseTime(value); err == nil {
+				delay := time.Until(retryAt)
+				if delay < 0 {
+					return 0
+				}
+				return delay
+			}
+		}
+	}
+
+	return 0
+}
+
+func retryAfterFromHeaders(headers http.Header, attempt int, fallbackBackoff time.Duration) time.Duration {
+	if fallbackBackoff <= 0 {
+		fallbackBackoff = 250 * time.Millisecond
+	}
+
+	if headers != nil {
+		retryAfter := strings.TrimSpace(headers.Get("Retry-After"))
+		if retryAfter != "" {
+			if seconds, err := strconv.Atoi(retryAfter); err == nil {
+				if seconds < 0 {
+					seconds = 0
+				}
+				return time.Duration(seconds) * time.Second
+			}
+			if retryAt, err := http.ParseTime(retryAfter); err == nil {
+				delay := time.Until(retryAt)
+				if delay < 0 {
+					return 0
+				}
+				return delay
+			}
+		}
+	}
+
+	return time.Duration(attempt+1) * fallbackBackoff
+}
+
+func TestRetryAfterParsingHelpers(t *testing.T) {
+	t.Run("git output helper parses retry-after seconds", func(t *testing.T) {
+		delay := retryAfterFromGitOutput("fatal: HTTP 429\nRetry-After: 2")
+		if delay != 2*time.Second {
+			t.Fatalf("expected 2s delay, got %s", delay)
+		}
+	})
+
+	t.Run("header helper parses retry-after http date", func(t *testing.T) {
+		retryAt := time.Now().Add(2 * time.Second).UTC().Format(http.TimeFormat)
+		delay := retryAfterFromHeaders(http.Header{"Retry-After": []string{retryAt}}, 0, time.Millisecond)
+		if delay <= 0 || delay > 3*time.Second {
+			t.Fatalf("expected positive delay <=3s, got %s", delay)
+		}
+	})
+
+	t.Run("header helper falls back", func(t *testing.T) {
+		delay := retryAfterFromHeaders(nil, 1, 250*time.Millisecond)
+		if delay != 500*time.Millisecond {
+			t.Fatalf("expected fallback delay 500ms, got %s", delay)
+		}
+	})
+
+	t.Run("git retry detection limits commands", func(t *testing.T) {
+		if isRetriableGitRateLimit("HTTP 429", []string{"commit"}) {
+			t.Fatal("expected non-network git command to be non-retriable")
+		}
+		if !isRetriableGitRateLimit("fatal: error: 429", []string{"push", "origin", "master"}) {
+			t.Fatal("expected git push 429 to be retriable")
+		}
+	})
 }

@@ -2,6 +2,7 @@ package openapi
 
 import (
 	"bytes"
+	"context"
 	"errors"
 	"io"
 	"net/http"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/diagnostics"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 )
 
 type retryRoundTripperFunc func(*http.Request) (*http.Response, error)
@@ -200,6 +202,132 @@ func TestRetryTransport(t *testing.T) {
 			t.Fatalf("expected 200 response, got %d", response.StatusCode)
 		}
 	})
+
+	t.Run("honors retry-after header over base backoff", func(t *testing.T) {
+		var attempts atomic.Int32
+		transport := &retryTransport{
+			base: retryRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
+				attempt := attempts.Add(1)
+				if attempt == 1 {
+					return &http.Response{
+						StatusCode: http.StatusTooManyRequests,
+						Body:       io.NopCloser(strings.NewReader("rate limited")),
+						Header: http.Header{
+							"Retry-After": []string{"0"},
+						},
+					}, nil
+				}
+				return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader("{}")), Header: make(http.Header)}, nil
+			}),
+			retries:     1,
+			baseBackoff: time.Hour,
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+		defer cancel()
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.test", nil)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+
+		response, err := transport.RoundTrip(request)
+		if err != nil {
+			t.Fatalf("expected retry to complete without waiting an hour, got: %v", err)
+		}
+		if response.StatusCode != http.StatusOK {
+			t.Fatalf("expected 200 response, got %d", response.StatusCode)
+		}
+		if attempts.Load() != 2 {
+			t.Fatalf("expected 2 attempts, got %d", attempts.Load())
+		}
+	})
+
+	t.Run("returns context error when canceled during status retry wait", func(t *testing.T) {
+		transport := &retryTransport{
+			base: retryRoundTripperFunc(func(request *http.Request) (*http.Response, error) {
+				return &http.Response{StatusCode: http.StatusServiceUnavailable, Body: io.NopCloser(strings.NewReader("{}")), Header: make(http.Header)}, nil
+			}),
+			retries:     1,
+			baseBackoff: time.Hour,
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+		defer cancel()
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, "http://example.test", nil)
+		if err != nil {
+			t.Fatalf("new request: %v", err)
+		}
+
+		_, err = transport.RoundTrip(request)
+		if err == nil {
+			t.Fatal("expected context cancellation error")
+		}
+		if !errors.Is(err, context.DeadlineExceeded) {
+			t.Fatalf("expected deadline exceeded, got %v", err)
+		}
+	})
+}
+
+func TestRetryDelayFromResponse(t *testing.T) {
+	t.Run("uses retry-after seconds", func(t *testing.T) {
+		delay := retryDelayFromResponse(http.Header{"Retry-After": []string{"3"}}, 0, time.Millisecond)
+		if delay != 3*time.Second {
+			t.Fatalf("expected 3s delay, got %s", delay)
+		}
+	})
+
+	t.Run("falls back on invalid retry-after", func(t *testing.T) {
+		delay := retryDelayFromResponse(http.Header{"Retry-After": []string{"invalid"}}, 1, 200*time.Millisecond)
+		if delay != 400*time.Millisecond {
+			t.Fatalf("expected fallback delay 400ms, got %s", delay)
+		}
+	})
+
+	t.Run("supports retry-after http date", func(t *testing.T) {
+		retryAt := time.Now().Add(2 * time.Second).UTC().Format(http.TimeFormat)
+		delay := retryDelayFromResponse(http.Header{"Retry-After": []string{retryAt}}, 0, time.Millisecond)
+		if delay <= 0 || delay > 3*time.Second {
+			t.Fatalf("expected positive delay <=3s, got %s", delay)
+		}
+	})
+
+	t.Run("normalizes negative retry-after seconds", func(t *testing.T) {
+		delay := retryDelayFromResponse(http.Header{"Retry-After": []string{"-2"}}, 0, time.Millisecond)
+		if delay != 0 {
+			t.Fatalf("expected zero delay for negative retry-after, got %s", delay)
+		}
+	})
+
+	t.Run("falls back when backoff is non-positive", func(t *testing.T) {
+		delay := retryDelayFromResponse(nil, 1, 0)
+		if delay != 500*time.Millisecond {
+			t.Fatalf("expected fallback delay 500ms, got %s", delay)
+		}
+	})
+
+	t.Run("returns zero for past retry-after date", func(t *testing.T) {
+		retryAt := time.Now().Add(-2 * time.Second).UTC().Format(http.TimeFormat)
+		delay := retryDelayFromResponse(http.Header{"Retry-After": []string{retryAt}}, 0, time.Millisecond)
+		if delay != 0 {
+			t.Fatalf("expected zero delay for past date, got %s", delay)
+		}
+	})
+}
+
+func TestSleepWithContext(t *testing.T) {
+	t.Run("returns nil for zero delay", func(t *testing.T) {
+		if err := sleepWithContext(context.Background(), 0); err != nil {
+			t.Fatalf("expected nil error for zero delay, got %v", err)
+		}
+	})
+
+	t.Run("returns context canceled", func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		if err := sleepWithContext(ctx, time.Second); err == nil {
+			t.Fatal("expected canceled context error")
+		}
+	})
 }
 
 func TestNewClientWithResponsesFromConfigInvalidCA(t *testing.T) {
@@ -225,4 +353,74 @@ func TestDiagnosticsWriter(t *testing.T) {
 	if writer := diagnostics.EnabledWriter(false, buffer); writer != io.Discard {
 		t.Fatalf("expected discard writer when disabled, got %T", writer)
 	}
+}
+
+func TestNewClientWithResponsesFromConfigAuthAndBasePath(t *testing.T) {
+	t.Run("uses bearer token auth", func(t *testing.T) {
+		var receivedAuth string
+		var receivedPath string
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			receivedAuth = request.Header.Get("Authorization")
+			receivedPath = request.URL.Path
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"size":0,"limit":1,"isLastPage":true,"values":[]}`))
+		}))
+		defer server.Close()
+
+		client, err := NewClientWithResponsesFromConfig(config.AppConfig{
+			BitbucketURL:   server.URL,
+			BitbucketToken: "abc123",
+			RequestTimeout: time.Second,
+			RetryCount:     0,
+			RetryBackoff:   time.Millisecond,
+		})
+		if err != nil {
+			t.Fatalf("new client: %v", err)
+		}
+
+		limit := float32(1)
+		response, err := client.GetProjectsWithResponse(context.Background(), &openapigenerated.GetProjectsParams{Limit: &limit})
+		if err != nil {
+			t.Fatalf("get projects: %v", err)
+		}
+		if response.StatusCode() != http.StatusOK {
+			t.Fatalf("expected 200 response, got %d", response.StatusCode())
+		}
+		if receivedAuth != "Bearer abc123" {
+			t.Fatalf("expected bearer auth header, got %q", receivedAuth)
+		}
+		if receivedPath != "/rest/api/latest/projects" {
+			t.Fatalf("expected /rest path prefix, got %q", receivedPath)
+		}
+	})
+
+	t.Run("uses basic auth when token is absent", func(t *testing.T) {
+		var authHeader string
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			authHeader = request.Header.Get("Authorization")
+			writer.Header().Set("Content-Type", "application/json")
+			_, _ = writer.Write([]byte(`{"size":0,"limit":1,"isLastPage":true,"values":[]}`))
+		}))
+		defer server.Close()
+
+		client, err := NewClientWithResponsesFromConfig(config.AppConfig{
+			BitbucketURL:      server.URL,
+			BitbucketUsername: "alice",
+			BitbucketPassword: "secret",
+			RequestTimeout:    time.Second,
+			RetryCount:        0,
+			RetryBackoff:      time.Millisecond,
+		})
+		if err != nil {
+			t.Fatalf("new client: %v", err)
+		}
+
+		limit := float32(1)
+		if _, err := client.GetProjectsWithResponse(context.Background(), &openapigenerated.GetProjectsParams{Limit: &limit}); err != nil {
+			t.Fatalf("get projects: %v", err)
+		}
+		if !strings.HasPrefix(authHeader, "Basic ") {
+			t.Fatalf("expected basic auth header, got %q", authHeader)
+		}
+	})
 }
