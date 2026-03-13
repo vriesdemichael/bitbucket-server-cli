@@ -8,8 +8,8 @@ import (
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 )
 
-const ContractVersion = "v1"
-const ContractName = "bbsc.machine"
+const ContractVersion = "v2"
+const ContractName = "bb.machine"
 
 type Envelope struct {
 	Version string       `json:"version"`

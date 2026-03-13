@@ -24,7 +24,7 @@ func NewRootCommand() *cobra.Command {
 	options := &rootOptions{}
 
 	rootCmd := &cobra.Command{
-		Use:           "bbsc",
+		Use:           "bb",
 		Short:         "Bitbucket Server CLI (live-behavior first)",
 		SilenceErrors: true,
 		SilenceUsage:  true,
@@ -91,7 +91,7 @@ func loadConfig() (config.AppConfig, error) {
 
 	if cfg.InsecureSkipVerify {
 		insecureTLSWarningOnce.Do(func() {
-			fmt.Fprintln(os.Stderr, "Warning: TLS certificate verification is disabled (--insecure-skip-verify / BBSC_INSECURE_SKIP_VERIFY); use only for local or development environments")
+			fmt.Fprintln(os.Stderr, "Warning: TLS certificate verification is disabled (--insecure-skip-verify / BB_INSECURE_SKIP_VERIFY); use only for local or development environments")
 		})
 	}
 
@@ -112,54 +112,37 @@ func applyRuntimeFlagOverrides(cmd *cobra.Command) error {
 		return cmd.PersistentFlags().Lookup(flagName)
 	}
 
-	setIfChanged := func(flagName, envKey string) error {
+	setIfChanged := func(flagName, envKey string) {
 		flag := lookupFlag(flagName)
 		if flag == nil || !flag.Changed {
-			return nil
+			return
 		}
 
 		value := strings.TrimSpace(flag.Value.String())
 
 		if value == "" {
-			if err := os.Unsetenv(envKey); err != nil {
-				return apperrors.New(apperrors.KindInternal, "failed to clear runtime override", err)
-			}
-			return nil
+			_ = os.Unsetenv(envKey)
+			return
 		}
 
-		if err := os.Setenv(envKey, value); err != nil {
-			return apperrors.New(apperrors.KindInternal, "failed to set runtime override", err)
-		}
-
-		return nil
+		_ = os.Setenv(envKey, value)
 	}
 
-	if err := setIfChanged("ca-file", "BBSC_CA_FILE"); err != nil {
-		return err
+	overrides := []struct {
+		flagName string
+		envKey   string
+	}{
+		{flagName: "ca-file", envKey: "BB_CA_FILE"},
+		{flagName: "insecure-skip-verify", envKey: "BB_INSECURE_SKIP_VERIFY"},
+		{flagName: "request-timeout", envKey: "BB_REQUEST_TIMEOUT"},
+		{flagName: "retry-count", envKey: "BB_RETRY_COUNT"},
+		{flagName: "retry-backoff", envKey: "BB_RETRY_BACKOFF"},
+		{flagName: "log-level", envKey: "BB_LOG_LEVEL"},
+		{flagName: "log-format", envKey: "BB_LOG_FORMAT"},
 	}
 
-	if err := setIfChanged("insecure-skip-verify", "BBSC_INSECURE_SKIP_VERIFY"); err != nil {
-		return err
-	}
-
-	if err := setIfChanged("request-timeout", "BBSC_REQUEST_TIMEOUT"); err != nil {
-		return err
-	}
-
-	if err := setIfChanged("retry-count", "BBSC_RETRY_COUNT"); err != nil {
-		return err
-	}
-
-	if err := setIfChanged("retry-backoff", "BBSC_RETRY_BACKOFF"); err != nil {
-		return err
-	}
-
-	if err := setIfChanged("log-level", "BBSC_LOG_LEVEL"); err != nil {
-		return err
-	}
-
-	if err := setIfChanged("log-format", "BBSC_LOG_FORMAT"); err != nil {
-		return err
+	for _, override := range overrides {
+		setIfChanged(override.flagName, override.envKey)
 	}
 
 	return nil

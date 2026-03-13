@@ -8,8 +8,8 @@ import (
 )
 
 func TestApplyRuntimeFlagOverridesLoggingFlags(t *testing.T) {
-	t.Setenv("BBSC_LOG_LEVEL", "")
-	t.Setenv("BBSC_LOG_FORMAT", "")
+	t.Setenv("BB_LOG_LEVEL", "")
+	t.Setenv("BB_LOG_FORMAT", "")
 
 	cmd := &cobra.Command{Use: "test"}
 	cmd.Flags().String("log-level", "", "")
@@ -26,10 +26,10 @@ func TestApplyRuntimeFlagOverridesLoggingFlags(t *testing.T) {
 		t.Fatalf("applyRuntimeFlagOverrides: %v", err)
 	}
 
-	if got := os.Getenv("BBSC_LOG_LEVEL"); got != "debug" {
-		t.Fatalf("expected BBSC_LOG_LEVEL=debug, got %q", got)
+	if got := os.Getenv("BB_LOG_LEVEL"); got != "debug" {
+		t.Fatalf("expected BB_LOG_LEVEL=debug, got %q", got)
 	}
-	if got := os.Getenv("BBSC_LOG_FORMAT"); got != "jsonl" {
-		t.Fatalf("expected BBSC_LOG_FORMAT=jsonl, got %q", got)
+	if got := os.Getenv("BB_LOG_FORMAT"); got != "jsonl" {
+		t.Fatalf("expected BB_LOG_FORMAT=jsonl, got %q", got)
 	}
 }

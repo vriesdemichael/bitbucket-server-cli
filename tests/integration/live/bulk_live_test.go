@@ -41,7 +41,7 @@ func TestLiveBulkPolicyPlanApplyStatus(t *testing.T) {
 	policyPath := filepath.Join(tempDir, "bulk-policy.yaml")
 	planPath := filepath.Join(tempDir, "bulk-plan.json")
 	policy := strings.Join([]string{
-		"apiVersion: bbsc.io/v1alpha1",
+		"apiVersion: bb.io/v1alpha1",
 		"selector:",
 		"  projectKey: " + seeded.Key,
 		"  repoPattern: lt-repo-*",

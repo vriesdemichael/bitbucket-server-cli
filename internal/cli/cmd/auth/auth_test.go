@@ -98,9 +98,9 @@ func TestStatusMissingDependenciesReturnError(t *testing.T) {
 }
 
 func TestAuthCommandAdditionalBranches(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
 	t.Run("login resolves host from loaded config when host flag missing", func(t *testing.T) {
 		cmd := New(Dependencies{
@@ -174,9 +174,9 @@ func TestAuthCommandAdditionalBranches(t *testing.T) {
 }
 
 func TestServerListAndUseCommands(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
 	if _, err := config.SaveLogin(config.LoginInput{Host: "http://one.local:7990", Token: "token-1", SetDefault: true}); err != nil {
 		t.Fatalf("save login one: %v", err)
@@ -242,9 +242,9 @@ func TestServerListAndUseCommands(t *testing.T) {
 }
 
 func TestServerCommandsJSONAndEmptyStates(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
 	cmd := New(Dependencies{
 		JSONEnabled: func() bool { return false },
@@ -316,8 +316,8 @@ func TestServerCommandsJSONAndEmptyStates(t *testing.T) {
 
 func TestServerCommandsErrorBranches(t *testing.T) {
 	configPath := t.TempDir()
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
 	cmd := New(Dependencies{
 		JSONEnabled: func() bool { return false },
@@ -336,8 +336,8 @@ func TestServerCommandsErrorBranches(t *testing.T) {
 		t.Fatal("expected error when config path points to directory")
 	}
 
-	configPath = filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
+	configPath = filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
 	if _, err := config.SaveLogin(config.LoginInput{Host: "http://example.local:7990", Token: "t", SetDefault: true}); err != nil {
 		t.Fatalf("save login: %v", err)
 	}
@@ -378,9 +378,9 @@ func TestServerCommandsErrorBranches(t *testing.T) {
 }
 
 func TestServerListIncludesUsernameForBasicAuth(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
 	if _, err := config.SaveLogin(config.LoginInput{Host: "http://basic.local:7990", Username: "alice", Password: "secret", SetDefault: true}); err != nil {
 		t.Fatalf("save basic login: %v", err)

@@ -255,7 +255,7 @@ func dryRunCommandPath(command *cobra.Command) string {
 	}
 
 	path := strings.TrimSpace(command.CommandPath())
-	path = strings.TrimPrefix(path, "bbsc ")
+	path = strings.TrimPrefix(path, "bb ")
 	return strings.TrimSpace(path)
 }
 

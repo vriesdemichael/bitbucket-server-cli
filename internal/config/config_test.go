@@ -11,17 +11,17 @@ import (
 )
 
 func TestLoadFromEnvDefaults(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "")
 	t.Setenv("BITBUCKET_VERSION_TARGET", "")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "")
-	t.Setenv("BBSC_CA_FILE", "")
-	t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
-	t.Setenv("BBSC_REQUEST_TIMEOUT", "")
-	t.Setenv("BBSC_RETRY_COUNT", "")
-	t.Setenv("BBSC_RETRY_BACKOFF", "")
-	t.Setenv("BBSC_LOG_LEVEL", "")
-	t.Setenv("BBSC_LOG_FORMAT", "")
+	t.Setenv("BB_CA_FILE", "")
+	t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+	t.Setenv("BB_REQUEST_TIMEOUT", "")
+	t.Setenv("BB_RETRY_COUNT", "")
+	t.Setenv("BB_RETRY_BACKOFF", "")
+	t.Setenv("BB_LOG_LEVEL", "")
+	t.Setenv("BB_LOG_FORMAT", "")
 
 	config, err := LoadFromEnv()
 	if err != nil {
@@ -118,7 +118,7 @@ func TestLoadFromEnvFindsRepositoryDotenvFromNestedWorkingDirectory(t *testing.T
 		t.Fatalf("chdir nested: %v", err)
 	}
 
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	unsetEnvKeys(t,
 		"BITBUCKET_USERNAME",
 		"BITBUCKET_PASSWORD",
@@ -127,11 +127,11 @@ func TestLoadFromEnvFindsRepositoryDotenvFromNestedWorkingDirectory(t *testing.T
 		"ADMIN_PASSWORD",
 		"BITBUCKET_TOKEN",
 		"BITBUCKET_URL",
-		"BBSC_REQUEST_TIMEOUT",
-		"BBSC_RETRY_COUNT",
-		"BBSC_RETRY_BACKOFF",
-		"BBSC_LOG_LEVEL",
-		"BBSC_LOG_FORMAT",
+		"BB_REQUEST_TIMEOUT",
+		"BB_RETRY_COUNT",
+		"BB_RETRY_BACKOFF",
+		"BB_LOG_LEVEL",
+		"BB_LOG_FORMAT",
 	)
 
 	loaded, err := LoadFromEnv()
@@ -162,19 +162,19 @@ func unsetEnvKeys(t *testing.T, keys ...string) {
 }
 
 func TestLoadFromEnvTransportOverrides(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
-	t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "true")
-	t.Setenv("BBSC_REQUEST_TIMEOUT", "45s")
-	t.Setenv("BBSC_RETRY_COUNT", "5")
-	t.Setenv("BBSC_RETRY_BACKOFF", "900ms")
-	t.Setenv("BBSC_LOG_LEVEL", "debug")
-	t.Setenv("BBSC_LOG_FORMAT", "jsonl")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_INSECURE_SKIP_VERIFY", "true")
+	t.Setenv("BB_REQUEST_TIMEOUT", "45s")
+	t.Setenv("BB_RETRY_COUNT", "5")
+	t.Setenv("BB_RETRY_BACKOFF", "900ms")
+	t.Setenv("BB_LOG_LEVEL", "debug")
+	t.Setenv("BB_LOG_FORMAT", "jsonl")
 
 	caFile := filepath.Join(t.TempDir(), "ca.pem")
 	if err := os.WriteFile(caFile, []byte("-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"), 0o600); err != nil {
 		t.Fatalf("write ca file: %v", err)
 	}
-	t.Setenv("BBSC_CA_FILE", caFile)
+	t.Setenv("BB_CA_FILE", caFile)
 
 	loaded, err := LoadFromEnv()
 	if err != nil {
@@ -208,83 +208,83 @@ func TestLoadFromEnvTransportOverrides(t *testing.T) {
 }
 
 func TestLoadFromEnvTransportOverrideValidation(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
-	t.Setenv("BBSC_CA_FILE", "")
-	t.Setenv("BBSC_LOG_LEVEL", "")
-	t.Setenv("BBSC_LOG_FORMAT", "")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_CA_FILE", "")
+	t.Setenv("BB_LOG_LEVEL", "")
+	t.Setenv("BB_LOG_FORMAT", "")
 
 	t.Run("invalid bool", func(t *testing.T) {
-		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "maybe")
-		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
-		t.Setenv("BBSC_RETRY_COUNT", "")
-		t.Setenv("BBSC_RETRY_BACKOFF", "")
+		t.Setenv("BB_INSECURE_SKIP_VERIFY", "maybe")
+		t.Setenv("BB_REQUEST_TIMEOUT", "")
+		t.Setenv("BB_RETRY_COUNT", "")
+		t.Setenv("BB_RETRY_BACKOFF", "")
 		if _, err := LoadFromEnv(); err == nil {
 			t.Fatal("expected validation error")
 		}
 	})
 
 	t.Run("invalid timeout", func(t *testing.T) {
-		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
-		t.Setenv("BBSC_REQUEST_TIMEOUT", "soon")
-		t.Setenv("BBSC_RETRY_COUNT", "")
-		t.Setenv("BBSC_RETRY_BACKOFF", "")
+		t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BB_REQUEST_TIMEOUT", "soon")
+		t.Setenv("BB_RETRY_COUNT", "")
+		t.Setenv("BB_RETRY_BACKOFF", "")
 		if _, err := LoadFromEnv(); err == nil {
 			t.Fatal("expected validation error")
 		}
 	})
 
 	t.Run("invalid retry count", func(t *testing.T) {
-		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
-		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
-		t.Setenv("BBSC_RETRY_COUNT", "-2")
-		t.Setenv("BBSC_RETRY_BACKOFF", "")
+		t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BB_REQUEST_TIMEOUT", "")
+		t.Setenv("BB_RETRY_COUNT", "-2")
+		t.Setenv("BB_RETRY_BACKOFF", "")
 		if _, err := LoadFromEnv(); err == nil {
 			t.Fatal("expected validation error")
 		}
 	})
 
 	t.Run("invalid retry backoff", func(t *testing.T) {
-		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
-		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
-		t.Setenv("BBSC_RETRY_COUNT", "")
-		t.Setenv("BBSC_RETRY_BACKOFF", "0s")
+		t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BB_REQUEST_TIMEOUT", "")
+		t.Setenv("BB_RETRY_COUNT", "")
+		t.Setenv("BB_RETRY_BACKOFF", "0s")
 		if _, err := LoadFromEnv(); err == nil {
 			t.Fatal("expected validation error")
 		}
 	})
 
 	t.Run("invalid ca path", func(t *testing.T) {
-		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
-		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
-		t.Setenv("BBSC_RETRY_COUNT", "")
-		t.Setenv("BBSC_RETRY_BACKOFF", "")
-		t.Setenv("BBSC_CA_FILE", filepath.Join(t.TempDir(), "missing.pem"))
+		t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BB_REQUEST_TIMEOUT", "")
+		t.Setenv("BB_RETRY_COUNT", "")
+		t.Setenv("BB_RETRY_BACKOFF", "")
+		t.Setenv("BB_CA_FILE", filepath.Join(t.TempDir(), "missing.pem"))
 		if _, err := LoadFromEnv(); err == nil {
 			t.Fatal("expected validation error")
 		}
 	})
 
 	t.Run("invalid log level", func(t *testing.T) {
-		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
-		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
-		t.Setenv("BBSC_RETRY_COUNT", "")
-		t.Setenv("BBSC_RETRY_BACKOFF", "")
-		t.Setenv("BBSC_CA_FILE", "")
-		t.Setenv("BBSC_LOG_LEVEL", "trace")
-		t.Setenv("BBSC_LOG_FORMAT", "")
+		t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BB_REQUEST_TIMEOUT", "")
+		t.Setenv("BB_RETRY_COUNT", "")
+		t.Setenv("BB_RETRY_BACKOFF", "")
+		t.Setenv("BB_CA_FILE", "")
+		t.Setenv("BB_LOG_LEVEL", "trace")
+		t.Setenv("BB_LOG_FORMAT", "")
 		if _, err := LoadFromEnv(); err == nil {
 			t.Fatal("expected validation error")
 		}
 	})
 
 	t.Run("invalid log format", func(t *testing.T) {
-		t.Setenv("BBSC_INSECURE_SKIP_VERIFY", "")
-		t.Setenv("BBSC_REQUEST_TIMEOUT", "")
-		t.Setenv("BBSC_RETRY_COUNT", "")
-		t.Setenv("BBSC_RETRY_BACKOFF", "")
-		t.Setenv("BBSC_CA_FILE", "")
-		t.Setenv("BBSC_LOG_LEVEL", "")
-		t.Setenv("BBSC_LOG_FORMAT", "structured")
+		t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+		t.Setenv("BB_REQUEST_TIMEOUT", "")
+		t.Setenv("BB_RETRY_COUNT", "")
+		t.Setenv("BB_RETRY_BACKOFF", "")
+		t.Setenv("BB_CA_FILE", "")
+		t.Setenv("BB_LOG_LEVEL", "")
+		t.Setenv("BB_LOG_FORMAT", "structured")
 		if _, err := LoadFromEnv(); err == nil {
 			t.Fatal("expected validation error")
 		}
@@ -292,7 +292,7 @@ func TestLoadFromEnvTransportOverrideValidation(t *testing.T) {
 }
 
 func TestLoadFromEnvInvalidURL(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "://broken")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 
@@ -303,7 +303,7 @@ func TestLoadFromEnvInvalidURL(t *testing.T) {
 }
 
 func TestLoadFromEnvNormalizesURLAndAliasUsername(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "localhost:7990")
 	t.Setenv("BITBUCKET_USER", "admin")
 	t.Setenv("BITBUCKET_PASSWORD", "admin")
@@ -326,9 +326,9 @@ func TestLoadFromEnvNormalizesURLAndAliasUsername(t *testing.T) {
 }
 
 func TestSaveLoginAndLoadStoredConfig(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
 	_, err := SaveLogin(LoginInput{
 		Host:       "localhost:7990",
@@ -364,9 +364,9 @@ func TestSaveLoginAndLoadStoredConfig(t *testing.T) {
 }
 
 func TestListServerContextsAndSetDefaultHost(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
 	if _, err := SaveLogin(LoginInput{Host: "http://alpha.local:7990", Token: "token-alpha", SetDefault: true}); err != nil {
 		t.Fatalf("save alpha login: %v", err)
@@ -413,8 +413,8 @@ func TestListServerContextsAndSetDefaultHost(t *testing.T) {
 
 func TestServerContextConfigErrorBranchesAndSorting(t *testing.T) {
 	brokenConfigPath := t.TempDir()
-	t.Setenv("BBSC_CONFIG_PATH", brokenConfigPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	t.Setenv("BB_CONFIG_PATH", brokenConfigPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
 	if _, err := ListServerContexts(); err == nil {
 		t.Fatal("expected list server contexts to fail for directory config path")
@@ -424,8 +424,8 @@ func TestServerContextConfigErrorBranchesAndSorting(t *testing.T) {
 	}
 
 	baseDir := t.TempDir()
-	configPath := filepath.Join(baseDir, "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
+	configPath := filepath.Join(baseDir, "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
 
 	stored := StoredConfig{
 		DefaultHost: "",
@@ -457,7 +457,7 @@ func TestServerContextConfigErrorBranchesAndSorting(t *testing.T) {
 	if err := os.WriteFile(parentFile, []byte("x"), 0o600); err != nil {
 		t.Fatalf("write parent marker file: %v", err)
 	}
-	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(parentFile, "config.yaml"))
+	t.Setenv("BB_CONFIG_PATH", filepath.Join(parentFile, "config.yaml"))
 	if _, err := SetDefaultHost("http://a.local:7990"); err == nil {
 		t.Fatal("expected save failure when config parent is a file")
 	}
@@ -474,8 +474,8 @@ func TestConfigAuthModeAndLogoutBranches(t *testing.T) {
 		t.Fatal("expected auth mode basic")
 	}
 
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
 	if err := Logout(""); err == nil || apperrors.ExitCode(err) != 4 {
 		t.Fatalf("expected not found logout error when no stored host, got: %v", err)
 	}
@@ -486,9 +486,9 @@ func TestResolveStoredCredentialsAndLoadFromStoredHost(t *testing.T) {
 		t.Fatal("expected not found when stored config is empty")
 	}
 
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 	t.Setenv("BITBUCKET_URL", "")
 	t.Setenv("BITBUCKET_TOKEN", "")
 	t.Setenv("BITBUCKET_USERNAME", "")
@@ -543,9 +543,9 @@ func TestSaveLoginValidationBranches(t *testing.T) {
 }
 
 func TestLoadFromEnvEnvSourceOverridesStored(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 	t.Setenv("BITBUCKET_URL", "http://stored.local:7990")
 	t.Setenv("BITBUCKET_USERNAME", "env-user")
 	t.Setenv("BITBUCKET_PASSWORD", "env-pass")
@@ -576,8 +576,8 @@ func TestLoadFromEnvEnvSourceOverridesStored(t *testing.T) {
 }
 
 func TestLogoutExplicitHostRemovesProfile(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
 
 	stored := StoredConfig{
 		DefaultHost: "http://one.local:7990",
@@ -611,8 +611,8 @@ func TestLogoutExplicitHostRemovesProfile(t *testing.T) {
 }
 
 func TestSaveLoginTokenAndMapInitialization(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
 
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -642,8 +642,8 @@ func TestSaveLoginTokenAndMapInitialization(t *testing.T) {
 }
 
 func TestLoadStoredConfigInvalidYAML(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
 
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o700); err != nil {
 		t.Fatalf("mkdir: %v", err)
@@ -697,67 +697,67 @@ func TestValidateAndHostKeyBranches(t *testing.T) {
 
 func TestConfigEnvParsingHelpers(t *testing.T) {
 	t.Run("env bool helper", func(t *testing.T) {
-		t.Setenv("BBSC_PARSE_BOOL", "")
-		value, err := envBoolOrDefault("BBSC_PARSE_BOOL", true)
+		t.Setenv("BB_PARSE_BOOL", "")
+		value, err := envBoolOrDefault("BB_PARSE_BOOL", true)
 		if err != nil || !value {
 			t.Fatalf("expected fallback true, got value=%v err=%v", value, err)
 		}
 
-		t.Setenv("BBSC_PARSE_BOOL", "false")
-		value, err = envBoolOrDefault("BBSC_PARSE_BOOL", true)
+		t.Setenv("BB_PARSE_BOOL", "false")
+		value, err = envBoolOrDefault("BB_PARSE_BOOL", true)
 		if err != nil || value {
 			t.Fatalf("expected parsed false, got value=%v err=%v", value, err)
 		}
 
-		t.Setenv("BBSC_PARSE_BOOL", "not-bool")
-		if _, err = envBoolOrDefault("BBSC_PARSE_BOOL", false); err == nil {
+		t.Setenv("BB_PARSE_BOOL", "not-bool")
+		if _, err = envBoolOrDefault("BB_PARSE_BOOL", false); err == nil {
 			t.Fatal("expected parse error")
 		}
 	})
 
 	t.Run("env int helper", func(t *testing.T) {
-		t.Setenv("BBSC_PARSE_INT", "")
-		value, err := envIntOrDefault("BBSC_PARSE_INT", 7)
+		t.Setenv("BB_PARSE_INT", "")
+		value, err := envIntOrDefault("BB_PARSE_INT", 7)
 		if err != nil || value != 7 {
 			t.Fatalf("expected fallback 7, got value=%d err=%v", value, err)
 		}
 
-		t.Setenv("BBSC_PARSE_INT", "12")
-		value, err = envIntOrDefault("BBSC_PARSE_INT", 7)
+		t.Setenv("BB_PARSE_INT", "12")
+		value, err = envIntOrDefault("BB_PARSE_INT", 7)
 		if err != nil || value != 12 {
 			t.Fatalf("expected parsed 12, got value=%d err=%v", value, err)
 		}
 
-		t.Setenv("BBSC_PARSE_INT", "12x")
-		if _, err = envIntOrDefault("BBSC_PARSE_INT", 7); err == nil {
+		t.Setenv("BB_PARSE_INT", "12x")
+		if _, err = envIntOrDefault("BB_PARSE_INT", 7); err == nil {
 			t.Fatal("expected parse error")
 		}
 	})
 
 	t.Run("env duration helper", func(t *testing.T) {
-		t.Setenv("BBSC_PARSE_DUR", "")
-		value, err := envDurationOrDefault("BBSC_PARSE_DUR", 2*time.Second)
+		t.Setenv("BB_PARSE_DUR", "")
+		value, err := envDurationOrDefault("BB_PARSE_DUR", 2*time.Second)
 		if err != nil || value != 2*time.Second {
 			t.Fatalf("expected fallback 2s, got value=%s err=%v", value, err)
 		}
 
-		t.Setenv("BBSC_PARSE_DUR", "350ms")
-		value, err = envDurationOrDefault("BBSC_PARSE_DUR", 2*time.Second)
+		t.Setenv("BB_PARSE_DUR", "350ms")
+		value, err = envDurationOrDefault("BB_PARSE_DUR", 2*time.Second)
 		if err != nil || value != 350*time.Millisecond {
 			t.Fatalf("expected parsed 350ms, got value=%s err=%v", value, err)
 		}
 
-		t.Setenv("BBSC_PARSE_DUR", "later")
-		if _, err = envDurationOrDefault("BBSC_PARSE_DUR", time.Second); err == nil {
+		t.Setenv("BB_PARSE_DUR", "later")
+		if _, err = envDurationOrDefault("BB_PARSE_DUR", time.Second); err == nil {
 			t.Fatal("expected parse error")
 		}
 	})
 }
 
 func TestLoadFromEnvUsesStoredTokenBranch(t *testing.T) {
-	configPath := filepath.Join(t.TempDir(), "bbsc", "config.yaml")
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 	t.Setenv("BITBUCKET_URL", "http://stored.local:7990")
 	t.Setenv("BITBUCKET_TOKEN", "")
 	t.Setenv("BITBUCKET_USERNAME", "")

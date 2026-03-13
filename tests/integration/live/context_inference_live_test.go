@@ -250,8 +250,8 @@ func TestLiveCLIAuthServerContextSwitchingFlow(t *testing.T) {
 	harness := newLiveHarness(t)
 
 	configPath := t.TempDir() + "/config.yaml"
-	t.Setenv("BBSC_CONFIG_PATH", configPath)
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 	t.Setenv("BITBUCKET_URL", harness.config.BitbucketURL)
 	t.Setenv("BITBUCKET_USERNAME", harness.config.BitbucketUsername)
 	t.Setenv("BITBUCKET_PASSWORD", harness.config.BitbucketPassword)

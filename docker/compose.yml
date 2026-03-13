@@ -3,7 +3,7 @@ name: bitbucket-server-cli
 services:
   postgres:
     image: postgres:15
-    container_name: bbsc-postgres
+    container_name: bb-postgres
     environment:
       POSTGRES_DB: bitbucket
       POSTGRES_USER: bitbucket
@@ -15,7 +15,7 @@ services:
 
   bitbucket:
     image: atlassian/bitbucket:9.4.16
-    container_name: bbsc-bitbucket
+    container_name: bb-bitbucket
     depends_on:
       - postgres
     env_file:

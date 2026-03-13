@@ -62,11 +62,11 @@ func (stub inferenceGitBackendStub) ListRemotes(context.Context, string) ([]git.
 
 func init() {
 	// Block external network access during tests by default
-	os.Setenv("BBSC_BLOCK_EXTERNAL_NETWORK", "1")
+	os.Setenv("BB_BLOCK_EXTERNAL_NETWORK", "1")
 }
 
 func TestAuthStatusSmoke(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
@@ -104,7 +104,7 @@ func TestAuthStatusSmoke(t *testing.T) {
 	}
 }
 func TestBranchValidationErrors(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		http.NotFound(w, r)
 	}))
@@ -149,7 +149,7 @@ func TestBranchValidationErrors(t *testing.T) {
 }
 
 func TestBranchCommandsFailOnInvalidRepositorySelector(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://example.local")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
@@ -191,7 +191,7 @@ func TestBranchCommandsFailOnInvalidRepositorySelector(t *testing.T) {
 }
 
 func TestBranchCommandsFailOnInvalidConfig(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "://bad-url")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
@@ -233,7 +233,7 @@ func TestBranchCommandsFailOnInvalidConfig(t *testing.T) {
 }
 
 func TestTagCreateJSON(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/tags" {
 			http.NotFound(writer, request)
@@ -265,7 +265,7 @@ func TestTagCreateJSON(t *testing.T) {
 }
 
 func TestBuildStatusSetJSON(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.URL.Path != "/rest/build-status/latest/commits/abc123" {
 			http.NotFound(writer, request)
@@ -294,7 +294,7 @@ func TestBuildStatusSetJSON(t *testing.T) {
 }
 
 func TestInsightsReportSetJSON(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPut || request.URL.Path != "/rest/insights/latest/projects/TEST/repos/demo/commits/abc123/reports/lint" {
 			http.NotFound(writer, request)
@@ -325,7 +325,7 @@ func TestInsightsReportSetJSON(t *testing.T) {
 	}
 }
 func TestAuthStatusJSON(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
 	t.Setenv("BITBUCKET_VERSION_TARGET", "9.4.16")
 	t.Setenv("BITBUCKET_TOKEN", "")
@@ -391,9 +391,9 @@ func decodeJSONEnvelopeDataMap(t *testing.T, raw []byte) map[string]any {
 }
 
 func TestRootTransportFlagsOverrideEnvironment(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
-	t.Setenv("BBSC_REQUEST_TIMEOUT", "not-a-duration")
+	t.Setenv("BB_REQUEST_TIMEOUT", "not-a-duration")
 
 	command := NewRootCommand()
 	buffer := &bytes.Buffer{}
@@ -429,30 +429,30 @@ func TestApplyRuntimeFlagOverridesBranches(t *testing.T) {
 		t.Fatalf("set retry-backoff: %v", err)
 	}
 
-	t.Setenv("BBSC_CA_FILE", "/tmp/keep")
+	t.Setenv("BB_CA_FILE", "/tmp/keep")
 	if err := applyRuntimeFlagOverrides(command); err != nil {
 		t.Fatalf("expected runtime overrides to apply, got: %v", err)
 	}
 
-	if value := os.Getenv("BBSC_CA_FILE"); value != "" {
-		t.Fatalf("expected BBSC_CA_FILE to be unset by blank flag value, got %q", value)
+	if value := os.Getenv("BB_CA_FILE"); value != "" {
+		t.Fatalf("expected BB_CA_FILE to be unset by blank flag value, got %q", value)
 	}
-	if value := os.Getenv("BBSC_INSECURE_SKIP_VERIFY"); value != "true" {
-		t.Fatalf("unexpected BBSC_INSECURE_SKIP_VERIFY value: %q", value)
+	if value := os.Getenv("BB_INSECURE_SKIP_VERIFY"); value != "true" {
+		t.Fatalf("unexpected BB_INSECURE_SKIP_VERIFY value: %q", value)
 	}
-	if value := os.Getenv("BBSC_REQUEST_TIMEOUT"); value != "30s" {
-		t.Fatalf("unexpected BBSC_REQUEST_TIMEOUT value: %q", value)
+	if value := os.Getenv("BB_REQUEST_TIMEOUT"); value != "30s" {
+		t.Fatalf("unexpected BB_REQUEST_TIMEOUT value: %q", value)
 	}
-	if value := os.Getenv("BBSC_RETRY_COUNT"); value != "4" {
-		t.Fatalf("unexpected BBSC_RETRY_COUNT value: %q", value)
+	if value := os.Getenv("BB_RETRY_COUNT"); value != "4" {
+		t.Fatalf("unexpected BB_RETRY_COUNT value: %q", value)
 	}
-	if value := os.Getenv("BBSC_RETRY_BACKOFF"); value != "500ms" {
-		t.Fatalf("unexpected BBSC_RETRY_BACKOFF value: %q", value)
+	if value := os.Getenv("BB_RETRY_BACKOFF"); value != "500ms" {
+		t.Fatalf("unexpected BB_RETRY_BACKOFF value: %q", value)
 	}
 }
 
 func TestAdminHealthSmoke(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/rest/api/1.0/projects" {
 			http.NotFound(writer, request)
@@ -486,7 +486,7 @@ func TestAdminHealthSmoke(t *testing.T) {
 }
 
 func TestAdminHealthJSON(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusUnauthorized)
 	}))
@@ -518,7 +518,7 @@ func TestAdminHealthJSON(t *testing.T) {
 }
 
 func TestDiffRefsNameOnly(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/patch" {
 			http.NotFound(writer, request)
@@ -555,7 +555,7 @@ func TestDiffRefsNameOnly(t *testing.T) {
 }
 
 func TestDiffRefsRejectsMultipleOutputModes(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
@@ -572,7 +572,7 @@ func TestDiffRefsRejectsMultipleOutputModes(t *testing.T) {
 }
 
 func TestRepoSettingsSecurityPermissionsUsersList(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/permissions/users" {
 			http.NotFound(writer, request)
@@ -604,7 +604,7 @@ func TestRepoSettingsSecurityPermissionsUsersList(t *testing.T) {
 }
 
 func TestRepoSettingsWorkflowWebhooksList(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/webhooks" {
 			http.NotFound(writer, request)
@@ -636,7 +636,7 @@ func TestRepoSettingsWorkflowWebhooksList(t *testing.T) {
 }
 
 func TestRepoSettingsPullRequestsGet(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/settings/pull-requests" {
 			http.NotFound(writer, request)
@@ -669,7 +669,7 @@ func TestRepoSettingsPullRequestsGet(t *testing.T) {
 }
 
 func TestRepoSettingsSecurityPermissionsUsersGrant(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPut || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/permissions/users" {
 			http.NotFound(writer, request)
@@ -705,7 +705,7 @@ func TestRepoSettingsSecurityPermissionsUsersGrant(t *testing.T) {
 }
 
 func TestRepoSettingsWorkflowWebhooksCreate(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/webhooks" {
 			http.NotFound(writer, request)
@@ -743,7 +743,7 @@ func TestRepoSettingsWorkflowWebhooksCreate(t *testing.T) {
 }
 
 func TestRepoSettingsPullRequestsUpdate(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/settings/pull-requests" {
 			body, _ := io.ReadAll(request.Body)
@@ -781,7 +781,7 @@ func TestRepoSettingsPullRequestsUpdate(t *testing.T) {
 }
 
 func TestRepoSettingsWorkflowWebhooksDelete(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodDelete || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/webhooks/42" {
 			http.NotFound(writer, request)
@@ -812,7 +812,7 @@ func TestRepoSettingsWorkflowWebhooksDelete(t *testing.T) {
 }
 
 func TestRepoSettingsPullRequestsUpdateApprovers(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/settings/pull-requests" {
 			http.NotFound(writer, request)
@@ -850,7 +850,7 @@ func TestRepoSettingsPullRequestsUpdateApprovers(t *testing.T) {
 }
 
 func TestRepoCommentListCommitJSON(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/commits/abc123/comments" {
 			http.NotFound(writer, request)
@@ -898,7 +898,7 @@ func TestRepoCommentListCommitJSON(t *testing.T) {
 }
 
 func TestRepoCommentCreatePRJSON(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodPost || !strings.HasSuffix(request.URL.Path, "/projects/TEST/repos/demo/pull-requests/77/comments") {
 			http.NotFound(writer, request)
@@ -941,7 +941,7 @@ func TestRepoCommentCreatePRJSON(t *testing.T) {
 }
 
 func TestRepoCommentDeleteAutoResolvesVersion(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	var getCommentCalls atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
@@ -986,7 +986,7 @@ func TestRepoCommentDeleteAutoResolvesVersion(t *testing.T) {
 }
 
 func TestRepoCommentDeleteWithoutResolvedVersionPrintsSimpleMessage(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/abc123/comments/301":
@@ -1025,7 +1025,7 @@ func TestRepoCommentDeleteWithoutResolvedVersionPrintsSimpleMessage(t *testing.T
 }
 
 func TestAdminHealthPropagatesHardFailure(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusServiceUnavailable)
 		_, _ = writer.Write([]byte("unavailable"))
@@ -1054,7 +1054,7 @@ func TestAdminHealthPropagatesHardFailure(t *testing.T) {
 }
 
 func TestPRListAndIssueCommandUnavailable(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.Method != http.MethodGet || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/pull-requests" {
 			http.NotFound(writer, request)
@@ -1120,7 +1120,7 @@ func TestBulkCommandAvailableFromRoot(t *testing.T) {
 }
 
 func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30":
@@ -1181,7 +1181,7 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 }
 
 func TestPRExtendedLifecycleReviewerAndTaskCommands(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/decline":
@@ -1312,7 +1312,7 @@ func TestApplyInferredRepositoryContext(t *testing.T) {
 		gitBackendFactory = originalFactory
 	})
 
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://bitbucket.local:7990")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "ENV")
 	t.Setenv("BITBUCKET_REPO_SLUG", "env-repo")
@@ -1614,7 +1614,7 @@ func TestInferenceHelperFunctions(t *testing.T) {
 	})
 
 	t.Run("infer context with no authenticated hosts returns nil", func(t *testing.T) {
-		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 		t.Setenv("BITBUCKET_URL", "")
 		gitBackendFactory = func() git.Backend {
 			return inferenceGitBackendStub{repoRoot: "/tmp/repo", remotes: []git.Remote{{Name: "origin", URL: "https://bitbucket.local/scm/PRJ/repo.git"}}}
@@ -1738,7 +1738,7 @@ func TestRootCommandPreRunPropagatesInferenceErrors(t *testing.T) {
 		}
 	}
 
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "https://bitbucket.local:7990")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
@@ -1759,7 +1759,7 @@ func TestRootCommandPreRunPropagatesInferenceErrors(t *testing.T) {
 
 func TestLoadConfigAndClientAndClientFactoryBranches(t *testing.T) {
 	t.Run("load config failure", func(t *testing.T) {
-		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 		t.Setenv("BITBUCKET_URL", "://broken")
 		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 
@@ -1787,7 +1787,7 @@ func TestLoadConfigAndClientAndClientFactoryBranches(t *testing.T) {
 
 func TestLoadQualityRepoAndServiceBranches(t *testing.T) {
 	t.Run("config load failure", func(t *testing.T) {
-		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 		t.Setenv("BITBUCKET_URL", "://broken")
 		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 
@@ -1798,7 +1798,7 @@ func TestLoadQualityRepoAndServiceBranches(t *testing.T) {
 	})
 
 	t.Run("invalid selector failure", func(t *testing.T) {
-		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 		t.Setenv("BITBUCKET_URL", "http://localhost:7990")
 		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 		t.Setenv("BITBUCKET_REPO_SLUG", "demo")
@@ -1818,7 +1818,7 @@ func TestLoadQualityRepoAndServiceBranches(t *testing.T) {
 		}))
 		defer server.Close()
 
-		t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 		t.Setenv("BITBUCKET_URL", server.URL)
 		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 		t.Setenv("BITBUCKET_REPO_SLUG", "demo")
@@ -2002,7 +2002,7 @@ func TestWriteJSONMarshalError(t *testing.T) {
 }
 
 func TestTagViewDeleteAndListCommandPaths(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/tags":
@@ -2061,7 +2061,7 @@ func TestTagViewDeleteAndListCommandPaths(t *testing.T) {
 }
 
 func TestBranchCommandPaths(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/branches":
@@ -2279,7 +2279,7 @@ func TestSafeUsersHelper(t *testing.T) {
 }
 
 func TestBranchCommandEmptyResultsOutput(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 		switch {
@@ -2328,7 +2328,7 @@ func TestBranchCommandEmptyResultsOutput(t *testing.T) {
 }
 
 func TestBuildRequiredCommandPaths(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/required-builds/latest/projects/TEST/repos/demo/conditions":
@@ -2402,7 +2402,7 @@ func TestBuildRequiredCommandPaths(t *testing.T) {
 }
 
 func TestInsightsReportAndAnnotationCommandPaths(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodPut && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/lint":
@@ -2513,7 +2513,7 @@ func TestInsightsReportAndAnnotationCommandPaths(t *testing.T) {
 }
 
 func TestRepoListCommandPaths(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/rest/api/1.0/repos" {
 			http.NotFound(writer, request)
@@ -2552,8 +2552,8 @@ func TestRepoListCommandPaths(t *testing.T) {
 }
 
 func TestAuthLoginAndLogoutJSON(t *testing.T) {
-	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config.yaml"))
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "0")
+	t.Setenv("BB_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config.yaml"))
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "0")
 	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
 	t.Setenv("BITBUCKET_TOKEN", "")
 	t.Setenv("BITBUCKET_USERNAME", "")
@@ -2587,8 +2587,8 @@ func TestAuthLoginAndLogoutJSON(t *testing.T) {
 }
 
 func TestAuthLoginUsesLoadedHostFallback(t *testing.T) {
-	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config-fallback.yaml"))
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config-fallback.yaml"))
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://fallback.local:7990")
 	t.Setenv("BITBUCKET_TOKEN", "")
 	t.Setenv("BITBUCKET_USERNAME", "")
@@ -2610,7 +2610,7 @@ func TestAuthLoginUsesLoadedHostFallback(t *testing.T) {
 }
 
 func TestDiffPRNameOnlyAndCommitJSON(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch request.URL.Path {
 		case "/rest/api/latest/projects/TEST/repos/demo/pull-requests/99.diff":
@@ -2653,7 +2653,7 @@ func TestDiffPRNameOnlyAndCommitJSON(t *testing.T) {
 }
 
 func TestBuildStatusHumanCommandPaths(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/build-status/latest/commits/abc123":
@@ -2710,7 +2710,7 @@ func TestBuildStatusHumanCommandPaths(t *testing.T) {
 }
 
 func TestRepoCommentCommandPathsCommitAndPR(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 		switch {
@@ -2840,8 +2840,8 @@ func TestRepoCommentCommandPathsCommitAndPR(t *testing.T) {
 }
 
 func TestAuthStatusHostOverrideAndHumanLoginLogout(t *testing.T) {
-	t.Setenv("BBSC_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config.yaml"))
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "0")
+	t.Setenv("BB_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config.yaml"))
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "0")
 	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
 	t.Setenv("BITBUCKET_TOKEN", "")
 	t.Setenv("BITBUCKET_USERNAME", "")
@@ -2942,7 +2942,7 @@ func TestResolveRepositoryReferenceWrappers(t *testing.T) {
 }
 
 func TestAdminHealthHumanLimitedOutput(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusUnauthorized)
 	}))
@@ -2971,7 +2971,7 @@ func TestAdminHealthHumanLimitedOutput(t *testing.T) {
 }
 
 func TestTagBuildAndInsightsEmptyHumanOutputs(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 		switch {
@@ -3043,7 +3043,7 @@ func TestTagBuildAndInsightsEmptyHumanOutputs(t *testing.T) {
 }
 
 func TestBuildAndInsightsValidationErrorPaths(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
@@ -3079,7 +3079,7 @@ func TestBuildAndInsightsValidationErrorPaths(t *testing.T) {
 }
 
 func TestRepoSettingsJSONCommandPaths(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 		switch {
@@ -3141,7 +3141,7 @@ func TestRepoSettingsJSONCommandPaths(t *testing.T) {
 }
 
 func TestBranchCommandsPropagateServiceErrors(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNotFound)
 		_, _ = writer.Write([]byte("missing"))
@@ -3189,7 +3189,7 @@ func TestBranchCommandsPropagateServiceErrors(t *testing.T) {
 }
 
 func TestTagBuildInsightsCommandsPropagateServiceErrors(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusNotFound)
 		_, _ = writer.Write([]byte("missing"))
@@ -3242,7 +3242,7 @@ func TestTagBuildInsightsCommandsPropagateServiceErrors(t *testing.T) {
 }
 
 func TestRepoSettingsCommandsPropagateServiceErrors(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		writer.WriteHeader(http.StatusUnauthorized)
 		_, _ = writer.Write([]byte("unauthorized"))
@@ -3286,7 +3286,7 @@ func TestRepoSettingsCommandsPropagateServiceErrors(t *testing.T) {
 }
 
 func TestRepoSettingsPullRequestsMergeChecksList(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/rest/required-builds/latest/projects/TEST/repos/demo/conditions" {
 			http.NotFound(writer, request)
@@ -3317,7 +3317,7 @@ func TestRepoSettingsPullRequestsMergeChecksList(t *testing.T) {
 }
 
 func TestProjectPermissionsUsersList(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/rest/api/latest/projects/PRJ/permissions/users" {
 			http.NotFound(writer, request)
@@ -3346,7 +3346,7 @@ func TestProjectPermissionsUsersList(t *testing.T) {
 }
 
 func TestRepoSettingsSecurityPermissionsUsersGrantDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/permissions/users":
@@ -3381,7 +3381,7 @@ func TestRepoSettingsSecurityPermissionsUsersGrantDryRunStateful(t *testing.T) {
 }
 
 func TestProjectPermissionsUsersGrantDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
@@ -3414,7 +3414,7 @@ func TestProjectPermissionsUsersGrantDryRunStateful(t *testing.T) {
 }
 
 func TestHookList(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		if request.URL.Path != "/rest/api/latest/projects/PRJ/settings/hooks" {
 			http.NotFound(writer, request)
@@ -3443,7 +3443,7 @@ func TestHookList(t *testing.T) {
 }
 
 func TestHookEnableDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks":
@@ -3474,7 +3474,7 @@ func TestHookEnableDryRunStateful(t *testing.T) {
 }
 
 func TestHookConfigureDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks":
@@ -3509,7 +3509,7 @@ func TestHookConfigureDryRunStateful(t *testing.T) {
 }
 
 func TestRepoSettingsWorkflowWebhooksCreateDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/webhooks":
@@ -3542,7 +3542,7 @@ func TestRepoSettingsWorkflowWebhooksCreateDryRunStateful(t *testing.T) {
 }
 
 func TestRepoSettingsPullRequestsUpdateDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/settings/pull-requests":
@@ -3575,7 +3575,7 @@ func TestRepoSettingsPullRequestsUpdateDryRunStateful(t *testing.T) {
 }
 
 func TestBranchCreateDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/branches":
@@ -3608,7 +3608,7 @@ func TestBranchCreateDryRunStateful(t *testing.T) {
 }
 
 func TestBranchDefaultSetDryRunStatefulNoop(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/default-branch":
@@ -3641,7 +3641,7 @@ func TestBranchDefaultSetDryRunStatefulNoop(t *testing.T) {
 }
 
 func TestTagCreateDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/tags":
@@ -3674,7 +3674,7 @@ func TestTagCreateDryRunStateful(t *testing.T) {
 }
 
 func TestReviewerConditionCreateDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/conditions":
@@ -3705,7 +3705,7 @@ func TestReviewerConditionCreateDryRunStateful(t *testing.T) {
 }
 
 func TestProjectCreateDryRunStateful(t *testing.T) {
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ":

@@ -39,7 +39,7 @@ func PlanJSONSchema() map[string]any {
 		"$schema":              jsonSchemaVersion,
 		"$id":                  schemaID("bulk-plan.schema.json"),
 		"title":                "BBSC Bulk Plan",
-		"description":          "Schema for deterministic reviewed bulk plan artifacts produced by bbsc bulk plan.",
+		"description":          "Schema for deterministic reviewed bulk plan artifacts produced by bb bulk plan.",
 		"type":                 "object",
 		"additionalProperties": false,
 		"properties": map[string]any{
@@ -61,7 +61,7 @@ func ApplyStatusJSONSchema() map[string]any {
 		"$schema":              jsonSchemaVersion,
 		"$id":                  schemaID("bulk-apply-status.schema.json"),
 		"title":                "BBSC Bulk Apply Status",
-		"description":          "Schema for persisted and command-emitted bulk apply status artifacts produced by bbsc bulk apply and bbsc bulk status.",
+		"description":          "Schema for persisted and command-emitted bulk apply status artifacts produced by bb bulk apply and bb bulk status.",
 		"type":                 "object",
 		"additionalProperties": false,
 		"properties": map[string]any{

@@ -18,10 +18,10 @@ func TestWriteSuccess(t *testing.T) {
 	}
 
 	output := buffer.String()
-	if !strings.Contains(output, "\"version\": \"v1\"") {
+	if !strings.Contains(output, "\"version\": \"v2\"") {
 		t.Fatalf("expected version field in output, got %s", output)
 	}
-	if !strings.Contains(output, "\"contract\": \"bbsc.machine\"") {
+	if !strings.Contains(output, "\"contract\": \"bb.machine\"") {
 		t.Fatalf("expected contract field in output, got %s", output)
 	}
 	if !strings.Contains(output, "\"status\": \"ok\"") {

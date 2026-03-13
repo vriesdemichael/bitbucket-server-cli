@@ -48,7 +48,7 @@ func TestSafeTransport(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			os.Setenv("BBSC_BLOCK_EXTERNAL_NETWORK", tt.blockEnv)
+			os.Setenv("BB_BLOCK_EXTERNAL_NETWORK", tt.blockEnv)
 
 			// Use a dummy transport for the success cases to avoid real network calls
 			// if the URL is actually reachable.

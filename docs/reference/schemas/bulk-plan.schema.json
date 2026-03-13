@@ -150,7 +150,7 @@
       "additionalProperties": false,
       "properties": {
         "apiVersion": {
-          "const": "bbsc.io/v1alpha1"
+          "const": "bb.io/v1alpha1"
         },
         "operations": {
           "items": {
@@ -477,10 +477,10 @@
   "$id": "https://github.com/vriesdemichael/bitbucket-server-cli/docs/reference/schemas/bulk-plan.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
-  "description": "Schema for deterministic reviewed bulk plan artifacts produced by bbsc bulk plan.",
+  "description": "Schema for deterministic reviewed bulk plan artifacts produced by bb bulk plan.",
   "properties": {
     "apiVersion": {
-      "const": "bbsc.io/v1alpha1"
+      "const": "bb.io/v1alpha1"
     },
     "kind": {
       "const": "BulkPlan"

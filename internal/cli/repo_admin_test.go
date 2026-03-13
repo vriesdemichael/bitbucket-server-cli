@@ -28,7 +28,7 @@ func TestRepoAdminCLICommandsMock(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	t.Setenv("BBSC_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", server.URL)
 	t.Setenv("BITBUCKET_TOKEN", "test-token")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")

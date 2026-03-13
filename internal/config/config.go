@@ -26,7 +26,7 @@ const (
 	defaultRetryBackoff           = 250 * time.Millisecond
 	defaultLogLevel               = string(diagnostics.LevelError)
 	defaultLogFormat              = string(diagnostics.FormatText)
-	keyringServiceName            = "bbsc"
+	keyringServiceName            = "bb"
 )
 
 type AppConfig struct {
@@ -89,38 +89,38 @@ func LoadFromEnv() (AppConfig, error) {
 	loadDotEnv()
 	storedConfig, _ := LoadStoredConfig()
 
-	insecureSkipVerify, err := envBoolOrDefault("BBSC_INSECURE_SKIP_VERIFY", false)
+	insecureSkipVerify, err := envBoolOrDefault("BB_INSECURE_SKIP_VERIFY", false)
 	if err != nil {
-		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_INSECURE_SKIP_VERIFY must be a boolean", err)
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BB_INSECURE_SKIP_VERIFY must be a boolean", err)
 	}
 
-	requestTimeout, err := envDurationOrDefault("BBSC_REQUEST_TIMEOUT", defaultRequestTimeout)
+	requestTimeout, err := envDurationOrDefault("BB_REQUEST_TIMEOUT", defaultRequestTimeout)
 	if err != nil {
-		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_REQUEST_TIMEOUT must be a valid duration (example: 20s)", err)
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BB_REQUEST_TIMEOUT must be a valid duration (example: 20s)", err)
 	}
 
-	retryCount, err := envIntOrDefault("BBSC_RETRY_COUNT", defaultRetryCount)
+	retryCount, err := envIntOrDefault("BB_RETRY_COUNT", defaultRetryCount)
 	if err != nil {
-		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_RETRY_COUNT must be a non-negative integer", err)
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BB_RETRY_COUNT must be a non-negative integer", err)
 	}
 
-	retryBackoff, err := envDurationOrDefault("BBSC_RETRY_BACKOFF", defaultRetryBackoff)
+	retryBackoff, err := envDurationOrDefault("BB_RETRY_BACKOFF", defaultRetryBackoff)
 	if err != nil {
-		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_RETRY_BACKOFF must be a valid duration (example: 250ms)", err)
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BB_RETRY_BACKOFF must be a valid duration (example: 250ms)", err)
 	}
 
-	rawLogLevel := strings.TrimSpace(os.Getenv("BBSC_LOG_LEVEL"))
-	rawLogFormat := strings.TrimSpace(os.Getenv("BBSC_LOG_FORMAT"))
+	rawLogLevel := strings.TrimSpace(os.Getenv("BB_LOG_LEVEL"))
+	rawLogFormat := strings.TrimSpace(os.Getenv("BB_LOG_FORMAT"))
 	diagnosticsEnabled := rawLogLevel != "" || rawLogFormat != ""
 
-	logLevel := envOrDefault("BBSC_LOG_LEVEL", defaultLogLevel)
+	logLevel := envOrDefault("BB_LOG_LEVEL", defaultLogLevel)
 	if _, err := diagnostics.ParseLevel(logLevel); err != nil {
-		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_LOG_LEVEL must be one of: error,warn,info,debug", err)
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BB_LOG_LEVEL must be one of: error,warn,info,debug", err)
 	}
 
-	logFormat := envOrDefault("BBSC_LOG_FORMAT", defaultLogFormat)
+	logFormat := envOrDefault("BB_LOG_FORMAT", defaultLogFormat)
 	if _, err := diagnostics.ParseFormat(logFormat); err != nil {
-		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BBSC_LOG_FORMAT must be one of: text,jsonl", err)
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "BB_LOG_FORMAT must be one of: text,jsonl", err)
 	}
 
 	envHost := strings.TrimSpace(os.Getenv("BITBUCKET_URL"))
@@ -143,7 +143,7 @@ func LoadFromEnv() (AppConfig, error) {
 		BitbucketToken:         envOrDefault("BITBUCKET_TOKEN", ""),
 		BitbucketUsername:      envOrDefault("BITBUCKET_USERNAME", envOrDefault("BITBUCKET_USER", envOrDefault("ADMIN_USER", ""))),
 		BitbucketPassword:      envOrDefault("BITBUCKET_PASSWORD", envOrDefault("ADMIN_PASSWORD", "")),
-		CAFile:                 strings.TrimSpace(os.Getenv("BBSC_CA_FILE")),
+		CAFile:                 strings.TrimSpace(os.Getenv("BB_CA_FILE")),
 		InsecureSkipVerify:     insecureSkipVerify,
 		RequestTimeout:         requestTimeout,
 		RetryCount:             retryCount,
@@ -154,7 +154,7 @@ func LoadFromEnv() (AppConfig, error) {
 		AuthSource:             "env/default",
 	}
 
-	if os.Getenv("BBSC_DISABLE_STORED_CONFIG") != "1" {
+	if os.Getenv("BB_DISABLE_STORED_CONFIG") != "1" {
 		stored, foundStored := resolveStoredCredentials(storedConfig, config.BitbucketURL)
 		if foundStored {
 			if config.BitbucketUsername == "" && stored.BitbucketUsername != "" {
@@ -448,7 +448,7 @@ func SaveStoredConfig(stored StoredConfig) error {
 }
 
 func ConfigPath() (string, error) {
-	if custom := strings.TrimSpace(os.Getenv("BBSC_CONFIG_PATH")); custom != "" {
+	if custom := strings.TrimSpace(os.Getenv("BB_CONFIG_PATH")); custom != "" {
 		return custom, nil
 	}
 
@@ -457,7 +457,7 @@ func ConfigPath() (string, error) {
 		return "", err
 	}
 
-	return filepath.Join(baseDir, "bbsc", "config.yaml"), nil
+	return filepath.Join(baseDir, "bb", "config.yaml"), nil
 }
 
 func resolveStoredCredentials(stored StoredConfig, runtimeURL string) (AppConfig, bool) {
@@ -521,15 +521,15 @@ func (config AppConfig) Validate() error {
 	}
 
 	if config.RequestTimeout <= 0 {
-		return apperrors.New(apperrors.KindValidation, "BBSC_REQUEST_TIMEOUT must be greater than 0", nil)
+		return apperrors.New(apperrors.KindValidation, "BB_REQUEST_TIMEOUT must be greater than 0", nil)
 	}
 
 	if config.RetryCount < 0 {
-		return apperrors.New(apperrors.KindValidation, "BBSC_RETRY_COUNT must be greater than or equal to 0", nil)
+		return apperrors.New(apperrors.KindValidation, "BB_RETRY_COUNT must be greater than or equal to 0", nil)
 	}
 
 	if config.RetryBackoff <= 0 {
-		return apperrors.New(apperrors.KindValidation, "BBSC_RETRY_BACKOFF must be greater than 0", nil)
+		return apperrors.New(apperrors.KindValidation, "BB_RETRY_BACKOFF must be greater than 0", nil)
 	}
 
 	levelToValidate := strings.TrimSpace(config.LogLevel)
@@ -537,7 +537,7 @@ func (config AppConfig) Validate() error {
 		levelToValidate = defaultLogLevel
 	}
 	if _, err := diagnostics.ParseLevel(levelToValidate); err != nil {
-		return apperrors.New(apperrors.KindValidation, "BBSC_LOG_LEVEL must be one of: error,warn,info,debug", err)
+		return apperrors.New(apperrors.KindValidation, "BB_LOG_LEVEL must be one of: error,warn,info,debug", err)
 	}
 
 	formatToValidate := strings.TrimSpace(config.LogFormat)
@@ -545,16 +545,16 @@ func (config AppConfig) Validate() error {
 		formatToValidate = defaultLogFormat
 	}
 	if _, err := diagnostics.ParseFormat(formatToValidate); err != nil {
-		return apperrors.New(apperrors.KindValidation, "BBSC_LOG_FORMAT must be one of: text,jsonl", err)
+		return apperrors.New(apperrors.KindValidation, "BB_LOG_FORMAT must be one of: text,jsonl", err)
 	}
 
 	if config.CAFile != "" {
 		info, err := os.Stat(config.CAFile)
 		if err != nil {
-			return apperrors.New(apperrors.KindValidation, fmt.Sprintf("BBSC_CA_FILE is invalid: %q", config.CAFile), err)
+			return apperrors.New(apperrors.KindValidation, fmt.Sprintf("BB_CA_FILE is invalid: %q", config.CAFile), err)
 		}
 		if info.IsDir() {
-			return apperrors.New(apperrors.KindValidation, "BBSC_CA_FILE must be a file path", nil)
+			return apperrors.New(apperrors.KindValidation, "BB_CA_FILE must be a file path", nil)
 		}
 	}
 
