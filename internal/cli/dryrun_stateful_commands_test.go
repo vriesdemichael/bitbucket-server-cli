@@ -16,7 +16,8 @@ func configureDryRunEnv(t *testing.T, serverURL, projectKey, repoSlug string) {
 	t.Setenv("BITBUCKET_PROJECT_KEY", projectKey)
 	t.Setenv("BITBUCKET_REPO_SLUG", repoSlug)
 	t.Setenv("BITBUCKET_TOKEN", "test-token")
-	t.Setenv("BITBUCKET_USERNAME", "alice")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
 }
 
 func TestInsightsAndPRDryRunPredictionBranches(t *testing.T) {
@@ -49,6 +50,8 @@ func TestInsightsAndPRDryRunPredictionBranches(t *testing.T) {
 	defer server.Close()
 
 	configureDryRunEnv(t, server.URL, "TEST", "demo")
+	t.Setenv("BITBUCKET_USERNAME", "alice")
+	t.Setenv("BITBUCKET_PASSWORD", "placeholder")
 
 	out, err := executeTestCLI(t, "--json", "--dry-run", "insights", "report", "set", "abc", "existing", "--body", `{"title":"x","result":"PASS"}`)
 	if err != nil || !strings.Contains(out, `"predicted_action": "update"`) {
