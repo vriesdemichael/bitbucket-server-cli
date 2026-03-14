@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -11,6 +12,8 @@ import (
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	pullrequestservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequest"
 )
+
+var testContext = context.Background()
 
 func newPermissionCheckerTestClient(t *testing.T, handler http.HandlerFunc) (*PermissionChecker, *httptest.Server) {
 	t.Helper()
@@ -44,10 +47,10 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 			_, _ = w.Write([]byte(`{"values":[{"slug":"demo","name":"Repository Display Name","project":{"key":"PRJ"}}],"isLastPage":true}`))
 		})
 
-		if err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOADMIN); err != nil {
+		if err := checker.CheckRepoPermission(testContext, "PRJ", "demo", openapigenerated.REPOADMIN); err != nil {
 			t.Fatalf("expected success, got: %v", err)
 		}
-		if err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOADMIN); err != nil {
+		if err := checker.CheckRepoPermission(testContext, "PRJ", "demo", openapigenerated.REPOADMIN); err != nil {
 			t.Fatalf("expected cached success, got: %v", err)
 		}
 		if calls.Load() != 1 {
@@ -61,7 +64,7 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 			_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
 		})
 
-		err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOWRITE)
+		err := checker.CheckRepoPermission(testContext, "PRJ", "demo", openapigenerated.REPOWRITE)
 		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
 			t.Fatalf("expected authorization error, got: %v", err)
 		}
@@ -73,7 +76,7 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 			_, _ = w.Write([]byte(`{"values":[{"slug":"other","project":{"key":"PRJ"}}],"isLastPage":true}`))
 		})
 
-		err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOWRITE)
+		err := checker.CheckRepoPermission(testContext, "PRJ", "demo", openapigenerated.REPOWRITE)
 		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
 			t.Fatalf("expected authorization error, got: %v", err)
 		}
@@ -85,7 +88,7 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 			_, _ = w.Write([]byte("forbidden"))
 		})
 
-		err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOREAD)
+		err := checker.CheckRepoPermission(testContext, "PRJ", "demo", openapigenerated.REPOREAD)
 		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
 			t.Fatalf("expected authorization error, got: %v", err)
 		}
@@ -116,10 +119,10 @@ func TestPermissionCheckerCheckProjectWrite(t *testing.T) {
 			}
 		})
 
-		if err := checker.CheckProjectWrite(t.Context(), "PRJ"); err != nil {
+		if err := checker.CheckProjectWrite(testContext, "PRJ"); err != nil {
 			t.Fatalf("expected success, got: %v", err)
 		}
-		if err := checker.CheckProjectWrite(t.Context(), "PRJ"); err != nil {
+		if err := checker.CheckProjectWrite(testContext, "PRJ"); err != nil {
 			t.Fatalf("expected cached success, got: %v", err)
 		}
 		if projectCalls.Load() != 1 || listCalls.Load() != 1 {
@@ -137,7 +140,7 @@ func TestPermissionCheckerCheckProjectWrite(t *testing.T) {
 			_, _ = w.Write([]byte(`{"key":"PRJ"}`))
 		})
 
-		err := checker.CheckProjectWrite(t.Context(), "PRJ")
+		err := checker.CheckProjectWrite(testContext, "PRJ")
 		if !apperrors.IsKind(err, apperrors.KindInternal) {
 			t.Fatalf("expected internal error, got: %v", err)
 		}
@@ -157,7 +160,7 @@ func TestPermissionCheckerCheckProjectWrite(t *testing.T) {
 			}
 		})
 
-		err := checker.CheckProjectWrite(t.Context(), "PRJ")
+		err := checker.CheckProjectWrite(testContext, "PRJ")
 		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
 			t.Fatalf("expected authorization error, got: %v", err)
 		}
@@ -169,7 +172,7 @@ func TestPermissionCheckerCheckProjectWrite(t *testing.T) {
 			_, _ = w.Write([]byte("missing"))
 		})
 
-		err := checker.CheckProjectWrite(t.Context(), "PRJ")
+		err := checker.CheckProjectWrite(testContext, "PRJ")
 		if !apperrors.IsKind(err, apperrors.KindNotFound) {
 			t.Fatalf("expected not found error, got: %v", err)
 		}
@@ -189,10 +192,10 @@ func TestPermissionCheckerCheckProjectAdmin(t *testing.T) {
 			_, _ = w.Write([]byte(`{"values":[{"user":{"name":"alice"}}],"isLastPage":true}`))
 		})
 
-		if err := checker.CheckProjectAdmin(t.Context(), "PRJ"); err != nil {
+		if err := checker.CheckProjectAdmin(testContext, "PRJ"); err != nil {
 			t.Fatalf("expected success, got: %v", err)
 		}
-		if err := checker.CheckProjectAdmin(t.Context(), "PRJ"); err != nil {
+		if err := checker.CheckProjectAdmin(testContext, "PRJ"); err != nil {
 			t.Fatalf("expected cached success, got: %v", err)
 		}
 		if calls.Load() != 1 {
@@ -206,7 +209,7 @@ func TestPermissionCheckerCheckProjectAdmin(t *testing.T) {
 			_, _ = w.Write([]byte("forbidden"))
 		})
 
-		err := checker.CheckProjectAdmin(t.Context(), "PRJ")
+		err := checker.CheckProjectAdmin(testContext, "PRJ")
 		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
 			t.Fatalf("expected authorization error, got: %v", err)
 		}
@@ -226,10 +229,10 @@ func TestPermissionCheckerCheckProjectCreate(t *testing.T) {
 			_, _ = w.Write([]byte("name is required"))
 		})
 
-		if err := checker.CheckProjectCreate(t.Context()); err != nil {
+		if err := checker.CheckProjectCreate(testContext); err != nil {
 			t.Fatalf("expected success, got: %v", err)
 		}
-		if err := checker.CheckProjectCreate(t.Context()); err != nil {
+		if err := checker.CheckProjectCreate(testContext); err != nil {
 			t.Fatalf("expected cached success, got: %v", err)
 		}
 		if calls.Load() != 1 {
@@ -243,7 +246,7 @@ func TestPermissionCheckerCheckProjectCreate(t *testing.T) {
 			_, _ = w.Write([]byte("forbidden"))
 		})
 
-		err := checker.CheckProjectCreate(t.Context())
+		err := checker.CheckProjectCreate(testContext)
 		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
 			t.Fatalf("expected authorization error, got: %v", err)
 		}
@@ -255,7 +258,7 @@ func TestPermissionCheckerCheckProjectCreate(t *testing.T) {
 			_, _ = w.Write([]byte(`{"key":"PRJ"}`))
 		})
 
-		err := checker.CheckProjectCreate(t.Context())
+		err := checker.CheckProjectCreate(testContext)
 		if !apperrors.IsKind(err, apperrors.KindPermanent) {
 			t.Fatalf("expected permanent error, got: %v", err)
 		}
