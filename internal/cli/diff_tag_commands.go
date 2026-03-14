@@ -6,6 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	diffservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
 	tagservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/tag"
 )
@@ -216,6 +217,11 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 
 			service := tagservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				tags, err := service.List(cmd.Context(), repo, tagservice.ListOptions{Limit: 200, FilterText: args[0]})
 				if err != nil {
 					return err
@@ -329,6 +335,11 @@ func newTagCommand(options *rootOptions) *cobra.Command {
 
 			service := tagservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				_, err := service.Get(cmd.Context(), repo, args[0])
 				predicted := "delete"
 				reason := "tag will be deleted"

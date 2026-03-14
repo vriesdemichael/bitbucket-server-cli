@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	reposervice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
 )
@@ -39,6 +40,11 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 
 			service := reposervice.NewAdminService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectWrite(cmd.Context(), createProject); err != nil {
+					return err
+				}
+
 				repoQueryService := reposervice.NewService(httpclient.NewFromConfig(cfg))
 				existing, err := repoQueryService.ListByProject(cmd.Context(), createProject, reposervice.ListOptions{Limit: 200, Name: createName})
 				if err != nil {
@@ -132,6 +138,16 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 			repo := reposervice.RepositoryRef{ProjectKey: repoRef.ProjectKey, Slug: repoRef.Slug}
 			service := reposervice.NewAdminService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+				if forkProject != "" {
+					if err := checker.CheckProjectWrite(cmd.Context(), forkProject); err != nil {
+						return err
+					}
+				}
+
 				predicted := "create"
 				reason := "repository fork will be created"
 				preview := dryRunPreview{
@@ -193,6 +209,11 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 			repo := reposervice.RepositoryRef{ProjectKey: repoRef.ProjectKey, Slug: repoRef.Slug}
 			service := reposervice.NewAdminService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				predicted := "update"
 				reason := "repository metadata will be updated"
 				if strings.TrimSpace(updateName) == "" && strings.TrimSpace(updateDesc) == "" && strings.TrimSpace(updateDefaultBranch) == "" {
@@ -263,6 +284,11 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 			repo := reposervice.RepositoryRef{ProjectKey: repoRef.ProjectKey, Slug: repoRef.Slug}
 			service := reposervice.NewAdminService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				preview := dryRunPreview{
 					DryRun:       true,
 					PlanningMode: planningModeStateful,

@@ -34,7 +34,7 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "Create or update a Code Insights report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			repo, service, client, err := loadQualityRepoServiceAndClient(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -45,6 +45,11 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				_, err := service.GetReport(cmd.Context(), repo, args[0], args[1])
 				predicted := "create"
 				reason := "insights report will be created"
@@ -58,7 +63,7 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 				preview := dryRunPreview{
 					DryRun:       true,
 					PlanningMode: planningModeStateful,
-					Capability:   capabilityPartial,
+					Capability:   capabilityFull,
 					Items: []dryRunItem{{
 						Intent:          "insights.report.set",
 						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "commit": args[0], "key": args[1]},
@@ -66,7 +71,7 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 						PredictedAction: predicted,
 						Supported:       true,
 						Reason:          reason,
-						Confidence:      capabilityPartial,
+						Confidence:      capabilityFull,
 						RequiredState:   []string{"insights report get"},
 					}},
 					Summary: dryRunSummary{Total: 1, Supported: 1},
@@ -116,12 +121,17 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "Delete a Code Insights report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			repo, service, client, err := loadQualityRepoServiceAndClient(repositorySelector)
 			if err != nil {
 				return err
 			}
 
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				_, err := service.GetReport(cmd.Context(), repo, args[0], args[1])
 				predicted := "delete"
 				reason := "insights report will be deleted"
@@ -137,7 +147,7 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 				preview := dryRunPreview{
 					DryRun:       true,
 					PlanningMode: planningModeStateful,
-					Capability:   capabilityPartial,
+					Capability:   capabilityFull,
 					Items: []dryRunItem{{
 						Intent:          "insights.report.delete",
 						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "commit": args[0], "key": args[1]},
@@ -145,7 +155,7 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 						PredictedAction: predicted,
 						Supported:       true,
 						Reason:          reason,
-						Confidence:      capabilityPartial,
+						Confidence:      capabilityFull,
 						RequiredState:   []string{"insights report get"},
 					}},
 					Summary: dryRunSummary{Total: 1, Supported: 1},
@@ -215,7 +225,7 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "Add annotations to a Code Insights report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			repo, service, client, err := loadQualityRepoServiceAndClient(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -226,6 +236,11 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				preview := dryRunPreview{
 					DryRun:       true,
 					PlanningMode: planningModeStateful,
@@ -299,12 +314,17 @@ func newInsightsCommand(options *rootOptions) *cobra.Command {
 		Short: "Delete annotation(s) by external id for a report",
 		Args:  cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			repo, service, client, err := loadQualityRepoServiceAndClient(repositorySelector)
 			if err != nil {
 				return err
 			}
 
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				annotations, err := service.ListAnnotations(cmd.Context(), repo, args[0], args[1])
 				if err != nil {
 					return err
@@ -487,7 +507,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Use:   "create",
 		Short: "Create a pull request",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -499,6 +519,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				existing, err := service.List(cmd.Context(), repo, pullrequestservice.ListOptions{
 					State:        "open",
 					Limit:        200,
@@ -587,7 +612,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Update pull request metadata",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -599,6 +624,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), repo, args[0])
 				if err != nil {
 					return err
@@ -667,7 +697,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Merge a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -678,6 +708,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), repo, args[0])
 				if err != nil {
 					return err
@@ -750,7 +785,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Decline a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -761,6 +796,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), repo, args[0])
 				if err != nil {
 					return err
@@ -825,7 +865,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Reopen a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -836,6 +876,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), repo, args[0])
 				if err != nil {
 					return err
@@ -902,7 +947,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Approve a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -913,15 +958,21 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), repo, args[0])
 				if err != nil {
 					return err
 				}
+				currentUser := strings.TrimSpace(cfg.BitbucketUsername)
 				predicted := "update"
 				reason := "pull request approval will be added"
-				if hasApprovedReviewer(current.Reviewers) {
+				if currentUser != "" && reviewerApprovedByUser(current.Reviewers, currentUser) {
 					predicted = "no-op"
-					reason = "an approved reviewer already exists"
+					reason = "current user has already approved this pull request"
 				}
 
 				preview := dryRunPreview{
@@ -969,7 +1020,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Remove pull request approval",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -980,15 +1031,21 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), repo, args[0])
 				if err != nil {
 					return err
 				}
+				currentUser := strings.TrimSpace(cfg.BitbucketUsername)
 				predicted := "update"
 				reason := "pull request approval will be removed"
-				if !hasApprovedReviewer(current.Reviewers) {
+				if currentUser != "" && !reviewerApprovedByUser(current.Reviewers, currentUser) {
 					predicted = "no-op"
-					reason = "no approved reviewer exists"
+					reason = "current user has not approved this pull request"
 				}
 
 				preview := dryRunPreview{
@@ -1038,7 +1095,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Add a reviewer",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -1049,6 +1106,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), repo, args[0])
 				if err != nil {
 					return err
@@ -1107,7 +1169,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Remove a reviewer",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -1118,6 +1180,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), repo, args[0])
 				if err != nil {
 					return err
@@ -1227,7 +1294,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Create a task on a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -1238,6 +1305,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
 				preview := dryRunPreview{
 					DryRun:       true,
 					PlanningMode: planningModeStateful,
@@ -1282,7 +1354,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Update a task on a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -1302,6 +1374,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
 				tasks, err := service.ListTasks(cmd.Context(), repo, args[0], pullrequestservice.TaskListOptions{State: "all", Limit: 200, Start: 0})
 				if err != nil {
 					return err
@@ -1373,7 +1450,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Short: "Delete a task from a pull request",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cfg, err := loadConfig()
+			cfg, apiClient, err := loadConfigAndClient()
 			if err != nil {
 				return err
 			}
@@ -1389,6 +1466,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
 				tasks, err := service.ListTasks(cmd.Context(), repo, args[0], pullrequestservice.TaskListOptions{State: "all", Limit: 200, Start: 0})
 				if err != nil {
 					return err
@@ -1493,6 +1575,19 @@ func hasApprovedReviewer(reviewers []pullrequestservice.Reviewer) bool {
 		}
 	}
 
+	return false
+}
+
+func reviewerApprovedByUser(reviewers []pullrequestservice.Reviewer, username string) bool {
+	trimmed := strings.TrimSpace(username)
+	if trimmed == "" {
+		return false
+	}
+	for _, reviewer := range reviewers {
+		if strings.EqualFold(strings.TrimSpace(reviewer.Name), trimmed) && (reviewer.Approved || strings.EqualFold(strings.TrimSpace(reviewer.Status), "APPROVED")) {
+			return true
+		}
+	}
 	return false
 }
 
