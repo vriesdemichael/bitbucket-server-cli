@@ -638,3 +638,117 @@ func TestLivePermissionRepoCreateDryRunDeniedWithProjectReadOnly(t *testing.T) {
 	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "repo", "admin", "create", "--project", seeded.Key, "--name", "denied-repo-dry")
 	assertDryRunAuthorizationError(t, cliErr, output, "repo create dry-run with PROJECT_READ only")
 }
+
+// ---------------------------------------------------------------------------
+// bb repo permissions show — effective permission inspection for the caller.
+//
+// Note: the dev Bitbucket license restricts additional user seats, so these
+// tests run as the harness admin user (who always has full access) and verify
+// that all three levels are reported as true. The unit tests in
+// permission_checker_test.go cover the partial-permission (false) paths.
+// ---------------------------------------------------------------------------
+
+// TestLiveRepoPermissionsShowAsAdmin verifies that an admin-level caller sees
+// REPO_READ=true, REPO_WRITE=true, and REPO_ADMIN=true on their own repository,
+// and that both JSON and human output contain the expected fields.
+func TestLiveRepoPermissionsShowAsAdmin(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+	repo := seeded.Repos[0]
+	repoRef := seeded.Key + "/" + repo.Slug
+
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	// JSON output
+	output, cliErr := executeLiveCLI(t, "--json", "repo", "permissions", "show", "--repo", repoRef)
+	if cliErr != nil {
+		t.Fatalf("repo permissions show (json) failed: %v\noutput: %s", cliErr, output)
+	}
+
+	result := decodeJSONMap(t, output)
+	if asString(result["repository"]) != repoRef {
+		t.Errorf("expected repository=%q, got %q", repoRef, asString(result["repository"]))
+	}
+	perms, ok := result["permissions"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected permissions map in output: %s", output)
+	}
+	for _, level := range []string{"REPO_READ", "REPO_WRITE", "REPO_ADMIN"} {
+		if perms[level] != true {
+			t.Errorf("expected %s=true for admin user, got %v", level, perms[level])
+		}
+	}
+
+	// Human output
+	humanOutput, cliErr := executeLiveCLI(t, "repo", "permissions", "show", "--repo", repoRef)
+	if cliErr != nil {
+		t.Fatalf("repo permissions show (human) failed: %v\noutput: %s", cliErr, humanOutput)
+	}
+	for _, level := range []string{"REPO_READ", "REPO_WRITE", "REPO_ADMIN"} {
+		if !strings.Contains(humanOutput, level) {
+			t.Errorf("expected human output to contain %s, got: %s", level, humanOutput)
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// bb project permissions show <key> — effective permission inspection for the caller.
+//
+// Same note as above: restricted users cannot authenticate on the dev license,
+// so tests run as the admin user and assert full access.
+// ---------------------------------------------------------------------------
+
+// TestLiveProjectPermissionsShowAsAdmin verifies that an admin-level caller sees
+// all three project permission levels as true, and that both JSON and human output
+// contain the expected fields.
+func TestLiveProjectPermissionsShowAsAdmin(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	configureLiveCLIEnv(t, harness, seeded.Key, seeded.Repos[0].Slug)
+
+	// JSON output
+	output, cliErr := executeLiveCLI(t, "--json", "project", "permissions", "show", seeded.Key)
+	if cliErr != nil {
+		t.Fatalf("project permissions show (json) failed: %v\noutput: %s", cliErr, output)
+	}
+
+	result := decodeJSONMap(t, output)
+	if asString(result["project_key"]) != seeded.Key {
+		t.Errorf("expected project_key=%q, got %q", seeded.Key, asString(result["project_key"]))
+	}
+	perms, ok := result["permissions"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected permissions map in output: %s", output)
+	}
+	for _, level := range []string{"PROJECT_READ", "PROJECT_WRITE", "PROJECT_ADMIN"} {
+		if perms[level] != true {
+			t.Errorf("expected %s=true for admin user, got %v", level, perms[level])
+		}
+	}
+
+	// Human output
+	humanOutput, cliErr := executeLiveCLI(t, "project", "permissions", "show", seeded.Key)
+	if cliErr != nil {
+		t.Fatalf("project permissions show (human) failed: %v\noutput: %s", cliErr, humanOutput)
+	}
+	for _, level := range []string{"PROJECT_READ", "PROJECT_WRITE", "PROJECT_ADMIN"} {
+		if !strings.Contains(humanOutput, level) {
+			t.Errorf("expected human output to contain %s, got: %s", level, humanOutput)
+		}
+	}
+}
