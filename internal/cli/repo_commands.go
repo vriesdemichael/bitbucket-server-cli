@@ -300,7 +300,7 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 					return err
 				}
 
-				_, err := service.Get(cmd.Context(), target, deleteCommentID)
+				current, err := service.Get(cmd.Context(), target, deleteCommentID)
 				currentUser := strings.TrimSpace(cfg.BitbucketUsername)
 				predicted := "delete"
 				reason := "comment will be deleted"
@@ -313,10 +313,6 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 						return err
 					}
 				} else if currentUser != "" {
-					current, getErr := service.Get(cmd.Context(), target, deleteCommentID)
-					if getErr != nil {
-						return getErr
-					}
 					if !commentOwnedByUser(current, currentUser) {
 						predicted = "blocked"
 						reason = "comment is owned by another user"

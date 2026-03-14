@@ -34,7 +34,6 @@ func (p *PermissionChecker) CheckRepoPermission(ctx context.Context, projectKey,
 	limit := float32(1)
 	params := &openapigenerated.GetRepositories1Params{
 		Projectkey: &projectKey,
-		Name:       &repoSlug,
 		Permission: &permission,
 		Limit:      &limit,
 	}
@@ -51,6 +50,22 @@ func (p *PermissionChecker) CheckRepoPermission(ctx context.Context, projectKey,
 	}
 
 	if resp.ApplicationjsonCharsetUTF8200 == nil || resp.ApplicationjsonCharsetUTF8200.Values == nil || len(*resp.ApplicationjsonCharsetUTF8200.Values) == 0 {
+		err := apperrors.New(apperrors.KindAuthorization, fmt.Sprintf("insufficient permission: %s required on repository %s/%s", permission, projectKey, repoSlug), nil)
+		p.cache[cacheKey] = err
+		return err
+	}
+
+	found := false
+	for _, repo := range *resp.ApplicationjsonCharsetUTF8200.Values {
+		if repo.Slug == nil || !strings.EqualFold(strings.TrimSpace(*repo.Slug), repoSlug) {
+			continue
+		}
+		if repo.Project != nil && strings.EqualFold(strings.TrimSpace(repo.Project.Key), projectKey) {
+			found = true
+			break
+		}
+	}
+	if !found {
 		err := apperrors.New(apperrors.KindAuthorization, fmt.Sprintf("insufficient permission: %s required on repository %s/%s", permission, projectKey, repoSlug), nil)
 		p.cache[cacheKey] = err
 		return err

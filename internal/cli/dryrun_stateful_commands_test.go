@@ -24,7 +24,7 @@ func TestInsightsAndPRDryRunPredictionBranches(t *testing.T) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
-			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"TEST"}}],"isLastPage":true}`))
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"test-repo","project":{"key":"TEST"}},{"slug":"demo","name":"project-repo","project":{"key":"PRJ"}}],"isLastPage":true}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/existing":
 			_, _ = writer.Write([]byte(`{"key":"existing","title":"Existing"}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/insights/latest/projects/TEST/repos/demo/commits/abc/reports/missing":
@@ -151,7 +151,11 @@ func TestGovernanceAndRepoDryRunPredictionBranches(t *testing.T) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
-			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"TEST"}}],"isLastPage":true}`))
+			if request.URL.Query().Get("projectkey") == "PRJ" {
+				_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"project-repo","project":{"key":"PRJ"}}],"isLastPage":true}`))
+				return
+			}
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"test-repo","project":{"key":"TEST"}}],"isLastPage":true}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
 			_, _ = writer.Write([]byte(`{"values":[{"user":{"name":"alice"}}],"isLastPage":true}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/conditions":
@@ -272,7 +276,11 @@ func TestBranchProjectAdminTagDryRunPredictionBranches(t *testing.T) {
 		writer.Header().Set("Content-Type", "application/json")
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
-			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"TEST"}}],"isLastPage":true}`))
+			if request.URL.Query().Get("projectkey") == "PRJ" {
+				_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"project-repo","project":{"key":"PRJ"}}],"isLastPage":true}`))
+				return
+			}
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"test-repo","project":{"key":"TEST"}}],"isLastPage":true}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects":
 			writer.WriteHeader(http.StatusBadRequest)
 			_, _ = writer.Write([]byte(`{"errors":[{"message":"name is required"}]}`))

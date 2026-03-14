@@ -35,13 +35,13 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 				http.NotFound(w, r)
 				return
 			}
-			if r.URL.Query().Get("projectkey") != "PRJ" || r.URL.Query().Get("name") != "demo" || r.URL.Query().Get("permission") != "REPO_ADMIN" {
+			if r.URL.Query().Get("projectkey") != "PRJ" || r.URL.Query().Get("name") != "" || r.URL.Query().Get("permission") != "REPO_ADMIN" {
 				w.WriteHeader(http.StatusBadRequest)
 				_, _ = w.Write([]byte("bad query"))
 				return
 			}
 			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
-			_, _ = w.Write([]byte(`{"values":[{"slug":"demo","project":{"key":"PRJ"}}],"isLastPage":true}`))
+			_, _ = w.Write([]byte(`{"values":[{"slug":"demo","name":"Repository Display Name","project":{"key":"PRJ"}}],"isLastPage":true}`))
 		})
 
 		if err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOADMIN); err != nil {
@@ -59,6 +59,18 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
+		})
+
+		err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOWRITE)
+		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
+			t.Fatalf("expected authorization error, got: %v", err)
+		}
+	})
+
+	t.Run("returns authorization error when list does not include requested slug", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = w.Write([]byte(`{"values":[{"slug":"other","project":{"key":"PRJ"}}],"isLastPage":true}`))
 		})
 
 		err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOWRITE)
