@@ -8,6 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
@@ -140,6 +141,11 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 
 			service := commentservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), target.Repository.ProjectKey, target.Repository.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
 				preview := dryRunPreview{
 					DryRun:       true,
 					PlanningMode: planningModeStateful,
@@ -195,16 +201,27 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 
 			service := commentservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), target.Repository.ProjectKey, target.Repository.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), target, updateCommentID)
 				if err != nil {
 					return err
 				}
+				currentUser := strings.TrimSpace(cfg.BitbucketUsername)
 
 				predicted := "update"
 				reason := "comment will be updated"
+				blocking := []string{}
 				if strings.EqualFold(strings.TrimSpace(safeString(current.Text)), strings.TrimSpace(updateText)) {
 					predicted = "no-op"
 					reason = "comment text already matches requested value"
+				} else if currentUser != "" && !commentOwnedByUser(current, currentUser) {
+					predicted = "blocked"
+					reason = "comment is owned by another user"
+					blocking = []string{"comment owned by another user"}
 				}
 
 				preview := dryRunPreview{
@@ -220,13 +237,16 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 						Reason:          reason,
 						Confidence:      capabilityPartial,
 						RequiredState:   []string{"comment get"},
+						BlockingReasons: blocking,
 					}},
 					Summary: dryRunSummary{Total: 1, Supported: 1},
 				}
 				if predicted == "update" {
 					preview.Summary.UpdateCount = 1
-				} else {
+				} else if predicted == "no-op" {
 					preview.Summary.NoopCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
 				}
 
 				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
@@ -275,15 +295,32 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 
 			service := commentservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), target.Repository.ProjectKey, target.Repository.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
 				_, err := service.Get(cmd.Context(), target, deleteCommentID)
+				currentUser := strings.TrimSpace(cfg.BitbucketUsername)
 				predicted := "delete"
 				reason := "comment will be deleted"
+				blocking := []string{}
 				if err != nil {
 					if apperrors.ExitCode(err) == 4 {
 						predicted = "no-op"
 						reason = "comment was not found"
 					} else {
 						return err
+					}
+				} else if currentUser != "" {
+					current, getErr := service.Get(cmd.Context(), target, deleteCommentID)
+					if getErr != nil {
+						return getErr
+					}
+					if !commentOwnedByUser(current, currentUser) {
+						predicted = "blocked"
+						reason = "comment is owned by another user"
+						blocking = []string{"comment owned by another user"}
 					}
 				}
 
@@ -300,13 +337,16 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 						Reason:          reason,
 						Confidence:      capabilityPartial,
 						RequiredState:   []string{"comment get"},
+						BlockingReasons: blocking,
 					}},
 					Summary: dryRunSummary{Total: 1, Supported: 1},
 				}
 				if predicted == "delete" {
 					preview.Summary.DeleteCount = 1
-				} else {
+				} else if predicted == "no-op" {
 					preview.Summary.NoopCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
 				}
 
 				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
@@ -416,6 +456,11 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			service := reposettings.NewService(client)
 			permission := strings.ToUpper(strings.TrimSpace(args[1]))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				users, err := service.ListRepositoryPermissionUsers(cmd.Context(), repo, permissionsLimit)
 				if err != nil {
 					return err
@@ -494,6 +539,11 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 
 			service := reposettings.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				users, err := service.ListRepositoryPermissionUsers(cmd.Context(), repo, permissionsLimit)
 				if err != nil {
 					return err
@@ -604,6 +654,11 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			service := reposettings.NewService(client)
 			permission := strings.ToUpper(strings.TrimSpace(args[1]))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				groups, err := service.ListRepositoryPermissionGroups(cmd.Context(), repo, permissionsLimit)
 				if err != nil {
 					return err
@@ -683,6 +738,11 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 
 			service := reposettings.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				groups, err := service.ListRepositoryPermissionGroups(cmd.Context(), repo, permissionsLimit)
 				if err != nil {
 					return err
@@ -799,6 +859,11 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 
 			service := reposettings.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				webhooks, err := service.ListRepositoryWebhooks(cmd.Context(), repo)
 				if err != nil {
 					return err
@@ -878,6 +943,11 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 
 			service := reposettings.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				webhooks, err := service.ListRepositoryWebhooks(cmd.Context(), repo)
 				if err != nil {
 					return err
@@ -1068,6 +1138,11 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 
 			service := reposettings.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				currentSettings, err := service.GetRepositoryPullRequestSettings(cmd.Context(), repo)
 				if err != nil {
 					return err
@@ -1141,6 +1216,11 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 
 			service := reposettings.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				currentSettings, err := service.GetRepositoryPullRequestSettings(cmd.Context(), repo)
 				if err != nil {
 					return err
@@ -1229,6 +1309,11 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			service := reposettings.NewService(client)
 			mergeStrategyID := args[0]
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				currentSettings, err := service.GetRepositoryPullRequestSettings(cmd.Context(), repo)
 				if err != nil {
 					return err
@@ -1306,6 +1391,20 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 	settingsCmd.AddCommand(pullRequestsCmd)
 
 	return settingsCmd
+}
+
+func commentOwnedByUser(comment openapigenerated.RestComment, username string) bool {
+	trimmed := strings.TrimSpace(username)
+	if trimmed == "" || comment.Author == nil {
+		return false
+	}
+	if comment.Author.Name != nil && strings.EqualFold(strings.TrimSpace(*comment.Author.Name), trimmed) {
+		return true
+	}
+	if comment.Author.Slug != nil && strings.EqualFold(strings.TrimSpace(*comment.Author.Slug), trimmed) {
+		return true
+	}
+	return false
 }
 
 func webhookEntries(payload any) []map[string]any {

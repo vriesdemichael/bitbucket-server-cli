@@ -98,6 +98,11 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 					return err
 				}
 				if options.DryRun {
+					checker := options.permissionCheckerFor(client)
+					if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+						return err
+					}
+
 					conditions, err := service.ListRepositoryConditions(cmd.Context(), repo.ProjectKey, repo.Slug)
 					if err != nil {
 						return err
@@ -148,6 +153,11 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 				return fmt.Errorf("project key is required (use --project or --repo)")
 			}
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), projectKey); err != nil {
+					return err
+				}
+
 				conditions, err := service.ListProjectConditions(cmd.Context(), projectKey)
 				if err != nil {
 					return err
@@ -242,6 +252,11 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 					return err
 				}
 				if options.DryRun {
+					checker := options.permissionCheckerFor(client)
+					if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+						return err
+					}
+
 					conditions, err := service.ListRepositoryConditions(cmd.Context(), repo.ProjectKey, repo.Slug)
 					if err != nil {
 						return err
@@ -299,6 +314,11 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 				return fmt.Errorf("project key is required (use --project or --repo)")
 			}
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), projectKey); err != nil {
+					return err
+				}
+
 				conditions, err := service.ListProjectConditions(cmd.Context(), projectKey)
 				if err != nil {
 					return err
@@ -400,6 +420,11 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 					return fmt.Errorf("invalid condition JSON: %w", err)
 				}
 				if options.DryRun {
+					checker := options.permissionCheckerFor(client)
+					if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+						return err
+					}
+
 					conditions, err := service.ListRepositoryConditions(cmd.Context(), repo.ProjectKey, repo.Slug)
 					if err != nil {
 						return err
@@ -464,6 +489,11 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 				return fmt.Errorf("invalid condition JSON: %w", err)
 			}
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), projectKey); err != nil {
+					return err
+				}
+
 				conditions, err := service.ListProjectConditions(cmd.Context(), projectKey)
 				if err != nil {
 					return err

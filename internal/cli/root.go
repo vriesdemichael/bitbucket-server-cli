@@ -80,8 +80,19 @@ func NewRootCommand() *cobra.Command {
 }
 
 type rootOptions struct {
-	JSON   bool
-	DryRun bool
+	JSON              bool
+	DryRun            bool
+	permissionChecker *PermissionChecker
+}
+
+func (options *rootOptions) permissionCheckerFor(client *openapigenerated.ClientWithResponses) *PermissionChecker {
+	if options == nil || client == nil {
+		return nil
+	}
+	if options.permissionChecker == nil {
+		options.permissionChecker = NewPermissionChecker(client)
+	}
+	return options.permissionChecker
 }
 
 func loadConfig() (config.AppConfig, error) {
@@ -164,17 +175,22 @@ func loadConfigAndClient() (config.AppConfig, *openapigenerated.ClientWithRespon
 }
 
 func loadQualityRepoAndService(selector string) (qualityservice.RepositoryRef, *qualityservice.Service, error) {
+	repo, service, _, err := loadQualityRepoServiceAndClient(selector)
+	return repo, service, err
+}
+
+func loadQualityRepoServiceAndClient(selector string) (qualityservice.RepositoryRef, *qualityservice.Service, *openapigenerated.ClientWithResponses, error) {
 	cfg, client, err := loadConfigAndClient()
 	if err != nil {
-		return qualityservice.RepositoryRef{}, nil, err
+		return qualityservice.RepositoryRef{}, nil, nil, err
 	}
 
 	repo, err := resolveQualityRepositoryReference(selector, cfg)
 	if err != nil {
-		return qualityservice.RepositoryRef{}, nil, err
+		return qualityservice.RepositoryRef{}, nil, nil, err
 	}
 
-	return repo, qualityservice.NewService(client), nil
+	return repo, qualityservice.NewService(client), client, nil
 }
 
 func newAPIClientFromConfig(cfg config.AppConfig) (*openapigenerated.ClientWithResponses, error) {

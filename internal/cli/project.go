@@ -100,6 +100,11 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 
 			service := projectservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectCreate(cmd.Context()); err != nil {
+					return err
+				}
+
 				_, err := service.Get(cmd.Context(), args[0])
 				predicted := "create"
 				reason := "project will be created"
@@ -177,6 +182,11 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 
 			service := projectservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), args[0]); err != nil {
+					return err
+				}
+
 				current, err := service.Get(cmd.Context(), args[0])
 				if err != nil {
 					return err
@@ -248,6 +258,11 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 
 			service := projectservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), args[0]); err != nil {
+					return err
+				}
+
 				_, err := service.Get(cmd.Context(), args[0])
 				predicted := "delete"
 				reason := "project will be deleted"
@@ -352,6 +367,11 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			service := projectservice.NewService(client)
 			permission := strings.ToUpper(strings.TrimSpace(args[2]))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), args[0]); err != nil {
+					return err
+				}
+
 				users, err := service.ListProjectPermissionUsers(cmd.Context(), args[0], projectPermissionsLimit)
 				if err != nil {
 					return err
@@ -426,6 +446,11 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 
 			service := projectservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), args[0]); err != nil {
+					return err
+				}
+
 				users, err := service.ListProjectPermissionUsers(cmd.Context(), args[0], projectPermissionsLimit)
 				if err != nil {
 					return err
@@ -531,6 +556,11 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			service := projectservice.NewService(client)
 			permission := strings.ToUpper(strings.TrimSpace(args[2]))
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), args[0]); err != nil {
+					return err
+				}
+
 				groups, err := service.ListProjectPermissionGroups(cmd.Context(), args[0], projectPermissionsLimit)
 				if err != nil {
 					return err
@@ -605,6 +635,11 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 
 			service := projectservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), args[0]); err != nil {
+					return err
+				}
+
 				groups, err := service.ListProjectPermissionGroups(cmd.Context(), args[0], projectPermissionsLimit)
 				if err != nil {
 					return err

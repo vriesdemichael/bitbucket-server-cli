@@ -111,6 +111,11 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 
 			service := branchservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
 				branches, err := service.List(cmd.Context(), repo, branchservice.ListOptions{Limit: 1000, FilterText: args[0]})
 				if err != nil {
 					return err
@@ -290,6 +295,11 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 
 			service := branchservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				currentDefault, err := service.GetDefault(cmd.Context(), repo)
 				if err != nil {
 					return err
@@ -406,6 +416,11 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 
 			service := branchservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				currentDefault, err := service.GetDefault(cmd.Context(), repo)
 				if err != nil {
 					return err
@@ -589,6 +604,11 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 
 			service := branchservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				restrictions, err := service.ListRestrictions(cmd.Context(), repo, branchservice.RestrictionListOptions{Limit: 1000})
 				if err != nil {
 					return err
@@ -696,6 +716,11 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 
 			service := branchservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				current, err := service.GetRestriction(cmd.Context(), repo, args[0])
 				if err != nil {
 					return err
@@ -783,6 +808,11 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 
 			service := branchservice.NewService(client)
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				_, err := service.GetRestriction(cmd.Context(), repo, args[0])
 				predicted := "delete"
 				reason := "branch restriction will be deleted"
@@ -1064,7 +1094,7 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Use:   "create",
 		Short: "Create required build merge check",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			repo, service, client, err := loadQualityRepoServiceAndClient(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -1075,10 +1105,15 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				preview := dryRunPreview{
 					DryRun:       true,
 					PlanningMode: planningModeStateful,
-					Capability:   capabilityPartial,
+					Capability:   capabilityFull,
 					Items: []dryRunItem{{
 						Intent:          "build.required.create",
 						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug)},
@@ -1086,7 +1121,7 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 						PredictedAction: "create",
 						Supported:       true,
 						Reason:          "required build check will be created",
-						Confidence:      capabilityPartial,
+						Confidence:      capabilityFull,
 						RequiredState:   []string{"required build checks endpoint availability"},
 					}},
 					Summary: dryRunSummary{Total: 1, Supported: 1, CreateCount: 1},
@@ -1112,7 +1147,7 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Short: "Update required build merge check",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			repo, service, client, err := loadQualityRepoServiceAndClient(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -1128,6 +1163,11 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				preview := dryRunPreview{
 					DryRun:       true,
 					PlanningMode: planningModeStateful,
@@ -1164,7 +1204,7 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 		Short: "Delete required build merge check",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			repo, service, err := loadQualityRepoAndService(repositorySelector)
+			repo, service, client, err := loadQualityRepoServiceAndClient(repositorySelector)
 			if err != nil {
 				return err
 			}
@@ -1175,6 +1215,11 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+
 				checks, err := service.ListRequiredBuildChecks(cmd.Context(), repo, requiredLimit)
 				if err != nil {
 					return err

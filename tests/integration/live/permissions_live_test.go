@@ -1,0 +1,640 @@
+//go:build live
+
+package live_test
+
+// Permission boundary tests (GitHub Issue #77).
+//
+// These tests create a temporarily scoped Bitbucket user using admin credentials,
+// grant them a specific (restricted) permission level, then assert that operations
+// requiring higher privileges return KindAuthorization errors (exit code 3) from the CLI.
+//
+// Each test also includes a --dry-run variant to verify that the stateful planning
+// engine surfaces the permission failure rather than silently producing a plan.
+
+import (
+	"context"
+	"strings"
+	"testing"
+	"time"
+
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
+)
+
+// assertAuthorizationError asserts that err is non-nil and has KindAuthorization (exit code 3).
+func assertAuthorizationError(t *testing.T, err error, output, context string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("%s: expected authorization error but command succeeded\noutput: %s", context, output)
+	}
+	if apperrors.ExitCode(err) != 3 {
+		t.Fatalf("%s: expected exit code 3 (KindAuthorization), got %d\nerror: %v\noutput: %s",
+			context, apperrors.ExitCode(err), err, output)
+	}
+}
+
+// assertDryRunAuthorizationError asserts that a --dry-run invocation fails with an
+// authorization error rather than producing a plan.  It also makes sure the output
+// does NOT contain a successful planning_mode entry, because that would mean the
+// plan was produced before the permission check fired.
+func assertDryRunAuthorizationError(t *testing.T, err error, output, context string) {
+	t.Helper()
+	if err == nil {
+		t.Fatalf("%s: expected authorization error from dry-run but command succeeded\noutput: %s", context, output)
+	}
+	if apperrors.ExitCode(err) != 3 {
+		t.Fatalf("%s: expected dry-run exit code 3 (KindAuthorization), got %d\nerror: %v\noutput: %s",
+			context, apperrors.ExitCode(err), err, output)
+	}
+	// The plan must NOT have been committed to output — the permission check must fire first.
+	if strings.Contains(output, `"planning_mode"`) && !strings.Contains(output, `"error"`) {
+		t.Fatalf("%s: dry-run produced a plan despite lacking permission\noutput: %s", context, output)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Repo-read boundary: a user with no project/repo access should get 403 on
+// operations that require at least REPO_READ.
+// ---------------------------------------------------------------------------
+
+func TestLivePermissionRepoReadDeniedWithoutAccess(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+	repo := seeded.Repos[0]
+
+	// Create a user with NO permissions — not even project read.
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	// repo list requires at least REPO_READ on the project.
+	output, cliErr := executeLiveCLI(t, "--json", "repo", "list")
+	assertAuthorizationError(t, cliErr, output, "repo list without any access")
+}
+
+// Dry-run: tag create without any access must surface authorization error.
+// tag create --dry-run calls service.List (tag list) during planning, which requires at
+// least REPO_READ. A user with no permissions at all gets 403 there.
+func TestLivePermissionRepoReadDryRunDeniedWithoutAccess(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+	repo := seeded.Repos[0]
+
+	// Create a user with NO permissions at all.
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	commitID := repo.CommitIDs[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	tagName := "v-perm-dry-noaccess"
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "tag", "create", tagName, "--start-point", commitID, "--message", "dry run perm test no access")
+	assertDryRunAuthorizationError(t, cliErr, output, "tag create dry-run without any access")
+}
+
+// ---------------------------------------------------------------------------
+// Repo-write boundary: a user with REPO_READ cannot create tags or branches.
+// ---------------------------------------------------------------------------
+
+func TestLivePermissionRepoWriteDeniedWithRepoReadOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+	repo := seeded.Repos[0]
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	// Grant only REPO_READ — the lowest privilege that lets the user see the repo.
+	if err := harness.grantRepoPermission(ctx, seeded.Key, repo.Slug, user.Username, openapigenerated.SetPermissionForUserParamsPermissionREPOREAD); err != nil {
+		t.Fatalf("grant repo read permission failed: %v", err)
+	}
+
+	commitID := repo.CommitIDs[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	// tag create requires REPO_WRITE.
+	tagName := "v-perm-test-tag-ro"
+	output, cliErr := executeLiveCLI(t, "--json", "tag", "create", tagName, "--start-point", commitID, "--message", "perm test")
+	assertAuthorizationError(t, cliErr, output, "tag create with REPO_READ only")
+}
+
+// ---------------------------------------------------------------------------
+// Dry-run: tag create with REPO_READ must surface authorization error, not plan.
+// ---------------------------------------------------------------------------
+
+func TestLivePermissionRepoWriteDryRunDeniedWithRepoReadOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+	repo := seeded.Repos[0]
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantRepoPermission(ctx, seeded.Key, repo.Slug, user.Username, openapigenerated.SetPermissionForUserParamsPermissionREPOREAD); err != nil {
+		t.Fatalf("grant repo read permission failed: %v", err)
+	}
+
+	commitID := repo.CommitIDs[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	tagName := "v-perm-dry-tag-ro"
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "tag", "create", tagName, "--start-point", commitID, "--message", "dry run perm test")
+	assertDryRunAuthorizationError(t, cliErr, output, "tag create dry-run with REPO_READ only")
+}
+
+// ---------------------------------------------------------------------------
+// Repo-admin boundary: a user with REPO_WRITE cannot change repo settings or
+// manage hooks.
+// ---------------------------------------------------------------------------
+
+func TestLivePermissionRepoAdminDeniedWithRepoWriteOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+	repo := seeded.Repos[0]
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantRepoPermission(ctx, seeded.Key, repo.Slug, user.Username, openapigenerated.SetPermissionForUserParamsPermissionREPOWRITE); err != nil {
+		t.Fatalf("grant repo write permission failed: %v", err)
+	}
+
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	// repo admin update requires REPO_ADMIN.
+	output, cliErr := executeLiveCLI(t, "--json", "repo", "admin", "update", "--name", "should-be-denied")
+	assertAuthorizationError(t, cliErr, output, "repo admin update with REPO_WRITE only")
+}
+
+// Dry-run: repo settings pull-requests update with REPO_WRITE must surface authorization error.
+// GetRepositoryPullRequestSettings is called during planning — a REPO_ADMIN API — so the permission
+// check fires before any plan is emitted.
+func TestLivePermissionPullRequestSettingsDryRunDeniedWithRepoWriteOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+	repo := seeded.Repos[0]
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantRepoPermission(ctx, seeded.Key, repo.Slug, user.Username, openapigenerated.SetPermissionForUserParamsPermissionREPOWRITE); err != nil {
+		t.Fatalf("grant repo write permission failed: %v", err)
+	}
+
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "repo", "settings", "pull-requests", "update", "--required-all-tasks-complete=false")
+	assertDryRunAuthorizationError(t, cliErr, output, "repo settings pull-requests update dry-run with REPO_WRITE only")
+}
+
+// ---------------------------------------------------------------------------
+// Repo hook management boundary: enabling/disabling hooks requires REPO_ADMIN.
+// ---------------------------------------------------------------------------
+
+func TestLivePermissionHookEnableDeniedWithRepoWriteOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+	repo := seeded.Repos[0]
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantRepoPermission(ctx, seeded.Key, repo.Slug, user.Username, openapigenerated.SetPermissionForUserParamsPermissionREPOWRITE); err != nil {
+		t.Fatalf("grant repo write permission failed: %v", err)
+	}
+
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	hookKey := "com.atlassian.bitbucket.server.bitbucket-bundled-hooks:verify-committer-hook"
+	output, cliErr := executeLiveCLI(t, "--json", "hook", "enable", hookKey, "--repo", seeded.Key+"/"+repo.Slug)
+	assertAuthorizationError(t, cliErr, output, "hook enable with REPO_WRITE only")
+}
+
+// Dry-run: hook enable with REPO_WRITE must surface authorization error.
+func TestLivePermissionHookEnableDryRunDeniedWithRepoWriteOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+	repo := seeded.Repos[0]
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantRepoPermission(ctx, seeded.Key, repo.Slug, user.Username, openapigenerated.SetPermissionForUserParamsPermissionREPOWRITE); err != nil {
+		t.Fatalf("grant repo write permission failed: %v", err)
+	}
+
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	hookKey := "com.atlassian.bitbucket.server.bitbucket-bundled-hooks:verify-committer-hook"
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "hook", "enable", hookKey, "--repo", seeded.Key+"/"+repo.Slug)
+	assertDryRunAuthorizationError(t, cliErr, output, "hook enable dry-run with REPO_WRITE only")
+}
+
+// ---------------------------------------------------------------------------
+// Project-admin boundary: a user with PROJECT_WRITE cannot delete a project or
+// manage project-level permissions.
+// ---------------------------------------------------------------------------
+
+func TestLivePermissionProjectDeleteDeniedWithProjectWriteOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantProjectPermission(ctx, seeded.Key, user.Username, "PROJECT_WRITE"); err != nil {
+		t.Fatalf("grant project write permission failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	// project delete requires PROJECT_ADMIN.
+	output, cliErr := executeLiveCLI(t, "--json", "project", "delete", seeded.Key)
+	assertAuthorizationError(t, cliErr, output, "project delete with PROJECT_WRITE only")
+}
+
+// Dry-run: project delete with PROJECT_WRITE must surface authorization error.
+func TestLivePermissionProjectDeleteDryRunDeniedWithProjectWriteOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantProjectPermission(ctx, seeded.Key, user.Username, "PROJECT_WRITE"); err != nil {
+		t.Fatalf("grant project write permission failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "project", "delete", seeded.Key)
+	assertDryRunAuthorizationError(t, cliErr, output, "project delete dry-run with PROJECT_WRITE only")
+}
+
+// ---------------------------------------------------------------------------
+// Project permissions boundary: a user with PROJECT_WRITE cannot manage
+// project-level user permissions.
+// ---------------------------------------------------------------------------
+
+func TestLivePermissionProjectPermissionGrantDeniedWithProjectWriteOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantProjectPermission(ctx, seeded.Key, user.Username, "PROJECT_WRITE"); err != nil {
+		t.Fatalf("grant project write permission failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	// Granting project permissions requires PROJECT_ADMIN.
+	output, cliErr := executeLiveCLI(t, "--json", "project", "permissions", "users", "grant", seeded.Key, user.Username, "PROJECT_READ")
+	assertAuthorizationError(t, cliErr, output, "project permission grant with PROJECT_WRITE only")
+}
+
+// Dry-run: project permission grant with PROJECT_WRITE must surface authorization error.
+func TestLivePermissionProjectPermissionGrantDryRunDeniedWithProjectWriteOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantProjectPermission(ctx, seeded.Key, user.Username, "PROJECT_WRITE"); err != nil {
+		t.Fatalf("grant project write permission failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "project", "permissions", "users", "grant", seeded.Key, user.Username, "PROJECT_READ")
+	assertDryRunAuthorizationError(t, cliErr, output, "project permission grant dry-run with PROJECT_WRITE only")
+}
+
+// Dry-run: project create requires global create-project permission. A user with
+// only project-scoped admin on an existing project must be denied before any plan
+// is emitted.
+func TestLivePermissionProjectCreateDryRunDeniedWithProjectAdminOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantProjectPermission(ctx, seeded.Key, user.Username, "PROJECT_ADMIN"); err != nil {
+		t.Fatalf("grant project admin permission failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "project", "create", "DRYDENY", "--name", "dry deny")
+	assertDryRunAuthorizationError(t, cliErr, output, "project create dry-run with PROJECT_ADMIN only")
+}
+
+// Dry-run ownership boundary: approving a pull request should be denied up-front if
+// the caller cannot even read the repo. This exercises the conservative ownership-aware
+// precheck path for PR review commands.
+func TestLivePermissionPRApproveDryRunDeniedWithoutRepoRead(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 2)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	branch := "perm-pr-approve-dry"
+	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, "perm-pr-approve.txt"); err != nil {
+		t.Fatalf("push commit on branch failed: %v", err)
+	}
+
+	prID, err := harness.createPullRequest(ctx, seeded.Key, repo.Slug, branch, "master")
+	if err != nil {
+		t.Fatalf("create pull request failed: %v", err)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "pr", "review", "approve", prID)
+	assertDryRunAuthorizationError(t, cliErr, output, "pr review approve dry-run without repo access")
+}
+
+// Dry-run ownership boundary: updating a comment should be denied up-front if the
+// caller cannot read the repo. This exercises the conservative ownership-aware
+// precheck path for comment mutation commands.
+func TestLivePermissionCommentUpdateDryRunDeniedWithoutRepoRead(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 2)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	prBranch := "perm-comment-update-dry"
+	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, prBranch, "perm-comment-update.txt"); err != nil {
+		t.Fatalf("push commit on branch failed: %v", err)
+	}
+
+	prID, err := harness.createPullRequest(ctx, seeded.Key, repo.Slug, prBranch, "master")
+	if err != nil {
+		t.Fatalf("create pull request failed: %v", err)
+	}
+
+	commentOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "create", "--pr", prID, "--text", "ownership precheck fixture")
+	if err != nil {
+		t.Fatalf("create comment fixture failed: %v\noutput: %s", err, commentOutput)
+	}
+	commentPayload := decodeJSONMap(t, commentOutput)
+	commentObj, ok := commentPayload["comment"].(map[string]any)
+	if !ok {
+		t.Fatalf("expected comment object in output: %s", commentOutput)
+	}
+	commentID := asString(commentObj["id"])
+	if commentID == "" {
+		t.Fatalf("expected comment id in output: %s", commentOutput)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "repo", "comment", "update", "--pr", prID, "--id", commentID, "--text", "denied update")
+	assertDryRunAuthorizationError(t, cliErr, output, "repo comment update dry-run without repo access")
+}
+
+// ---------------------------------------------------------------------------
+// Repo-admin boundary via pull-request settings: a user with REPO_WRITE cannot
+// read pull-request settings (requires REPO_ADMIN).
+// ---------------------------------------------------------------------------
+
+func TestLivePermissionPullRequestSettingsDeniedWithRepoWriteOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	// We only need a seeded project so we have something to grant.
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+
+	// Grant only REPO_WRITE — insufficient to read pull-request settings
+	// (requires REPO_ADMIN).
+	if err := harness.grantRepoPermission(ctx, seeded.Key, repo.Slug, user.Username, openapigenerated.SetPermissionForUserParamsPermissionREPOWRITE); err != nil {
+		t.Fatalf("grant repo write permission failed: %v", err)
+	}
+
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	output, cliErr := executeLiveCLI(t, "--json", "repo", "settings", "pull-requests", "get")
+	assertAuthorizationError(t, cliErr, output, "repo settings pull-requests get with REPO_WRITE only")
+}
+
+// ---------------------------------------------------------------------------
+// Repo admin create boundary: PROJECT_READ cannot create repositories.
+// ---------------------------------------------------------------------------
+
+func TestLivePermissionRepoCreateDeniedWithProjectReadOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	// Only grant PROJECT_READ — insufficient to create repos (requires PROJECT_WRITE+).
+	if err := harness.grantProjectPermission(ctx, seeded.Key, user.Username, "PROJECT_READ"); err != nil {
+		t.Fatalf("grant project read permission failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	output, cliErr := executeLiveCLI(t, "--json", "repo", "admin", "create", "--project", seeded.Key, "--name", "denied-repo")
+	assertAuthorizationError(t, cliErr, output, "repo create with PROJECT_READ only")
+}
+
+// Dry-run: repo create with PROJECT_READ must surface authorization error.
+func TestLivePermissionRepoCreateDryRunDeniedWithProjectReadOnly(t *testing.T) {
+	harness := newLiveHarness(t)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Minute)
+	defer cancel()
+
+	seeded, err := harness.seedProjectWithRepositories(ctx, 1, 1)
+	if err != nil {
+		t.Fatalf("seed project failed: %v", err)
+	}
+
+	user, err := harness.createRestrictedUser(ctx)
+	if err != nil {
+		t.Fatalf("create restricted user failed: %v", err)
+	}
+
+	if err := harness.grantProjectPermission(ctx, seeded.Key, user.Username, "PROJECT_READ"); err != nil {
+		t.Fatalf("grant project read permission failed: %v", err)
+	}
+
+	repo := seeded.Repos[0]
+	configureLiveCLIEnvForUser(t, harness, seeded.Key, repo.Slug, user)
+
+	output, cliErr := executeLiveCLI(t, "--json", "--dry-run", "repo", "admin", "create", "--project", seeded.Key, "--name", "denied-repo-dry")
+	assertDryRunAuthorizationError(t, cliErr, output, "repo create dry-run with PROJECT_READ only")
+}

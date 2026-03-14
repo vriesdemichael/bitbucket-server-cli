@@ -91,6 +91,11 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 					return err
 				}
 				if options.DryRun {
+					checker := options.permissionCheckerFor(client)
+					if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+						return err
+					}
+
 					hooks, err := service.ListRepositoryHooks(cmd.Context(), repo.ProjectKey, repo.Slug, 100)
 					if err != nil {
 						return err
@@ -148,6 +153,11 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), projectKey); err != nil {
+					return err
+				}
+
 				hooks, err := service.ListProjectHooks(cmd.Context(), projectKey, 100)
 				if err != nil {
 					return err
@@ -218,6 +228,11 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 					return err
 				}
 				if options.DryRun {
+					checker := options.permissionCheckerFor(client)
+					if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+						return err
+					}
+
 					hooks, err := service.ListRepositoryHooks(cmd.Context(), repo.ProjectKey, repo.Slug, 100)
 					if err != nil {
 						return err
@@ -274,6 +289,11 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), projectKey); err != nil {
+					return err
+				}
+
 				hooks, err := service.ListProjectHooks(cmd.Context(), projectKey, 100)
 				if err != nil {
 					return err
@@ -421,6 +441,11 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 					return err
 				}
 				if options.DryRun {
+					checker := options.permissionCheckerFor(client)
+					if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+						return err
+					}
+
 					hooks, err := service.ListRepositoryHooks(cmd.Context(), repo.ProjectKey, repo.Slug, 100)
 					if err != nil {
 						return err
@@ -482,6 +507,11 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 				return fmt.Errorf("project key is required (use --project or --repo)")
 			}
 			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckProjectAdmin(cmd.Context(), projectKey); err != nil {
+					return err
+				}
+
 				hooks, err := service.ListProjectHooks(cmd.Context(), projectKey, 100)
 				if err != nil {
 					return err

@@ -498,6 +498,110 @@ func retryAfterFromHeaders(headers http.Header, attempt int, fallbackBackoff tim
 	return time.Duration(attempt+1) * fallbackBackoff
 }
 
+// restrictedUser holds the credentials of a temporarily created test user.
+type restrictedUser struct {
+	Username string
+	Password string
+}
+
+// createRestrictedUser creates a Bitbucket user via the admin API and registers a cleanup to delete it.
+// The caller is responsible for granting permissions on the new user after creation.
+func (h *liveHarness) createRestrictedUser(ctx context.Context) (restrictedUser, error) {
+	suffix := strconv.FormatInt(time.Now().UnixNano(), 10)
+	username := "ltuser" + suffix[len(suffix)-8:]
+	password := "Ltp@ss" + suffix[len(suffix)-6:] + "!"
+	displayName := "Live Test User " + suffix[len(suffix)-6:]
+	email := username + "@example.local"
+
+	addToDefaultGroup := false
+	params := openapigenerated.CreateUserParams{
+		Name:              username,
+		Password:          &password,
+		DisplayName:       displayName,
+		EmailAddress:      email,
+		AddToDefaultGroup: &addToDefaultGroup,
+	}
+
+	resp, err := h.client.CreateUser(ctx, &params)
+	if err != nil {
+		return restrictedUser{}, fmt.Errorf("create restricted user call failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return restrictedUser{}, fmt.Errorf("create restricted user returned status %d", resp.StatusCode)
+	}
+
+	user := restrictedUser{Username: username, Password: password}
+
+	h.t.Cleanup(func() {
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		_ = h.deleteRestrictedUser(cleanupCtx, username)
+	})
+
+	return user, nil
+}
+
+// deleteRestrictedUser removes a Bitbucket user via the admin API.
+func (h *liveHarness) deleteRestrictedUser(ctx context.Context, username string) error {
+	resp, err := h.client.DeleteUser(ctx, &openapigenerated.DeleteUserParams{Name: username})
+	if err != nil {
+		return fmt.Errorf("delete restricted user call failed: %w", err)
+	}
+	defer resp.Body.Close()
+	return nil
+}
+
+// grantProjectPermission grants a project-level permission to a user.
+// permission must be one of: PROJECT_READ, PROJECT_WRITE, PROJECT_ADMIN.
+func (h *liveHarness) grantProjectPermission(ctx context.Context, projectKey, username, permission string) error {
+	params := openapigenerated.SetPermissionForUsers1Params{
+		Name:       &username,
+		Permission: &permission,
+	}
+	resp, err := h.client.SetPermissionForUsers1(ctx, projectKey, &params)
+	if err != nil {
+		return fmt.Errorf("set project permission call failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("set project permission returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// grantRepoPermission grants a repo-level permission to a user.
+// permission must be one of: REPO_READ, REPO_WRITE, REPO_ADMIN.
+func (h *liveHarness) grantRepoPermission(ctx context.Context, projectKey, repoSlug, username string, permission openapigenerated.SetPermissionForUserParamsPermission) error {
+	params := openapigenerated.SetPermissionForUserParams{
+		Name:       []string{username},
+		Permission: permission,
+	}
+	resp, err := h.client.SetPermissionForUser(ctx, projectKey, repoSlug, &params)
+	if err != nil {
+		return fmt.Errorf("set repo permission call failed: %w", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("set repo permission returned status %d", resp.StatusCode)
+	}
+	return nil
+}
+
+// configureLiveCLIEnvForUser sets env vars to run the CLI as the given restricted user
+// (not as the admin from harness.config).
+func configureLiveCLIEnvForUser(t *testing.T, harness *liveHarness, projectKey, repositorySlug string, user restrictedUser) {
+	t.Helper()
+
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", harness.config.BitbucketURL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", projectKey)
+	t.Setenv("BITBUCKET_REPO_SLUG", repositorySlug)
+	t.Setenv("BITBUCKET_USERNAME", user.Username)
+	t.Setenv("BITBUCKET_PASSWORD", user.Password)
+	t.Setenv("BITBUCKET_TOKEN", "")
+}
+
 func TestRetryAfterParsingHelpers(t *testing.T) {
 	t.Run("git output helper parses retry-after seconds", func(t *testing.T) {
 		delay := retryAfterFromGitOutput("fatal: HTTP 429\nRetry-After: 2")

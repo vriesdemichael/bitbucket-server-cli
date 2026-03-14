@@ -3421,6 +3421,10 @@ func TestRepoSettingsSecurityPermissionsUsersGrantDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"TEST"}}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/permissions/users":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"values":[{"user":{"name":"alice","displayName":"Alice"},"permission":"REPO_READ"}],"isLastPage":true}`))
@@ -3456,6 +3460,10 @@ func TestProjectPermissionsUsersGrantDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"user":{"name":"alice"},"permission":"PROJECT_READ"}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"values":[{"user":{"name":"alice"},"permission":"PROJECT_READ"}],"isLastPage":true}`))
@@ -3518,6 +3526,10 @@ func TestHookEnableDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"group":{"name":"dummy"}}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"values":[{"enabled":false,"details":{"key":"hook1","name":"Hook 1"}}],"isLastPage":true}`))
@@ -3549,6 +3561,10 @@ func TestHookConfigureDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"group":{"name":"dummy"}}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/settings/hooks":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"values":[{"enabled":true,"details":{"key":"hook1","name":"Hook 1"}}],"isLastPage":true}`))
@@ -3584,6 +3600,10 @@ func TestRepoSettingsWorkflowWebhooksCreateDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"TEST"}}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/webhooks":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`[{"id":11,"name":"existing","url":"http://existing.local"}]`))
@@ -3617,6 +3637,10 @@ func TestRepoSettingsPullRequestsUpdateDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"TEST"}}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/settings/pull-requests":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"requiredAllTasksComplete":false}`))
@@ -3650,6 +3674,10 @@ func TestBranchCreateDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"TEST"}}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/branches":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"values":[{"id":"refs/heads/main","displayId":"main"}],"isLastPage":true}`))
@@ -3683,6 +3711,10 @@ func TestBranchDefaultSetDryRunStatefulNoop(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"TEST"}}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/default-branch":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"id":"refs/heads/master","displayId":"master"}`))
@@ -3716,6 +3748,10 @@ func TestTagCreateDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"TEST"}}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/tags":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"values":[{"id":"refs/tags/v1.0.0","displayId":"v1.0.0"}],"isLastPage":true}`))
@@ -3749,6 +3785,10 @@ func TestReviewerConditionCreateDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/permissions/users":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"values":[{"user":{"name":"alice"}}],"isLastPage":true}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/default-reviewers/latest/projects/PRJ/conditions":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`[]`))
@@ -3780,12 +3820,20 @@ func TestProjectCreateDryRunStateful(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
 		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte(`{"errors":[{"message":"name is required"}]}`))
+			return
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ":
 			writer.WriteHeader(http.StatusNotFound)
 			_, _ = writer.Write([]byte(`{"errors":[{"message":"not found"}]}`))
 			return
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects":
-			t.Fatalf("project create endpoint must not be called in dry-run mode")
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			writer.WriteHeader(http.StatusBadRequest)
+			_, _ = writer.Write([]byte(`{"errors":[{"message":"name is required"}]}`))
+			return
 		}
 		http.NotFound(writer, request)
 	}))
