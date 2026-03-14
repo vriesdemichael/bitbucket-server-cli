@@ -699,6 +699,38 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 	permissionsGroupsCmd.AddCommand(permissionsGroupsRevokeCmd)
 	permissionsCmd.AddCommand(permissionsGroupsCmd)
 
+	permissionsShowCmd := &cobra.Command{
+		Use:   "show <key>",
+		Short: "Show the caller's effective permissions on a project",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			checker := options.permissionCheckerFor(client)
+			perms, err := checker.InspectProjectPermissions(cmd.Context(), args[0])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{
+					"project_key": args[0],
+					"permissions": perms,
+				})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Project: %s\n", args[0])
+			for _, level := range []string{"PROJECT_READ", "PROJECT_WRITE", "PROJECT_ADMIN"} {
+				fmt.Fprintf(cmd.OutOrStdout(), "%-14s\t%t\n", level, perms[level])
+			}
+			return nil
+		},
+	}
+	permissionsCmd.AddCommand(permissionsShowCmd)
+
 	projectCmd.AddCommand(permissionsCmd)
 
 	return projectCmd

@@ -63,6 +63,7 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 	repoCmd.AddCommand(newRepoBrowseCommand(options))
 	repoCmd.AddCommand(newRepoCloneCommand(options))
 	repoCmd.AddCommand(newRepoAdminCommand(options))
+	repoCmd.AddCommand(newRepoPermissionsCommand(options))
 
 	return repoCmd
 }
@@ -1459,4 +1460,54 @@ func webhookExistsByID(payload any, webhookID string) bool {
 	}
 
 	return false
+}
+
+func newRepoPermissionsCommand(options *rootOptions) *cobra.Command {
+	var repositorySelector string
+
+	permissionsCmd := &cobra.Command{
+		Use:   "permissions",
+		Short: "Repository permission inspection commands",
+	}
+	permissionsCmd.PersistentFlags().StringVar(&repositorySelector, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+
+	showCmd := &cobra.Command{
+		Use:   "show",
+		Short: "Show the caller's effective permissions on a repository",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			checker := options.permissionCheckerFor(client)
+			perms, err := checker.InspectRepoPermissions(cmd.Context(), repo.ProjectKey, repo.Slug)
+			if err != nil {
+				return err
+			}
+
+			repoID := fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug)
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{
+					"repository":  repoID,
+					"permissions": perms,
+				})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Repository: %s\n", repoID)
+			for _, level := range []string{"REPO_READ", "REPO_WRITE", "REPO_ADMIN"} {
+				fmt.Fprintf(cmd.OutOrStdout(), "%-12s\t%t\n", level, perms[level])
+			}
+			return nil
+		},
+	}
+
+	permissionsCmd.AddCommand(showCmd)
+	return permissionsCmd
 }

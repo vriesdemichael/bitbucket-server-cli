@@ -265,6 +265,294 @@ func TestPermissionCheckerCheckProjectCreate(t *testing.T) {
 	})
 }
 
+func TestPermissionCheckerCheckProjectRead(t *testing.T) {
+	t.Run("returns success when project lookup matches permission-filtered result", func(t *testing.T) {
+		var projectCalls atomic.Int32
+		var listCalls atomic.Int32
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/rest/api/latest/projects/PRJ":
+				projectCalls.Add(1)
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"key":"PRJ","name":"Project"}`))
+			case "/rest/api/latest/projects":
+				listCalls.Add(1)
+				if r.URL.Query().Get("name") != "Project" || r.URL.Query().Get("permission") != "PROJECT_READ" {
+					w.WriteHeader(http.StatusBadRequest)
+					_, _ = w.Write([]byte("bad query"))
+					return
+				}
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"values":[{"key":"PRJ","name":"Project"}],"isLastPage":true}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+
+		if err := checker.CheckProjectRead(t.Context(), "PRJ"); err != nil {
+			t.Fatalf("expected success, got: %v", err)
+		}
+		if err := checker.CheckProjectRead(t.Context(), "PRJ"); err != nil {
+			t.Fatalf("expected cached success, got: %v", err)
+		}
+		if projectCalls.Load() != 1 || listCalls.Load() != 1 {
+			t.Fatalf("expected one project call and one list call, got %d and %d", projectCalls.Load(), listCalls.Load())
+		}
+	})
+
+	t.Run("returns authorization error when filtered list omits project", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/rest/api/latest/projects/PRJ":
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"key":"PRJ","name":"Project"}`))
+			case "/rest/api/latest/projects":
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+
+		err := checker.CheckProjectRead(t.Context(), "PRJ")
+		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
+			t.Fatalf("expected authorization error, got: %v", err)
+		}
+	})
+
+	t.Run("returns internal error when project name is missing", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/rest/api/latest/projects/PRJ" {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = w.Write([]byte(`{"key":"PRJ"}`))
+		})
+
+		err := checker.CheckProjectRead(t.Context(), "PRJ")
+		if !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal error, got: %v", err)
+		}
+	})
+
+	t.Run("maps project lookup status errors", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotFound)
+			_, _ = w.Write([]byte("missing"))
+		})
+
+		err := checker.CheckProjectRead(t.Context(), "PRJ")
+		if !apperrors.IsKind(err, apperrors.KindNotFound) {
+			t.Fatalf("expected not found error, got: %v", err)
+		}
+	})
+}
+
+func TestInspectRepoPermissions(t *testing.T) {
+	makeHandler := func(adminGranted, writeGranted, readGranted bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != "/rest/api/latest/repos" {
+				http.NotFound(w, r)
+				return
+			}
+			perm := r.URL.Query().Get("permission")
+			var granted bool
+			switch perm {
+			case "REPO_ADMIN":
+				granted = adminGranted
+			case "REPO_WRITE":
+				granted = writeGranted
+			case "REPO_READ":
+				granted = readGranted
+			}
+			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			if granted {
+				_, _ = w.Write([]byte(`{"values":[{"slug":"demo","project":{"key":"PRJ"}}],"isLastPage":true}`))
+			} else {
+				_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
+			}
+		}
+	}
+
+	t.Run("full access returns all true", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, makeHandler(true, true, true))
+		result, err := checker.InspectRepoPermissions(t.Context(), "PRJ", "demo")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		for _, perm := range []string{"REPO_READ", "REPO_WRITE", "REPO_ADMIN"} {
+			if !result[perm] {
+				t.Errorf("expected %s to be true", perm)
+			}
+		}
+	})
+
+	t.Run("read-only access returns expected bools", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, makeHandler(false, false, true))
+		result, err := checker.InspectRepoPermissions(t.Context(), "PRJ", "demo")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result["REPO_READ"] {
+			t.Error("expected REPO_READ to be true")
+		}
+		if result["REPO_WRITE"] {
+			t.Error("expected REPO_WRITE to be false")
+		}
+		if result["REPO_ADMIN"] {
+			t.Error("expected REPO_ADMIN to be false")
+		}
+	})
+
+	t.Run("no access returns all false", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, makeHandler(false, false, false))
+		result, err := checker.InspectRepoPermissions(t.Context(), "PRJ", "demo")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		for _, perm := range []string{"REPO_READ", "REPO_WRITE", "REPO_ADMIN"} {
+			if result[perm] {
+				t.Errorf("expected %s to be false", perm)
+			}
+		}
+	})
+
+	t.Run("propagates non-authorization errors", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("server error"))
+		})
+		_, err := checker.InspectRepoPermissions(t.Context(), "PRJ", "demo")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
+func TestInspectProjectPermissions(t *testing.T) {
+	makeHandler := func(readGranted, writeGranted, adminGranted bool) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/rest/api/latest/projects/PRJ":
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"key":"PRJ","name":"Project"}`))
+			case "/rest/api/latest/projects":
+				perm := r.URL.Query().Get("permission")
+				var granted bool
+				switch perm {
+				case "PROJECT_READ":
+					granted = readGranted
+				case "PROJECT_WRITE":
+					granted = writeGranted
+				}
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				if granted {
+					_, _ = w.Write([]byte(`{"values":[{"key":"PRJ","name":"Project"}],"isLastPage":true}`))
+				} else {
+					_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
+				}
+			case "/rest/api/latest/projects/PRJ/permissions/users":
+				if adminGranted {
+					w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+					_, _ = w.Write([]byte(`{"values":[{"user":{"name":"alice"}}],"isLastPage":true}`))
+				} else {
+					w.WriteHeader(http.StatusForbidden)
+					_, _ = w.Write([]byte("forbidden"))
+				}
+			default:
+				http.NotFound(w, r)
+			}
+		}
+	}
+
+	t.Run("full access returns all true", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, makeHandler(true, true, true))
+		result, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		for _, perm := range []string{"PROJECT_READ", "PROJECT_WRITE", "PROJECT_ADMIN"} {
+			if !result[perm] {
+				t.Errorf("expected %s to be true", perm)
+			}
+		}
+	})
+
+	t.Run("write-only access returns expected bools", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, makeHandler(true, true, false))
+		result, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result["PROJECT_READ"] {
+			t.Error("expected PROJECT_READ to be true")
+		}
+		if !result["PROJECT_WRITE"] {
+			t.Error("expected PROJECT_WRITE to be true")
+		}
+		if result["PROJECT_ADMIN"] {
+			t.Error("expected PROJECT_ADMIN to be false")
+		}
+	})
+
+	t.Run("read-only access returns expected bools", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, makeHandler(true, false, false))
+		result, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !result["PROJECT_READ"] {
+			t.Error("expected PROJECT_READ to be true")
+		}
+		if result["PROJECT_WRITE"] {
+			t.Error("expected PROJECT_WRITE to be false")
+		}
+		if result["PROJECT_ADMIN"] {
+			t.Error("expected PROJECT_ADMIN to be false")
+		}
+	})
+
+	t.Run("no access returns all false", func(t *testing.T) {
+		// PROJECT_READ probe hits /projects endpoint, returns forbidden
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/rest/api/latest/projects/PRJ":
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"key":"PRJ","name":"Project"}`))
+			case "/rest/api/latest/projects":
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
+			case "/rest/api/latest/projects/PRJ/permissions/users":
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = w.Write([]byte("forbidden"))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		result, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		for _, perm := range []string{"PROJECT_READ", "PROJECT_WRITE", "PROJECT_ADMIN"} {
+			if result[perm] {
+				t.Errorf("expected %s to be false", perm)
+			}
+		}
+	})
+
+	t.Run("propagates non-authorization error from project read probe", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = w.Write([]byte("server error"))
+		})
+		_, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+	})
+}
+
 func TestCommentOwnedByUser(t *testing.T) {
 	username := "alice"
 	commentWithName := openapigenerated.RestComment{Author: &struct {
