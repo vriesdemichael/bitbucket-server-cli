@@ -2,7 +2,7 @@
 
 package live_test
 
-// Permission boundary tests (GitHub Issue #77).
+// Permission boundary tests (GitHub Issues #77, #81).
 //
 // These tests create a temporarily scoped Bitbucket user using admin credentials,
 // grant them a specific (restricted) permission level, then assert that operations
@@ -10,6 +10,7 @@ package live_test
 //
 // Each test also includes a --dry-run variant to verify that the stateful planning
 // engine surfaces the permission failure rather than silently producing a plan.
+// The bb repo/project permissions show commands (issue #81) are also tested here.
 
 import (
 	"context"

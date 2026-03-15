@@ -30,7 +30,7 @@ func newPermissionCheckerTestClient(t *testing.T, handler http.HandlerFunc) (*Pe
 }
 
 func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
-	t.Run("caches successful repo permission probe", func(t *testing.T) {
+	t.Run("caches successful repo permission probe matching by slug", func(t *testing.T) {
 		var calls atomic.Int32
 		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
 			calls.Add(1)
@@ -43,6 +43,7 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 				_, _ = w.Write([]byte("bad query"))
 				return
 			}
+			// Slug does not match Name: repo display name differs from slug
 			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = w.Write([]byte(`{"values":[{"slug":"demo","name":"Repository Display Name","project":{"key":"PRJ"}}],"isLastPage":true}`))
 		})
@@ -55,6 +56,19 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 		}
 		if calls.Load() != 1 {
 			t.Fatalf("expected one HTTP call, got %d", calls.Load())
+		}
+	})
+
+	t.Run("returns authorization error when slug is not found across all pages", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			// Returns a repo with a different slug; also the last page
+			_, _ = w.Write([]byte(`{"values":[{"slug":"other-repo","name":"Other"}],"isLastPage":true}`))
+		})
+
+		err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOWRITE)
+		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
+			t.Fatalf("expected authorization error, got: %v", err)
 		}
 	})
 
@@ -79,6 +93,26 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 		err := checker.CheckRepoPermission(testContext, "PRJ", "demo", openapigenerated.REPOWRITE)
 		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
 			t.Fatalf("expected authorization error, got: %v", err)
+		}
+	})
+
+	t.Run("finds slug on second page", func(t *testing.T) {
+		var calls atomic.Int32
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			calls.Add(1)
+			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			if r.URL.Query().Get("start") == "25" {
+				_, _ = w.Write([]byte(`{"values":[{"slug":"demo","name":"Demo Repository","project":{"key":"PRJ"}}],"isLastPage":true}`))
+			} else {
+				_, _ = w.Write([]byte(`{"values":[{"slug":"other","name":"Other"}],"isLastPage":false,"nextPageStart":25}`))
+			}
+		})
+
+		if err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOREAD); err != nil {
+			t.Fatalf("expected success on second page, got: %v", err)
+		}
+		if calls.Load() != 2 {
+			t.Fatalf("expected two HTTP calls for pagination, got %d", calls.Load())
 		}
 	})
 
@@ -347,6 +381,47 @@ func TestPermissionCheckerCheckProjectRead(t *testing.T) {
 			t.Fatalf("expected not found error, got: %v", err)
 		}
 	})
+
+	t.Run("maps projects list status errors", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/rest/api/latest/projects/PRJ":
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"key":"PRJ","name":"Project"}`))
+			default:
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte("server error"))
+			}
+		})
+
+		err := checker.CheckProjectRead(testContext, "PRJ")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if apperrors.IsKind(err, apperrors.KindAuthorization) {
+			t.Fatalf("expected non-authorization error, got: %v", err)
+		}
+	})
+
+	t.Run("returns authorization error when list has no matching key", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/rest/api/latest/projects/PRJ":
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"key":"PRJ","name":"Project"}`))
+			case "/rest/api/latest/projects":
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"values":[{"key":"OTHER","name":"Project"}],"isLastPage":true}`))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+
+		err := checker.CheckProjectRead(testContext, "PRJ")
+		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
+			t.Fatalf("expected authorization error, got: %v", err)
+		}
+	})
 }
 
 func TestInspectRepoPermissions(t *testing.T) {
@@ -549,6 +624,71 @@ func TestInspectProjectPermissions(t *testing.T) {
 		_, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
 		if err == nil {
 			t.Fatal("expected error, got nil")
+		}
+	})
+
+	t.Run("propagates non-authorization error from project write probe", func(t *testing.T) {
+		var callCount atomic.Int32
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			callCount.Add(1)
+			switch r.URL.Path {
+			case "/rest/api/latest/projects/PRJ":
+				// First two calls (read probe's GetProject, write probe's GetProject) succeed
+				if callCount.Load() <= 2 {
+					w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+					_, _ = w.Write([]byte(`{"key":"PRJ","name":"Project"}`))
+					return
+				}
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte("server error"))
+			case "/rest/api/latest/projects":
+				// Read probe list succeeds (returns empty → auth error so read=false)
+				// Write probe list must return a server error
+				perm := r.URL.Query().Get("permission")
+				if perm == "PROJECT_READ" {
+					w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+					_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
+				} else {
+					w.WriteHeader(http.StatusInternalServerError)
+					_, _ = w.Write([]byte("server error"))
+				}
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		_, err := checker.InspectProjectPermissions(testContext, "PRJ")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if apperrors.IsKind(err, apperrors.KindAuthorization) {
+			t.Fatalf("expected non-authorization error, got: %v", err)
+		}
+	})
+
+	t.Run("propagates non-authorization error from project admin probe", func(t *testing.T) {
+		checker, _ := newPermissionCheckerTestClient(t, func(w http.ResponseWriter, r *http.Request) {
+			switch r.URL.Path {
+			case "/rest/api/latest/projects/PRJ":
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"key":"PRJ","name":"Project"}`))
+			case "/rest/api/latest/projects":
+				// Both read and write probes return empty list (auth error → false)
+				w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+				_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
+			case "/rest/api/latest/projects/PRJ/permissions/users":
+				// Admin probe returns a non-auth server error
+				w.WriteHeader(http.StatusInternalServerError)
+				_, _ = w.Write([]byte("server error"))
+			default:
+				http.NotFound(w, r)
+			}
+		})
+		_, err := checker.InspectProjectPermissions(testContext, "PRJ")
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+		if apperrors.IsKind(err, apperrors.KindAuthorization) {
+			t.Fatalf("expected non-authorization error, got: %v", err)
 		}
 	})
 }

@@ -25,54 +25,61 @@ func NewPermissionChecker(client *openapigenerated.ClientWithResponses) *Permiss
 }
 
 // CheckRepoPermission verifies if the caller has the specified permission on a repository.
+// It pages through the permission-filtered repository list (scoped to the given project key)
+// and scans for a slug match, since the API's Name filter matches on display name—not slug—
+// and slug != name is common.
 func (p *PermissionChecker) CheckRepoPermission(ctx context.Context, projectKey, repoSlug string, permission openapigenerated.GetRepositories1ParamsPermission) error {
 	cacheKey := fmt.Sprintf("repo:%s/%s:%s", projectKey, repoSlug, permission)
 	if err, ok := p.cache[cacheKey]; ok {
 		return err
 	}
 
-	limit := float32(1)
-	params := &openapigenerated.GetRepositories1Params{
-		Projectkey: &projectKey,
-		Permission: &permission,
-		Limit:      &limit,
-	}
-
-	resp, err := p.client.GetRepositories1WithResponse(ctx, params)
-	if err != nil {
-		p.cache[cacheKey] = err
-		return err
-	}
-	if resp.StatusCode() >= 400 {
-		err := openapi.MapStatusError(resp.StatusCode(), resp.Body)
-		p.cache[cacheKey] = err
-		return err
-	}
-
-	if resp.ApplicationjsonCharsetUTF8200 == nil || resp.ApplicationjsonCharsetUTF8200.Values == nil || len(*resp.ApplicationjsonCharsetUTF8200.Values) == 0 {
-		err := apperrors.New(apperrors.KindAuthorization, fmt.Sprintf("insufficient permission: %s required on repository %s/%s", permission, projectKey, repoSlug), nil)
-		p.cache[cacheKey] = err
-		return err
-	}
-
-	found := false
-	for _, repo := range *resp.ApplicationjsonCharsetUTF8200.Values {
-		if repo.Slug == nil || !strings.EqualFold(strings.TrimSpace(*repo.Slug), repoSlug) {
-			continue
+	limit := float32(25)
+	var start float32
+	for {
+		params := &openapigenerated.GetRepositories1Params{
+			Projectkey: &projectKey,
+			Permission: &permission,
+			Limit:      &limit,
+			Start:      &start,
 		}
-		if repo.Project != nil && strings.EqualFold(strings.TrimSpace(repo.Project.Key), projectKey) {
-			found = true
+
+		resp, err := p.client.GetRepositories1WithResponse(ctx, params)
+		if err != nil {
+			p.cache[cacheKey] = err
+			return err
+		}
+		if resp.StatusCode() >= 400 {
+			err := openapi.MapStatusError(resp.StatusCode(), resp.Body)
+			p.cache[cacheKey] = err
+			return err
+		}
+
+		if resp.ApplicationjsonCharsetUTF8200 != nil && resp.ApplicationjsonCharsetUTF8200.Values != nil {
+			for _, repo := range *resp.ApplicationjsonCharsetUTF8200.Values {
+				if repo.Slug == nil || !strings.EqualFold(strings.TrimSpace(*repo.Slug), repoSlug) {
+					continue
+				}
+				if repo.Project != nil && strings.EqualFold(strings.TrimSpace(repo.Project.Key), projectKey) {
+					p.cache[cacheKey] = nil
+					return nil
+				}
+			}
+		}
+
+		// Stop paginating if this is the last page or the response is empty
+		if resp.ApplicationjsonCharsetUTF8200 == nil ||
+			resp.ApplicationjsonCharsetUTF8200.IsLastPage == nil ||
+			*resp.ApplicationjsonCharsetUTF8200.IsLastPage ||
+			resp.ApplicationjsonCharsetUTF8200.NextPageStart == nil {
 			break
 		}
-	}
-	if !found {
-		err := apperrors.New(apperrors.KindAuthorization, fmt.Sprintf("insufficient permission: %s required on repository %s/%s", permission, projectKey, repoSlug), nil)
-		p.cache[cacheKey] = err
-		return err
+		start = float32(*resp.ApplicationjsonCharsetUTF8200.NextPageStart)
 	}
 
-	p.cache[cacheKey] = nil
-	return nil
+	err := apperrors.New(apperrors.KindAuthorization, fmt.Sprintf("insufficient permission: %s required on repository %s/%s", permission, projectKey, repoSlug), nil)
+	p.cache[cacheKey] = err
+	return err
 }
 
 // CheckProjectWrite verifies if the caller has PROJECT_WRITE on a project.
