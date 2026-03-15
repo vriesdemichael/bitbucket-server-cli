@@ -66,7 +66,7 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 			_, _ = w.Write([]byte(`{"values":[{"slug":"other-repo","name":"Other"}],"isLastPage":true}`))
 		})
 
-		err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOWRITE)
+		err := checker.CheckRepoPermission(context.Background(), "PRJ", "demo", openapigenerated.REPOWRITE)
 		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
 			t.Fatalf("expected authorization error, got: %v", err)
 		}
@@ -108,7 +108,7 @@ func TestPermissionCheckerCheckRepoPermission(t *testing.T) {
 			}
 		})
 
-		if err := checker.CheckRepoPermission(t.Context(), "PRJ", "demo", openapigenerated.REPOREAD); err != nil {
+		if err := checker.CheckRepoPermission(context.Background(), "PRJ", "demo", openapigenerated.REPOREAD); err != nil {
 			t.Fatalf("expected success on second page, got: %v", err)
 		}
 		if calls.Load() != 2 {
@@ -323,10 +323,10 @@ func TestPermissionCheckerCheckProjectRead(t *testing.T) {
 			}
 		})
 
-		if err := checker.CheckProjectRead(t.Context(), "PRJ"); err != nil {
+		if err := checker.CheckProjectRead(context.Background(), "PRJ"); err != nil {
 			t.Fatalf("expected success, got: %v", err)
 		}
-		if err := checker.CheckProjectRead(t.Context(), "PRJ"); err != nil {
+		if err := checker.CheckProjectRead(context.Background(), "PRJ"); err != nil {
 			t.Fatalf("expected cached success, got: %v", err)
 		}
 		if projectCalls.Load() != 1 || listCalls.Load() != 1 {
@@ -348,7 +348,7 @@ func TestPermissionCheckerCheckProjectRead(t *testing.T) {
 			}
 		})
 
-		err := checker.CheckProjectRead(t.Context(), "PRJ")
+		err := checker.CheckProjectRead(context.Background(), "PRJ")
 		if !apperrors.IsKind(err, apperrors.KindAuthorization) {
 			t.Fatalf("expected authorization error, got: %v", err)
 		}
@@ -364,7 +364,7 @@ func TestPermissionCheckerCheckProjectRead(t *testing.T) {
 			_, _ = w.Write([]byte(`{"key":"PRJ"}`))
 		})
 
-		err := checker.CheckProjectRead(t.Context(), "PRJ")
+		err := checker.CheckProjectRead(context.Background(), "PRJ")
 		if !apperrors.IsKind(err, apperrors.KindInternal) {
 			t.Fatalf("expected internal error, got: %v", err)
 		}
@@ -376,7 +376,7 @@ func TestPermissionCheckerCheckProjectRead(t *testing.T) {
 			_, _ = w.Write([]byte("missing"))
 		})
 
-		err := checker.CheckProjectRead(t.Context(), "PRJ")
+		err := checker.CheckProjectRead(context.Background(), "PRJ")
 		if !apperrors.IsKind(err, apperrors.KindNotFound) {
 			t.Fatalf("expected not found error, got: %v", err)
 		}
@@ -452,7 +452,7 @@ func TestInspectRepoPermissions(t *testing.T) {
 
 	t.Run("full access returns all true", func(t *testing.T) {
 		checker, _ := newPermissionCheckerTestClient(t, makeHandler(true, true, true))
-		result, err := checker.InspectRepoPermissions(t.Context(), "PRJ", "demo")
+		result, err := checker.InspectRepoPermissions(context.Background(), "PRJ", "demo")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -465,7 +465,7 @@ func TestInspectRepoPermissions(t *testing.T) {
 
 	t.Run("read-only access returns expected bools", func(t *testing.T) {
 		checker, _ := newPermissionCheckerTestClient(t, makeHandler(false, false, true))
-		result, err := checker.InspectRepoPermissions(t.Context(), "PRJ", "demo")
+		result, err := checker.InspectRepoPermissions(context.Background(), "PRJ", "demo")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -482,7 +482,7 @@ func TestInspectRepoPermissions(t *testing.T) {
 
 	t.Run("no access returns all false", func(t *testing.T) {
 		checker, _ := newPermissionCheckerTestClient(t, makeHandler(false, false, false))
-		result, err := checker.InspectRepoPermissions(t.Context(), "PRJ", "demo")
+		result, err := checker.InspectRepoPermissions(context.Background(), "PRJ", "demo")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -498,7 +498,7 @@ func TestInspectRepoPermissions(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("server error"))
 		})
-		_, err := checker.InspectRepoPermissions(t.Context(), "PRJ", "demo")
+		_, err := checker.InspectRepoPermissions(context.Background(), "PRJ", "demo")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
@@ -543,7 +543,7 @@ func TestInspectProjectPermissions(t *testing.T) {
 
 	t.Run("full access returns all true", func(t *testing.T) {
 		checker, _ := newPermissionCheckerTestClient(t, makeHandler(true, true, true))
-		result, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		result, err := checker.InspectProjectPermissions(context.Background(), "PRJ")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -556,7 +556,7 @@ func TestInspectProjectPermissions(t *testing.T) {
 
 	t.Run("write-only access returns expected bools", func(t *testing.T) {
 		checker, _ := newPermissionCheckerTestClient(t, makeHandler(true, true, false))
-		result, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		result, err := checker.InspectProjectPermissions(context.Background(), "PRJ")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -573,7 +573,7 @@ func TestInspectProjectPermissions(t *testing.T) {
 
 	t.Run("read-only access returns expected bools", func(t *testing.T) {
 		checker, _ := newPermissionCheckerTestClient(t, makeHandler(true, false, false))
-		result, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		result, err := checker.InspectProjectPermissions(context.Background(), "PRJ")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -605,7 +605,7 @@ func TestInspectProjectPermissions(t *testing.T) {
 				http.NotFound(w, r)
 			}
 		})
-		result, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		result, err := checker.InspectProjectPermissions(context.Background(), "PRJ")
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -621,7 +621,7 @@ func TestInspectProjectPermissions(t *testing.T) {
 			w.WriteHeader(http.StatusInternalServerError)
 			_, _ = w.Write([]byte("server error"))
 		})
-		_, err := checker.InspectProjectPermissions(t.Context(), "PRJ")
+		_, err := checker.InspectProjectPermissions(context.Background(), "PRJ")
 		if err == nil {
 			t.Fatal("expected error, got nil")
 		}
