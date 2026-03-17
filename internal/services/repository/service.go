@@ -42,19 +42,31 @@ func (service *Service) ListByProject(ctx context.Context, projectKey string, op
 	return service.listPaged(ctx, "/rest/api/1.0/projects/"+projectKey+"/repos", opts)
 }
 
+const defaultPageSize = 25
+
 func (service *Service) listPaged(ctx context.Context, path string, opts ListOptions) ([]Repository, error) {
 	if opts.Limit <= 0 {
-		opts.Limit = 25
+		opts.Limit = defaultPageSize
 	}
 
 	results := []Repository{}
 	start := opts.Start
 
 	for {
+		remaining := opts.Limit - len(results)
+		if remaining <= 0 {
+			break
+		}
+
+		pageSize := defaultPageSize
+		if remaining < pageSize {
+			pageSize = remaining
+		}
+
 		var response pagedRepoResponse
 
 		queryParams := map[string]string{
-			"limit": strconv.Itoa(opts.Limit),
+			"limit": strconv.Itoa(pageSize),
 			"start": strconv.Itoa(start),
 		}
 		if opts.Name != "" {
@@ -81,6 +93,9 @@ func (service *Service) listPaged(ctx context.Context, path string, opts ListOpt
 				Name:       value.Name,
 				Public:     value.Public,
 			})
+			if len(results) >= opts.Limit {
+				return results, nil
+			}
 		}
 
 		if response.IsLastPage {

@@ -260,10 +260,10 @@ func TestLiveCLIAuthServerContextSwitchingFlow(t *testing.T) {
 	primaryHost := harness.config.BitbucketURL
 	secondaryHost := "http://secondary.invalid:7990"
 
-	if output, err := executeLiveCLI(t, "auth", "login", "--host", primaryHost, "--token", "primary-token", "--set-default=true"); err != nil {
+	if output, err := executeLiveCLI(t, "auth", "login", primaryHost, "--token", "primary-token", "--set-default=true"); err != nil {
 		t.Fatalf("auth login primary failed: %v\noutput: %s", err, output)
 	}
-	if output, err := executeLiveCLI(t, "auth", "login", "--host", secondaryHost, "--token", "secondary-token", "--set-default=false"); err != nil {
+	if output, err := executeLiveCLI(t, "auth", "login", secondaryHost, "--token", "secondary-token", "--set-default=false"); err != nil {
 		t.Fatalf("auth login secondary failed: %v\noutput: %s", err, output)
 	}
 
