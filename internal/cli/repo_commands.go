@@ -22,7 +22,7 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 	}
 
 	var limit int
-	repoCmd.PersistentFlags().IntVar(&limit, "limit", 25, "Page size for Bitbucket list operations")
+	repoCmd.PersistentFlags().IntVar(&limit, "limit", 25, "Maximum number of results to return")
 
 	repoCmd.AddCommand(&cobra.Command{
 		Use:   "list",

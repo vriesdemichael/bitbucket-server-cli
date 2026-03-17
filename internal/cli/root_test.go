@@ -2569,7 +2569,7 @@ func TestAuthLoginAndLogoutJSON(t *testing.T) {
 	loginBuffer := &bytes.Buffer{}
 	loginCommand.SetOut(loginBuffer)
 	loginCommand.SetErr(loginBuffer)
-	loginCommand.SetArgs([]string{"--json", "auth", "login", "--host", "http://localhost:7990", "--token", "abc123", "--set-default"})
+	loginCommand.SetArgs([]string{"--json", "auth", "login", "http://localhost:7990", "--token", "abc123", "--set-default"})
 	if err := loginCommand.Execute(); err != nil {
 		t.Fatalf("auth login json failed: %v", err)
 	}
@@ -2590,10 +2590,9 @@ func TestAuthLoginAndLogoutJSON(t *testing.T) {
 	}
 }
 
-func TestAuthLoginUsesLoadedHostFallback(t *testing.T) {
-	t.Setenv("BB_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config-fallback.yaml"))
-	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
-	t.Setenv("BITBUCKET_URL", "http://fallback.local:7990")
+func TestAuthLoginWithPositionalHost(t *testing.T) {
+	t.Setenv("BB_CONFIG_PATH", filepath.Join(t.TempDir(), "auth-config-positional.yaml"))
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "0")
 	t.Setenv("BITBUCKET_TOKEN", "")
 	t.Setenv("BITBUCKET_USERNAME", "")
 	t.Setenv("BITBUCKET_PASSWORD", "")
@@ -2604,12 +2603,12 @@ func TestAuthLoginUsesLoadedHostFallback(t *testing.T) {
 	loginBuffer := &bytes.Buffer{}
 	loginCommand.SetOut(loginBuffer)
 	loginCommand.SetErr(loginBuffer)
-	loginCommand.SetArgs([]string{"--json", "auth", "login", "--token", "abc123", "--set-default"})
+	loginCommand.SetArgs([]string{"--json", "auth", "login", "http://positional.local:7990", "--token", "abc123", "--set-default"})
 	if err := loginCommand.Execute(); err != nil {
-		t.Fatalf("auth login json with host fallback failed: %v", err)
+		t.Fatalf("auth login json with positional host failed: %v", err)
 	}
-	if !strings.Contains(loginBuffer.String(), `"host": "http://fallback.local:7990"`) {
-		t.Fatalf("expected fallback host in login output, got: %s", loginBuffer.String())
+	if !strings.Contains(loginBuffer.String(), `"host": "http://positional.local:7990"`) {
+		t.Fatalf("expected positional host in login output, got: %s", loginBuffer.String())
 	}
 }
 
@@ -2869,7 +2868,7 @@ func TestAuthStatusHostOverrideAndHumanLoginLogout(t *testing.T) {
 	loginBuffer := &bytes.Buffer{}
 	loginCommand.SetOut(loginBuffer)
 	loginCommand.SetErr(loginBuffer)
-	loginCommand.SetArgs([]string{"auth", "login", "--host", "http://example.local:7990", "--token", "abc123", "--set-default"})
+	loginCommand.SetArgs([]string{"auth", "login", "http://example.local:7990", "--token", "abc123", "--set-default"})
 	if err := loginCommand.Execute(); err != nil {
 		t.Fatalf("auth login human failed: %v", err)
 	}

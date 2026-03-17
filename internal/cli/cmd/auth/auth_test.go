@@ -119,7 +119,7 @@ func TestAuthCommandAdditionalBranches(t *testing.T) {
 	t.Setenv("BB_CONFIG_PATH", configPath)
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
-	t.Run("login resolves host from loaded config when host flag missing", func(t *testing.T) {
+	t.Run("login with positional host arg stores credentials", func(t *testing.T) {
 		cmd := New(Dependencies{
 			JSONEnabled: func() bool { return false },
 			LoadConfig: func() (config.AppConfig, error) {
@@ -133,7 +133,7 @@ func TestAuthCommandAdditionalBranches(t *testing.T) {
 		out := &bytes.Buffer{}
 		cmd.SetOut(out)
 		cmd.SetErr(out)
-		cmd.SetArgs([]string{"login", "--token", "abc", "--set-default=true"})
+		cmd.SetArgs([]string{"login", "http://resolved.local:7990", "--token", "abc", "--set-default=true"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("login failed: %v", err)
 		}
@@ -173,7 +173,7 @@ func TestAuthCommandAdditionalBranches(t *testing.T) {
 		cmd := New(Dependencies{JSONEnabled: func() bool { return true }})
 		cmd.SetOut(&bytes.Buffer{})
 		cmd.SetErr(&bytes.Buffer{})
-		cmd.SetArgs([]string{"login", "--token", "abc"})
+		cmd.SetArgs([]string{"status"})
 		if err := cmd.Execute(); err == nil {
 			t.Fatal("expected dependency error when LoadConfig default is used")
 		}

@@ -18,7 +18,6 @@ import (
 )
 
 const (
-	defaultBitbucketURL           = "http://localhost:7990"
 	defaultBitbucketVersionTarget = "9.4.16"
 	defaultProjectKey             = "TEST"
 	defaultRequestTimeout         = 20 * time.Second
@@ -133,7 +132,7 @@ func LoadFromEnv() (AppConfig, error) {
 		}
 	}
 	if resolvedURL == "" {
-		resolvedURL = defaultBitbucketURL
+		return AppConfig{}, apperrors.New(apperrors.KindValidation, "no Bitbucket host configured: set BITBUCKET_URL or run 'bb auth login <host>'", nil)
 	}
 
 	config := AppConfig{
