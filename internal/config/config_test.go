@@ -10,9 +10,9 @@ import (
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 )
 
-func TestLoadFromEnvDefaults(t *testing.T) {
+func TestLoadFromEnvNonHostDefaults(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
-	t.Setenv("BITBUCKET_URL", "")
+	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
 	t.Setenv("BITBUCKET_VERSION_TARGET", "")
 	t.Setenv("BITBUCKET_PROJECT_KEY", "")
 	t.Setenv("BB_CA_FILE", "")
@@ -28,8 +28,8 @@ func TestLoadFromEnvDefaults(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	if config.BitbucketURL != defaultBitbucketURL {
-		t.Fatalf("expected default url %q, got %q", defaultBitbucketURL, config.BitbucketURL)
+	if config.BitbucketURL != "http://localhost:7990" {
+		t.Fatalf("expected url %q, got %q", "http://localhost:7990", config.BitbucketURL)
 	}
 	if config.RequestTimeout != defaultRequestTimeout {
 		t.Fatalf("expected default timeout %s, got %s", defaultRequestTimeout, config.RequestTimeout)
@@ -48,6 +48,20 @@ func TestLoadFromEnvDefaults(t *testing.T) {
 	}
 	if config.DiagnosticsEnabled {
 		t.Fatal("expected diagnostics to be disabled by default")
+	}
+}
+
+func TestLoadFromEnvErrorsWhenNoHostConfigured(t *testing.T) {
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "")
+	t.Setenv("BB_CONFIG_PATH", filepath.Join(t.TempDir(), "empty-config.yaml"))
+
+	_, err := LoadFromEnv()
+	if err == nil {
+		t.Fatal("expected error when no host is configured, got nil")
+	}
+	if !apperrors.IsKind(err, apperrors.KindValidation) {
+		t.Fatalf("expected KindValidation error, got: %v", err)
 	}
 }
 
@@ -106,7 +120,7 @@ func TestLoadFromEnvFindsRepositoryDotenvFromNestedWorkingDirectory(t *testing.T
 	if err := os.WriteFile(filepath.Join(repoRoot, "go.mod"), []byte("module example.com/testrepo\n\ngo 1.24\n"), 0o600); err != nil {
 		t.Fatalf("write go.mod: %v", err)
 	}
-	if err := os.WriteFile(filepath.Join(repoRoot, ".env"), []byte("BITBUCKET_USERNAME=test-user\nBITBUCKET_PASSWORD=test-pass\n"), 0o600); err != nil {
+	if err := os.WriteFile(filepath.Join(repoRoot, ".env"), []byte("BITBUCKET_URL=http://localhost:7990\nBITBUCKET_USERNAME=test-user\nBITBUCKET_PASSWORD=test-pass\n"), 0o600); err != nil {
 		t.Fatalf("write .env: %v", err)
 	}
 
@@ -163,6 +177,7 @@ func unsetEnvKeys(t *testing.T, keys ...string) {
 
 func TestLoadFromEnvTransportOverrides(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
 	t.Setenv("BB_INSECURE_SKIP_VERIFY", "true")
 	t.Setenv("BB_REQUEST_TIMEOUT", "45s")
 	t.Setenv("BB_RETRY_COUNT", "5")

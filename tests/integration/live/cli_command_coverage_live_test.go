@@ -403,7 +403,7 @@ func TestLiveCLIAuthStoredConfigFlow(t *testing.T) {
 	t.Setenv("ADMIN_PASSWORD", "")
 
 	host := "http://localhost:7990"
-	loginOutput, err := executeLiveCLI(t, "auth", "login", "--host", host, "--username", "admin", "--password", "admin", "--set-default")
+	loginOutput, err := executeLiveCLI(t, "auth", "login", host, "--username", "admin", "--password", "admin", "--set-default")
 	if err != nil {
 		t.Fatalf("auth login failed: %v\noutput: %s", err, loginOutput)
 	}

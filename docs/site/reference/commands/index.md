@@ -164,10 +164,9 @@ Store credentials for a Bitbucket host
 Store credentials for a Bitbucket host
 
 Usage:
-  bb auth login [flags]
+  bb auth login <host> [flags]
 
 Flags:
-      --host string       Bitbucket host URL
       --password string   Password for basic auth
       --set-default       Set host as default target (default true)
       --token string      Access token
@@ -2869,7 +2868,7 @@ Available Commands:
   settings    Repository settings commands
 
 Flags:
-      --limit int   Page size for Bitbucket list operations (default 25)
+      --limit int   Maximum number of results to return (default 25)
 
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
@@ -2909,7 +2908,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -2941,7 +2940,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -2965,7 +2964,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -2993,7 +2992,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3022,7 +3021,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3056,7 +3055,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3084,7 +3083,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3111,7 +3110,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3164,7 +3163,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3219,7 +3218,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3253,7 +3252,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3282,7 +3281,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --pr string                Pull request ID context
@@ -3312,7 +3311,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --pr string                Pull request ID context
@@ -3372,7 +3371,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --pr string                Pull request ID context
@@ -3397,7 +3396,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3426,7 +3425,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3451,7 +3450,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3483,7 +3482,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3515,7 +3514,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3541,7 +3540,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3568,7 +3567,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3594,7 +3593,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3618,7 +3617,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3645,7 +3644,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3672,7 +3671,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3699,7 +3698,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3729,7 +3728,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3760,7 +3759,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3786,7 +3785,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3836,7 +3835,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3865,7 +3864,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3891,7 +3890,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3941,7 +3940,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3968,7 +3967,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -3999,7 +3998,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -4029,7 +4028,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -4053,7 +4052,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
@@ -4077,7 +4076,7 @@ Global Flags:
       --dry-run                  Preview server mutations without applying them
       --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
       --json                     Output as JSON
-      --limit int                Page size for Bitbucket list operations (default 25)
+      --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)

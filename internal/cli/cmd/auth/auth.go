@@ -98,23 +98,16 @@ func New(deps Dependencies) *cobra.Command {
 	statusCmd.Flags().StringVar(&statusHost, "host", "", "Override host for this status check")
 	authCmd.AddCommand(statusCmd)
 
-	var loginHost string
 	var loginToken string
 	var loginUsername string
 	var loginPassword string
 	var loginSetDefault bool
 	loginCmd := &cobra.Command{
-		Use:   "login",
+		Use:   "login <host>",
 		Short: "Store credentials for a Bitbucket host",
+		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resolvedHost := strings.TrimSpace(loginHost)
-			if resolvedHost == "" {
-				cfg, err := deps.LoadConfig()
-				if err != nil {
-					return err
-				}
-				resolvedHost = cfg.BitbucketURL
-			}
+			resolvedHost := strings.TrimSpace(args[0])
 
 			result, err := config.SaveLogin(config.LoginInput{
 				Host:       resolvedHost,
@@ -143,7 +136,6 @@ func New(deps Dependencies) *cobra.Command {
 			return nil
 		},
 	}
-	loginCmd.Flags().StringVar(&loginHost, "host", "", "Bitbucket host URL")
 	loginCmd.Flags().StringVar(&loginToken, "token", "", "Access token")
 	loginCmd.Flags().StringVar(&loginUsername, "username", "", "Username for basic auth")
 	loginCmd.Flags().StringVar(&loginPassword, "password", "", "Password for basic auth")
