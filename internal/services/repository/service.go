@@ -24,6 +24,10 @@ func NewService(client *httpclient.Client) *Service {
 }
 
 type ListOptions struct {
+	// Limit caps the total number of repositories returned across all pages.
+	// Unlike other service list options, this is not forwarded as a caller-controlled
+	// Bitbucket page size because `bb repo list --limit` is defined as a maximum
+	// result count at the CLI layer.
 	Limit       int
 	Start       int
 	Name        string

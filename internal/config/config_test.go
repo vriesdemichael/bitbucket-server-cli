@@ -10,7 +10,7 @@ import (
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 )
 
-func TestLoadFromEnvDefaults(t *testing.T) {
+func TestLoadFromEnvNonHostDefaults(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	t.Setenv("BITBUCKET_URL", "http://localhost:7990")
 	t.Setenv("BITBUCKET_VERSION_TARGET", "")
