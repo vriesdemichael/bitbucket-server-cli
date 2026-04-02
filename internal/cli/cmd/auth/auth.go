@@ -186,7 +186,16 @@ func New(deps Dependencies) *cobra.Command {
 				resolvedHost = cfg.BitbucketURL
 			}
 
-			patURL, err := personalAccessTokenURL(resolvedHost)
+			// Attempt to resolve the current user slug for a per-user PAT URL.
+			// If credentials are not configured, fall back to the generic URL.
+			var userSlug string
+			if cfg, err := deps.LoadConfig(); err == nil && cfg.AuthMode() != "none" {
+				if identity, err := resolveIdentity(cmd.Context(), cfg, deps.NewUsersClient); err == nil {
+					userSlug = identity.Slug
+				}
+			}
+
+			patURL, err := personalAccessTokenURL(resolvedHost, userSlug)
 			if err != nil {
 				return err
 			}
@@ -410,7 +419,10 @@ func safeStringFromEnum(value *openapigenerated.RestApplicationUserType) string 
 	return string(*value)
 }
 
-func personalAccessTokenURL(host string) (string, error) {
+// personalAccessTokenURL returns the Bitbucket URL for managing personal access tokens.
+// When userSlug is non-empty it returns the per-user URL (.../users/<slug>/manage);
+// otherwise it returns the generic manage URL.
+func personalAccessTokenURL(host string, userSlug string) (string, error) {
 	trimmed := strings.TrimSpace(host)
 	if trimmed == "" {
 		return "", apperrors.New(apperrors.KindValidation, "bitbucket host is required (set --host or BITBUCKET_URL)", nil)
@@ -425,7 +437,12 @@ func personalAccessTokenURL(host string) (string, error) {
 		return "", apperrors.New(apperrors.KindValidation, "bitbucket host URL is invalid", err)
 	}
 
-	parsed.Path = path.Join(parsed.Path, "/plugins/servlet/access-tokens/manage")
+	slug := strings.TrimSpace(userSlug)
+	if slug != "" {
+		parsed.Path = path.Join(parsed.Path, "/plugins/servlet/access-tokens/users/"+slug+"/manage")
+	} else {
+		parsed.Path = path.Join(parsed.Path, "/plugins/servlet/access-tokens/manage")
+	}
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 
