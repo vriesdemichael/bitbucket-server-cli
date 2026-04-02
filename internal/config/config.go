@@ -619,7 +619,7 @@ func normalizeURL(value string) string {
 		return trimmed
 	}
 
-	return "http://" + trimmed
+	return "https://" + trimmed
 }
 
 func hostKey(hostURL string) string {
