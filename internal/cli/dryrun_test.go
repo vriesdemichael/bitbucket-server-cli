@@ -192,7 +192,7 @@ func TestNewDryRunPreviewSummaries(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		preview := newDryRunPreview(dryRunProfile{Intent: "x", Action: tc.action, PlanningMode: planningModeStatic, Capability: capabilityPartial}, nil, nil)
+		preview := newDryRunPreview(dryRunProfile{Intent: "x", Action: tc.action}, nil, nil)
 		if preview.Summary.Total != 1 || preview.Summary.Supported != 1 {
 			t.Fatalf("expected default totals to be set, got: %+v", preview.Summary)
 		}
@@ -210,10 +210,8 @@ func TestNewDryRunPreviewIncludesRepositoryAndArgs(t *testing.T) {
 	}
 
 	preview := newDryRunPreview(dryRunProfile{
-		Intent:       "project.create",
-		Action:       "create",
-		PlanningMode: planningModeStatic,
-		Capability:   capabilityPartial,
+		Intent:  "project.create",
+		Action:  "create",
 	}, cmd, []string{"PRJ", "--name", "Demo"})
 
 	if preview.Items[0].Target["repository"] != "PRJ/demo" {
@@ -238,10 +236,8 @@ func TestNewDryRunPreviewIncludesInheritedRepositoryFlag(t *testing.T) {
 	root.AddCommand(projectCmd)
 
 	preview := newDryRunPreview(dryRunProfile{
-		Intent:       "project.update",
-		Action:       "update",
-		PlanningMode: planningModeStatic,
-		Capability:   capabilityPartial,
+		Intent:  "project.update",
+		Action:  "update",
 	}, updateCmd, []string{"PRJ"})
 
 	if preview.Items[0].Target["repository"] != "PRJ/inherited" {
@@ -379,6 +375,7 @@ func TestWriteDryRunPreviewWriterErrors(t *testing.T) {
 }
 
 func TestDryRunPassthroughPathCoverage(t *testing.T) {
+	// Every previously-passthrough path must now be a stateful entry in dryRunProfiles.
 	paths := []string{
 		"branch delete",
 		"repo settings security permissions users grant",
@@ -441,8 +438,12 @@ func TestDryRunPassthroughPathCoverage(t *testing.T) {
 	}
 
 	for _, path := range paths {
-		if _, ok := dryRunPassthroughPaths[path]; !ok {
-			t.Fatalf("expected passthrough entry for %q", path)
+		profile, ok := dryRunProfiles[path]
+		if !ok {
+			t.Fatalf("expected dryRunProfiles entry for %q", path)
+		}
+		if !profile.Stateful {
+			t.Fatalf("expected Stateful=true for %q", path)
 		}
 	}
 }
