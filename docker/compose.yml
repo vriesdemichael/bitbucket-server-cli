@@ -2,7 +2,7 @@ name: bitbucket-server-cli
 
 services:
   postgres:
-    image: postgres:15
+    image: postgres:17
     container_name: bb-postgres
     environment:
       POSTGRES_DB: bitbucket
@@ -14,13 +14,17 @@ services:
       - ./postgres/data:/var/lib/postgresql/data
 
   bitbucket:
-    image: atlassian/bitbucket:9.4.16
+    build:
+      context: ./secret-patch
+    image: atlassian/bitbucket:9.4.16-faketime
     container_name: bb-bitbucket
     depends_on:
       - postgres
     env_file:
       - ../.env
     environment:
+      LD_PRELOAD: /usr/lib/x86_64-linux-gnu/faketime/libfaketime.so.1
+      FAKETIME: "@2026-03-01 00:00:00"
       JDBC_DRIVER: org.postgresql.Driver
       JDBC_URL: jdbc:postgresql://postgres:5432/bitbucket
       JDBC_USER: bitbucket
