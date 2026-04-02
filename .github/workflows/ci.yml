@@ -197,6 +197,85 @@ jobs:
       - name: Build docs site
         run: task docs:validate
 
+  live-tests:
+    name: Live Integration Tests
+    runs-on: ubuntu-latest
+    # Skip for fork pull requests where the BITBUCKET_LICENSE_KEY secret is
+    # unavailable.  The committed-artifact coverage gate (coverage-report-policy
+    # job) remains active as a fallback for those cases.
+    if: github.event.pull_request.head.repo.full_name == github.repository || github.event_name == 'push'
+    timeout-minutes: 30
+    env:
+      BITBUCKET_URL: http://localhost:7990
+      ADMIN_USER: admin
+      ADMIN_PASSWORD: admin
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Setup Task
+        uses: arduino/setup-task@v2
+
+      - name: Create .env file (required by docker/compose.yml env_file directive)
+        run: touch .env
+
+      - name: Start Bitbucket stack
+        env:
+          BITBUCKET_LICENSE_KEY: ${{ secrets.BITBUCKET_LICENSE_KEY }}
+        run: docker compose -f docker/compose.yml up -d
+
+      - name: Bootstrap Bitbucket (wait for ready + create admin user)
+        run: bash scripts/bootstrap-bitbucket.sh
+
+      - name: Run unit tests with coverage
+        run: task test:unit:coverage
+
+      - name: Run live integration tests with coverage
+        run: task test:live:coverage
+
+      - name: Fetch origin/main for quality-report base ref
+        run: git fetch origin main
+
+      - name: Resolve CI coverage thresholds
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC1091
+          source .github/coverage-thresholds.env
+          echo "COVERAGE_MIN_GLOBAL_COMBINED=${CI_COVERAGE_MIN_GLOBAL_COMBINED:-85}" >> "$GITHUB_ENV"
+          echo "COVERAGE_MIN_PATCH=${CI_COVERAGE_MIN_PATCH:-85}" >> "$GITHUB_ENV"
+          echo "COVERAGE_MIN_PATCH_LINES=${CI_COVERAGE_MIN_PATCH_LINES:-30}" >> "$GITHUB_ENV"
+          echo "COVERAGE_MAX_UNCOVERED_SMALL_PATCH=${CI_COVERAGE_MAX_UNCOVERED_SMALL_PATCH:-2}" >> "$GITHUB_ENV"
+          echo "COVERAGE_MIN_CONTRACT=${CI_COVERAGE_MIN_CONTRACT:-0}" >> "$GITHUB_ENV"
+
+      - name: Verify committed quality report is current
+        run: |
+          go run ./tools/quality-report \
+            -coverprofile .tmp/coverage.unit.out \
+            -live-coverprofile .tmp/coverage.live.out \
+            -base-ref origin/main \
+            -manifest docs/quality/generated-operation-contracts.json \
+            -report-file docs/quality/coverage-report.json \
+            -raw-coverprofile-file docs/quality/coverage.combined.raw.out \
+            -scoped-coverprofile-file docs/quality/coverage.combined.scoped.out \
+            -verify-report -verify-coverprofiles \
+            -min-global-combined "$COVERAGE_MIN_GLOBAL_COMBINED" \
+            -min-patch "$COVERAGE_MIN_PATCH" \
+            -min-patch-lines "$COVERAGE_MIN_PATCH_LINES" \
+            -max-uncovered-small-patch "$COVERAGE_MAX_UNCOVERED_SMALL_PATCH" \
+            -min-contract "$COVERAGE_MIN_CONTRACT"
+
+      - name: Stop Bitbucket stack
+        if: always()
+        run: docker compose -f docker/compose.yml down
+
   ci-complete:
     name: CI Complete
     runs-on: ubuntu-latest
@@ -206,6 +285,7 @@ jobs:
       - unit-tests
       - coverage-report-policy
       - docs-site
+      - live-tests
     if: always()
     steps:
       - name: Verify all required CI jobs passed
@@ -215,9 +295,11 @@ jobs:
           UNIT_TESTS_RESULT: ${{ needs.unit-tests.result }}
           COVERAGE_REPORT_POLICY_RESULT: ${{ needs.coverage-report-policy.result }}
           DOCS_SITE_RESULT: ${{ needs.docs-site.result }}
+          LIVE_TESTS_RESULT: ${{ needs.live-tests.result }}
         run: |
           [[ "$LINEAR_HISTORY_RESULT" == "success" ]]
           [[ "$ADR_VALIDATION_RESULT" == "success" ]]
           [[ "$UNIT_TESTS_RESULT" == "success" ]]
           [[ "$COVERAGE_REPORT_POLICY_RESULT" == "success" ]]
           [[ "$DOCS_SITE_RESULT" == "success" ]]
+          [[ "$LIVE_TESTS_RESULT" == "success" || "$LIVE_TESTS_RESULT" == "skipped" ]]
