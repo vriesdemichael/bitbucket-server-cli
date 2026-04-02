@@ -14,3 +14,4 @@ __pycache__/
 /docs/.venv/
 /.tmp/*
 !/.tmp/.gitkeep
+docker/secret-patch/
