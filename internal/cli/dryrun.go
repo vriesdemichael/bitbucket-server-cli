@@ -21,8 +21,7 @@ const (
 type dryRunProfile struct {
 	Intent        string
 	Action        string
-	PlanningMode  string
-	Capability    string
+	Stateful      bool
 	CapabilityMsg string
 }
 
@@ -58,121 +57,81 @@ type dryRunPreview struct {
 	Summary      dryRunSummary `json:"summary"`
 }
 
+// dryRunProfiles is the single source of truth for dry-run behaviour on every
+// mutating command. Stateful: true means the command handler performs its own
+// live pre-flight check and writes the dryRunPreview output itself; the
+// interceptor passes through to it unchanged. Stateful: false means the
+// interceptor generates a static (intent-only) preview using newDryRunPreview.
 var dryRunProfiles = map[string]dryRunProfile{
-	"branch create":                                {Intent: "branch.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"branch default set":                           {Intent: "branch.default.set", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"branch model update":                          {Intent: "branch.model.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"branch restriction create":                    {Intent: "branch.restriction.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"branch restriction update":                    {Intent: "branch.restriction.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"branch restriction delete":                    {Intent: "branch.restriction.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"build status set":                             {Intent: "build.status.set", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"build required create":                        {Intent: "build.required.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"build required update":                        {Intent: "build.required.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"build required delete":                        {Intent: "build.required.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"tag create":                                   {Intent: "tag.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"tag delete":                                   {Intent: "tag.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo comment create":                          {Intent: "repo.comment.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo comment update":                          {Intent: "repo.comment.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo comment delete":                          {Intent: "repo.comment.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo settings workflow webhooks create":       {Intent: "repo.webhook.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo settings workflow webhooks delete":       {Intent: "repo.webhook.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo settings pull-requests update":           {Intent: "repo.pull-request-settings.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo settings pull-requests update-approvers": {Intent: "repo.pull-request-settings.update-approvers", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo settings pull-requests set-strategy":     {Intent: "repo.pull-request-settings.set-strategy", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo admin create":                            {Intent: "repo.admin.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo admin fork":                              {Intent: "repo.admin.fork", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo admin update":                            {Intent: "repo.admin.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"repo admin delete":                            {Intent: "repo.admin.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"insights report set":                          {Intent: "insights.report.set", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"insights report delete":                       {Intent: "insights.report.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"insights annotation add":                      {Intent: "insights.annotation.add", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"insights annotation delete":                   {Intent: "insights.annotation.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr create":                                    {Intent: "pr.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr update":                                    {Intent: "pr.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr merge":                                     {Intent: "pr.merge", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr decline":                                   {Intent: "pr.decline", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr reopen":                                    {Intent: "pr.reopen", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr review approve":                            {Intent: "pr.review.approve", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr review unapprove":                          {Intent: "pr.review.unapprove", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr review reviewer add":                       {Intent: "pr.review.reviewer.add", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr review reviewer remove":                    {Intent: "pr.review.reviewer.remove", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr task create":                               {Intent: "pr.task.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr task update":                               {Intent: "pr.task.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"pr task delete":                               {Intent: "pr.task.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"reviewer condition create":                    {Intent: "reviewer.condition.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"reviewer condition update":                    {Intent: "reviewer.condition.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"reviewer condition delete":                    {Intent: "reviewer.condition.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"hook enable":                                  {Intent: "hook.enable", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"hook disable":                                 {Intent: "hook.disable", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"hook configure":                               {Intent: "hook.configure", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"project create":                               {Intent: "project.create", Action: "create", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"project update":                               {Intent: "project.update", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"project delete":                               {Intent: "project.delete", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"project permissions users grant":              {Intent: "project.permission.user.grant", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"project permissions users revoke":             {Intent: "project.permission.user.revoke", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"project permissions groups grant":             {Intent: "project.permission.group.grant", Action: "update", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-	"project permissions groups revoke":            {Intent: "project.permission.group.revoke", Action: "delete", PlanningMode: planningModeStatic, Capability: capabilityPartial, CapabilityMsg: "static preview only"},
-}
-
-var dryRunPassthroughPaths = map[string]struct{}{
-	"branch delete": {},
-	"repo settings security permissions users grant":   {},
-	"repo settings security permissions users revoke":  {},
-	"repo settings security permissions groups grant":  {},
-	"repo settings security permissions groups revoke": {},
-	"project permissions users grant":                  {},
-	"project permissions users revoke":                 {},
-	"project permissions groups grant":                 {},
-	"project permissions groups revoke":                {},
-	"hook enable":                                      {},
-	"hook disable":                                     {},
-	"hook configure":                                   {},
-	"repo settings workflow webhooks create":           {},
-	"repo settings workflow webhooks delete":           {},
-	"repo settings pull-requests update":               {},
-	"repo settings pull-requests update-approvers":     {},
-	"repo settings pull-requests set-strategy":         {},
-	"branch create":                                    {},
-	"branch default set":                               {},
-	"branch model update":                              {},
-	"branch restriction create":                        {},
-	"branch restriction update":                        {},
-	"branch restriction delete":                        {},
-	"tag create":                                       {},
-	"tag delete":                                       {},
-	"reviewer condition create":                        {},
-	"reviewer condition update":                        {},
-	"reviewer condition delete":                        {},
-	"repo admin create":                                {},
-	"repo admin fork":                                  {},
-	"repo admin update":                                {},
-	"repo admin delete":                                {},
-	"project create":                                   {},
-	"project update":                                   {},
-	"project delete":                                   {},
-	"pr create":                                        {},
-	"pr update":                                        {},
-	"pr merge":                                         {},
-	"pr decline":                                       {},
-	"pr reopen":                                        {},
-	"pr review approve":                                {},
-	"pr review unapprove":                              {},
-	"pr review reviewer add":                           {},
-	"pr review reviewer remove":                        {},
-	"pr task create":                                   {},
-	"pr task update":                                   {},
-	"pr task delete":                                   {},
-	"build status set":                                 {},
-	"build required create":                            {},
-	"build required update":                            {},
-	"build required delete":                            {},
-	"insights report set":                              {},
-	"insights report delete":                           {},
-	"insights annotation add":                          {},
-	"insights annotation delete":                       {},
-	"repo comment create":                              {},
-	"repo comment update":                              {},
-	"repo comment delete":                              {},
+	// branch
+	"branch delete":                                {Intent: "branch.delete", Action: "delete", Stateful: true},
+	"branch create":                                {Intent: "branch.create", Action: "create", Stateful: true},
+	"branch default set":                           {Intent: "branch.default.set", Action: "update", Stateful: true},
+	"branch model update":                          {Intent: "branch.model.update", Action: "update", Stateful: true},
+	"branch restriction create":                    {Intent: "branch.restriction.create", Action: "create", Stateful: true},
+	"branch restriction update":                    {Intent: "branch.restriction.update", Action: "update", Stateful: true},
+	"branch restriction delete":                    {Intent: "branch.restriction.delete", Action: "delete", Stateful: true},
+	// build
+	"build status set":    {Intent: "build.status.set", Action: "update", Stateful: true},
+	"build required create": {Intent: "build.required.create", Action: "create", Stateful: true},
+	"build required update": {Intent: "build.required.update", Action: "update", Stateful: true},
+	"build required delete": {Intent: "build.required.delete", Action: "delete", Stateful: true},
+	// tag
+	"tag create": {Intent: "tag.create", Action: "create", Stateful: true},
+	"tag delete": {Intent: "tag.delete", Action: "delete", Stateful: true},
+	// repo comment
+	"repo comment create": {Intent: "repo.comment.create", Action: "create", Stateful: true},
+	"repo comment update": {Intent: "repo.comment.update", Action: "update", Stateful: true},
+	"repo comment delete": {Intent: "repo.comment.delete", Action: "delete", Stateful: true},
+	// repo settings
+	"repo settings workflow webhooks create":                  {Intent: "repo.webhook.create", Action: "create", Stateful: true},
+	"repo settings workflow webhooks delete":                  {Intent: "repo.webhook.delete", Action: "delete", Stateful: true},
+	"repo settings pull-requests update":                      {Intent: "repo.pull-request-settings.update", Action: "update", Stateful: true},
+	"repo settings pull-requests update-approvers":            {Intent: "repo.pull-request-settings.update-approvers", Action: "update", Stateful: true},
+	"repo settings pull-requests set-strategy":                {Intent: "repo.pull-request-settings.set-strategy", Action: "update", Stateful: true},
+	"repo settings security permissions users grant":          {Intent: "repo.permission.user.grant", Action: "update", Stateful: true},
+	"repo settings security permissions users revoke":         {Intent: "repo.permission.user.revoke", Action: "delete", Stateful: true},
+	"repo settings security permissions groups grant":         {Intent: "repo.permission.group.grant", Action: "update", Stateful: true},
+	"repo settings security permissions groups revoke":        {Intent: "repo.permission.group.revoke", Action: "delete", Stateful: true},
+	// repo admin
+	"repo admin create": {Intent: "repo.admin.create", Action: "create", Stateful: true},
+	"repo admin fork":   {Intent: "repo.admin.fork", Action: "create", Stateful: true},
+	"repo admin update": {Intent: "repo.admin.update", Action: "update", Stateful: true},
+	"repo admin delete": {Intent: "repo.admin.delete", Action: "delete", Stateful: true},
+	// insights
+	"insights report set":      {Intent: "insights.report.set", Action: "update", Stateful: true},
+	"insights report delete":   {Intent: "insights.report.delete", Action: "delete", Stateful: true},
+	"insights annotation add":  {Intent: "insights.annotation.add", Action: "create", Stateful: true},
+	"insights annotation delete": {Intent: "insights.annotation.delete", Action: "delete", Stateful: true},
+	// pr
+	"pr create":              {Intent: "pr.create", Action: "create", Stateful: true},
+	"pr update":              {Intent: "pr.update", Action: "update", Stateful: true},
+	"pr merge":               {Intent: "pr.merge", Action: "update", Stateful: true},
+	"pr decline":             {Intent: "pr.decline", Action: "update", Stateful: true},
+	"pr reopen":              {Intent: "pr.reopen", Action: "update", Stateful: true},
+	"pr review approve":      {Intent: "pr.review.approve", Action: "update", Stateful: true},
+	"pr review unapprove":    {Intent: "pr.review.unapprove", Action: "update", Stateful: true},
+	"pr review reviewer add":    {Intent: "pr.review.reviewer.add", Action: "update", Stateful: true},
+	"pr review reviewer remove": {Intent: "pr.review.reviewer.remove", Action: "delete", Stateful: true},
+	"pr task create": {Intent: "pr.task.create", Action: "create", Stateful: true},
+	"pr task update": {Intent: "pr.task.update", Action: "update", Stateful: true},
+	"pr task delete": {Intent: "pr.task.delete", Action: "delete", Stateful: true},
+	// reviewer conditions
+	"reviewer condition create": {Intent: "reviewer.condition.create", Action: "create", Stateful: true},
+	"reviewer condition update": {Intent: "reviewer.condition.update", Action: "update", Stateful: true},
+	"reviewer condition delete": {Intent: "reviewer.condition.delete", Action: "delete", Stateful: true},
+	// hook
+	"hook enable":    {Intent: "hook.enable", Action: "update", Stateful: true},
+	"hook disable":   {Intent: "hook.disable", Action: "update", Stateful: true},
+	"hook configure": {Intent: "hook.configure", Action: "update", Stateful: true},
+	// project
+	"project create":                    {Intent: "project.create", Action: "create", Stateful: true},
+	"project update":                    {Intent: "project.update", Action: "update", Stateful: true},
+	"project delete":                    {Intent: "project.delete", Action: "delete", Stateful: true},
+	"project permissions users grant":   {Intent: "project.permission.user.grant", Action: "update", Stateful: true},
+	"project permissions users revoke":  {Intent: "project.permission.user.revoke", Action: "delete", Stateful: true},
+	"project permissions groups grant":  {Intent: "project.permission.group.grant", Action: "update", Stateful: true},
+	"project permissions groups revoke": {Intent: "project.permission.group.revoke", Action: "delete", Stateful: true},
 }
 
 func registerGlobalDryRunInterceptors(root *cobra.Command, options *rootOptions) {
@@ -195,8 +154,7 @@ func registerGlobalDryRunInterceptors(root *cobra.Command, options *rootOptions)
 					return originalRun(cmd, args)
 				}
 
-				path := dryRunCommandPath(cmd)
-				if _, ok := dryRunPassthroughPaths[path]; ok {
+				if profile.Stateful {
 					return originalRun(cmd, args)
 				}
 
@@ -211,9 +169,6 @@ func registerGlobalDryRunInterceptors(root *cobra.Command, options *rootOptions)
 				}
 
 				path := dryRunCommandPath(cmd)
-				if _, ok := dryRunPassthroughPaths[path]; ok {
-					return originalRun(cmd, args)
-				}
 				if !isServerMutatingPath(path) {
 					return originalRun(cmd, args)
 				}
@@ -309,8 +264,8 @@ func newDryRunPreview(profile dryRunProfile, command *cobra.Command, args []stri
 
 	return dryRunPreview{
 		DryRun:       true,
-		PlanningMode: profile.PlanningMode,
-		Capability:   profile.Capability,
+		PlanningMode: planningModeStatic,
+		Capability:   capabilityPartial,
 		Items:        []dryRunItem{item},
 		Summary:      summary,
 	}
