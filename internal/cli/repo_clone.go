@@ -1,9 +1,12 @@
 package cli
 
 import (
+	"bufio"
 	"context"
 	"fmt"
+	"io"
 	"net/url"
+	"os"
 	"strings"
 
 	"github.com/spf13/cobra"
@@ -11,6 +14,7 @@ import (
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/git"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
+	"golang.org/x/term"
 )
 
 func newRepoCloneCommand(options *rootOptions) *cobra.Command {
@@ -57,10 +61,20 @@ func newRepoCloneCommand(options *rootOptions) *cobra.Command {
 				return apperrors.New(apperrors.KindInternal, "git backend is not configured", nil)
 			}
 
-			err = backend.Clone(cmd.Context(), cloneURL, git.CloneOptions{
-				Directory: directory,
-				ExtraArgs: extraCloneArgs,
-			})
+			cloneURL, err = cloneRepositoryWithAuthFallback(
+				cmd,
+				cfg,
+				args[0],
+				usedURLInput,
+				cloneHost,
+				repo,
+				git.CloneOptions{
+					Directory: directory,
+					ExtraArgs: extraCloneArgs,
+				},
+				backend,
+				options.JSON,
+			)
 			if err != nil {
 				return err
 			}
@@ -190,10 +204,216 @@ func parseCloneSelector(value, defaultProjectKey string) (repositorySelector, cl
 }
 
 func buildCloneURL(rawInput string, usedURLInput bool, cloneHost string, repo repositorySelector) (string, error) {
-	if usedURLInput && strings.Contains(strings.TrimSpace(rawInput), "://") {
+	if usedURLInput && isExplicitCloneURL(rawInput) {
 		return strings.TrimSpace(rawInput), nil
 	}
 	return buildBitbucketCloneURL(cloneHost, repo.ProjectKey, repo.Slug)
+}
+
+func cloneRepositoryWithAuthFallback(
+	cmd *cobra.Command,
+	cfg config.AppConfig,
+	rawInput string,
+	usedURLInput bool,
+	cloneHost string,
+	repo repositorySelector,
+	cloneOptions git.CloneOptions,
+	backend git.Backend,
+	jsonOutput bool,
+) (string, error) {
+	canonicalCloneURL, err := buildCloneURL(rawInput, usedURLInput, cloneHost, repo)
+	if err != nil {
+		return "", err
+	}
+
+	sshCloneURL, hasSSHCloneURL, err := resolveSSHCloneURL(rawInput, usedURLInput, cloneHost, repo)
+	if err != nil {
+		return "", err
+	}
+
+	var sshErr error
+	if hasSSHCloneURL {
+		sshErr = backend.Clone(cmd.Context(), sshCloneURL, cloneOptions)
+		if sshErr == nil {
+			return sshCloneURL, nil
+		}
+	}
+
+	cloneAuth, hasStoredHTTPAuth, err := resolveCloneHTTPAuth(cfg, cloneHost)
+	if err != nil {
+		return "", err
+	}
+
+	if hasStoredHTTPAuth {
+		authenticatedCloneURL, err := buildAuthenticatedCloneURL(canonicalCloneURL, cloneAuth)
+		if err != nil {
+			return "", err
+		}
+		if err := backend.Clone(cmd.Context(), authenticatedCloneURL, cloneOptions); err == nil {
+			return canonicalCloneURL, nil
+		} else if sshErr == nil {
+			return "", err
+		} else {
+			return "", err
+		}
+	}
+
+	if jsonOutput {
+		return "", newCloneLoginRequiredError(cloneHost, sshErr)
+	}
+
+	promptedAuth, prompted, err := promptForCloneLogin(cmd, cloneHost)
+	if err != nil {
+		return "", err
+	}
+	if !prompted {
+		return "", newCloneLoginRequiredError(cloneHost, sshErr)
+	}
+
+	authenticatedCloneURL, err := buildAuthenticatedCloneURL(canonicalCloneURL, promptedAuth)
+	if err != nil {
+		return "", err
+	}
+	if err := backend.Clone(cmd.Context(), authenticatedCloneURL, cloneOptions); err != nil {
+		return "", err
+	}
+
+	return canonicalCloneURL, nil
+}
+
+func resolveCloneHTTPAuth(cfg config.AppConfig, cloneHost string) (config.AppConfig, bool, error) {
+	if sameCloneHost(cfg.BitbucketURL, cloneHost) && cfg.AuthMode() != "none" {
+		cfg.BitbucketURL = cloneHost
+		return cfg, true, nil
+	}
+
+	if os.Getenv("BB_DISABLE_STORED_CONFIG") == "1" {
+		return config.AppConfig{BitbucketURL: cloneHost}, false, nil
+	}
+
+	storedAuth, ok, err := config.LoadStoredAuthForHost(cloneHost)
+	if err != nil {
+		return config.AppConfig{}, false, err
+	}
+	if !ok || storedAuth.AuthMode() == "none" {
+		return config.AppConfig{BitbucketURL: cloneHost}, false, nil
+	}
+
+	storedAuth.BitbucketURL = cloneHost
+	return storedAuth, true, nil
+}
+
+func promptForCloneLogin(cmd *cobra.Command, cloneHost string) (config.AppConfig, bool, error) {
+	input := cmd.InOrStdin()
+	if !canPromptForCloneLogin(input) {
+		return config.AppConfig{}, false, nil
+	}
+
+	output := cmd.ErrOrStderr()
+	fmt.Fprintf(output, "SSH clone failed and no stored HTTP credentials were found for %s.\n", cloneHost)
+	fmt.Fprintf(output, "Create a token with `bb auth token-url --host %s`, then paste it to store and retry.\n", cloneHost)
+	fmt.Fprint(output, "Token: ")
+
+	tokenValue, err := readCloneToken(input, output)
+	if err != nil {
+		return config.AppConfig{}, false, apperrors.New(apperrors.KindAuthentication, "failed to read clone login token", err)
+	}
+	if strings.TrimSpace(tokenValue) == "" {
+		return config.AppConfig{}, false, nil
+	}
+
+	if _, err := config.SaveLogin(config.LoginInput{Host: cloneHost, Token: tokenValue, SetDefault: false}); err != nil {
+		return config.AppConfig{}, false, err
+	}
+
+	return config.AppConfig{BitbucketURL: cloneHost, BitbucketToken: tokenValue}, true, nil
+}
+
+func canPromptForCloneLogin(input io.Reader) bool {
+	file, ok := input.(*os.File)
+	if !ok {
+		return true
+	}
+
+	return term.IsTerminal(int(file.Fd()))
+}
+
+func readCloneToken(input io.Reader, output io.Writer) (string, error) {
+	if file, ok := input.(*os.File); ok && term.IsTerminal(int(file.Fd())) {
+		value, err := term.ReadPassword(int(file.Fd()))
+		fmt.Fprintln(output)
+		if err != nil {
+			return "", err
+		}
+		return strings.TrimSpace(string(value)), nil
+	}
+
+	reader := bufio.NewReader(input)
+	value, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+	return strings.TrimSpace(value), nil
+}
+
+func newCloneLoginRequiredError(cloneHost string, cause error) error {
+	message := fmt.Sprintf(
+		"ssh clone failed and no stored HTTP credentials are configured for %s; run 'bb auth login %s --token <token>' and retry",
+		cloneHost,
+		cloneHost,
+	)
+	return apperrors.New(apperrors.KindAuthentication, message, cause)
+}
+
+func resolveSSHCloneURL(rawInput string, usedURLInput bool, cloneHost string, repo repositorySelector) (string, bool, error) {
+	if usedURLInput {
+		trimmed := strings.TrimSpace(rawInput)
+		if strings.HasPrefix(trimmed, "git@") || strings.HasPrefix(trimmed, "ssh://") {
+			return trimmed, true, nil
+		}
+	}
+
+	sshCloneURL, err := buildBitbucketSSHCloneURL(cloneHost, repo.ProjectKey, repo.Slug)
+	if err != nil {
+		return "", false, err
+	}
+	return sshCloneURL, true, nil
+}
+
+func buildAuthenticatedCloneURL(cloneURL string, auth config.AppConfig) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(cloneURL))
+	if err != nil || strings.TrimSpace(parsed.Scheme) == "" || strings.TrimSpace(parsed.Host) == "" {
+		return "", apperrors.New(apperrors.KindValidation, "clone URL must include a valid scheme and host", err)
+	}
+
+	switch auth.AuthMode() {
+	case "token":
+		parsed.User = url.UserPassword("x-token-auth", auth.BitbucketToken)
+	case "basic":
+		parsed.User = url.UserPassword(auth.BitbucketUsername, auth.BitbucketPassword)
+	default:
+		return "", apperrors.New(apperrors.KindValidation, "HTTP clone credentials are required", nil)
+	}
+
+	return parsed.String(), nil
+}
+
+func isExplicitCloneURL(rawInput string) bool {
+	trimmed := strings.TrimSpace(rawInput)
+	return strings.Contains(trimmed, "://") || strings.HasPrefix(trimmed, "git@")
+}
+
+func sameCloneHost(left string, right string) bool {
+	leftParsed, leftErr := url.Parse(strings.TrimSpace(left))
+	rightParsed, rightErr := url.Parse(strings.TrimSpace(right))
+	if leftErr != nil || rightErr != nil {
+		return false
+	}
+	if leftParsed.Scheme == "" || rightParsed.Scheme == "" || leftParsed.Host == "" || rightParsed.Host == "" {
+		return false
+	}
+
+	return strings.EqualFold(leftParsed.Scheme, rightParsed.Scheme) && strings.EqualFold(leftParsed.Host, rightParsed.Host)
 }
 
 func splitCloneDirectoryAndExtraArgs(defaultDirectory string, values []string) (string, []string) {
@@ -324,4 +544,24 @@ func buildBitbucketCloneURL(baseURL, projectKey, slug string) (string, error) {
 	parsed.Fragment = ""
 
 	return parsed.String(), nil
+}
+
+func buildBitbucketSSHCloneURL(baseURL, projectKey, slug string) (string, error) {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || strings.TrimSpace(parsed.Scheme) == "" || strings.TrimSpace(parsed.Host) == "" {
+		return "", apperrors.New(apperrors.KindValidation, "BITBUCKET_URL must include a valid scheme and host", err)
+	}
+
+	trimmedProject := strings.TrimSpace(projectKey)
+	trimmedSlug := strings.TrimSpace(slug)
+	if trimmedProject == "" || trimmedSlug == "" {
+		return "", apperrors.New(apperrors.KindValidation, "repository selector must include project key and slug", nil)
+	}
+
+	host := parsed.Hostname()
+	if strings.TrimSpace(host) == "" {
+		return "", apperrors.New(apperrors.KindValidation, "BITBUCKET_URL must include a valid host", nil)
+	}
+
+	return fmt.Sprintf("git@%s:scm/%s/%s.git", host, url.PathEscape(trimmedProject), url.PathEscape(trimmedSlug)), nil
 }

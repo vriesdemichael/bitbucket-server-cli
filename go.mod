@@ -6,6 +6,7 @@ require (
 	github.com/joho/godotenv v1.5.1
 	github.com/spf13/cobra v1.8.1
 	github.com/zalando/go-keyring v0.2.6
+	golang.org/x/term v0.26.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 
@@ -19,6 +20,6 @@ require (
 	github.com/oapi-codegen/runtime v1.1.2 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/sys v0.26.0 // indirect
+	golang.org/x/sys v0.27.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 )
