@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 # Bootstrap a fresh Bitbucket Data Center instance for CI.
 #
-# Polls /status until the server is ready (FIRST_RUN or RUNNING), then
-# completes the setup wizard by creating the initial admin user via the
-# /setup form endpoint.  The license and database are already wired via
-# container environment variables (BITBUCKET_LICENSE_KEY + JDBC_*), so
-# only the admin-user step needs to be driven here.
+# The Bitbucket container auto-applies the license from BITBUCKET_LICENSE_KEY,
+# so the only remaining setup step is creating the initial admin user.
+# This script:
+#   1. Polls /status until FIRST_RUN (license applied, user step pending)
+#      or RUNNING (already bootstrapped).
+#   2. On FIRST_RUN: fetches the setup page to obtain the session cookie and
+#      CSRF token (atl_token), then POSTs the admin-user form.
+#   3. Polls /status until RUNNING.
 #
 # Usage:
 #   bash scripts/bootstrap-bitbucket.sh [base_url] [username] [password]
@@ -22,6 +25,8 @@ ADMIN_USERNAME="${2:-admin}"
 ADMIN_PASSWORD="${3:-admin}"
 ADMIN_EMAIL="admin@example.com"
 ADMIN_DISPLAY_NAME="Admin"
+COOKIE_JAR="$(mktemp /tmp/bb_bootstrap_cookies.XXXXXX)"
+trap 'rm -f "$COOKIE_JAR"' EXIT
 
 MAX_WAIT_SECONDS=300
 POLL_INTERVAL=5
@@ -29,18 +34,17 @@ POLL_INTERVAL=5
 log() { echo "[bootstrap-bitbucket] $*" >&2; }
 
 # Print the Bitbucket server state (STARTING, FIRST_RUN, RUNNING, or empty on
-# error) by querying /status.  All output goes to stdout so callers can
-# capture it; informational messages go to stderr via log().
+# error) by querying /status.
 query_state() {
   local response
   response=$(curl -sf "${BASE_URL}/status" 2>/dev/null) || { echo ""; return 0; }
-  python3 - <<'EOF' "$response"
+  python3 -c "
 import sys, json
 try:
-    print(json.loads(sys.argv[1]).get("state", ""))
+    print(json.loads(sys.argv[1]).get('state', ''))
 except Exception:
-    print("")
-EOF
+    print('')
+" "$response"
 }
 
 # Poll /status until one of the expected states is reached.
@@ -70,19 +74,36 @@ log "Waiting for Bitbucket to be ready (${BASE_URL})..."
 current_state=$(wait_for_states "FIRST_RUN" "RUNNING")
 
 if [ "$current_state" = "FIRST_RUN" ]; then
-  log "Completing setup wizard: creating admin user '${ADMIN_USERNAME}'..."
+  log "Fetching setup page to obtain session cookie and CSRF token..."
+  setup_html=$(curl -sf -c "$COOKIE_JAR" "${BASE_URL}/setup" 2>/dev/null)
 
+  atl_token=$(python3 -c "
+import sys, re
+html = sys.argv[1]
+# atl_token appears as either name=...value=... or value=...name=...
+for pat in [r\"name=['\\\"]atl_token['\\\"][^>]*value=['\\\"]([^'\\\"]*)\",
+            r\"value=['\\\"]([^'\\\"]*)['\\\"][^>]*name=['\\\"]atl_token['\\\"]\"]:
+    m = re.search(pat, html)
+    if m:
+        print(m.group(1))
+        sys.exit(0)
+sys.exit(1)
+" "$setup_html")
+  log "Got CSRF token."
+
+  log "Creating admin user '${ADMIN_USERNAME}'..."
   http_code=$(
-    curl -s -o /dev/null -w "%{http_code}" \
+    curl -sf -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+      -o /dev/null -w "%{http_code}" \
       -X POST "${BASE_URL}/setup" \
-      -H "Content-Type: application/x-www-form-urlencoded" \
-      --data-urlencode "step=user-install" \
-      --data-urlencode "user.username=${ADMIN_USERNAME}" \
-      --data-urlencode "user.password=${ADMIN_PASSWORD}" \
-      --data-urlencode "user.confirmPassword=${ADMIN_PASSWORD}" \
-      --data-urlencode "user.displayName=${ADMIN_DISPLAY_NAME}" \
-      --data-urlencode "user.emailAddress=${ADMIN_EMAIL}" \
-      --data-urlencode "baseUrl=${BASE_URL}"
+      --data-urlencode "step=user" \
+      --data-urlencode "username=${ADMIN_USERNAME}" \
+      --data-urlencode "fullname=${ADMIN_DISPLAY_NAME}" \
+      --data-urlencode "email=${ADMIN_EMAIL}" \
+      --data-urlencode "password=${ADMIN_PASSWORD}" \
+      --data-urlencode "confirmPassword=${ADMIN_PASSWORD}" \
+      --data-urlencode "skipJira=" \
+      --data-urlencode "atl_token=${atl_token}"
   )
   log "Setup POST HTTP status: ${http_code}"
 

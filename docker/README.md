@@ -20,6 +20,7 @@ This folder contains the local stack for behavior-accurate integration testing.
 ## Planned commands
 - Start: `docker compose -f docker/compose.yml up -d`
 - Stop: `docker compose -f docker/compose.yml down`
-- Reset state: remove `docker/bitbucket/data` and `docker/postgres/data`
+- Reset state: `docker compose -f docker/compose.yml down --volumes` (removes named volumes)
+  or: `task stack:reset`
 
 Not executed by scaffold step.

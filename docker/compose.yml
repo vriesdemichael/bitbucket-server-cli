@@ -11,7 +11,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./postgres/data:/var/lib/postgresql/data
+      - bb-postgres-data:/var/lib/postgresql/data
 
   bitbucket:
     build:
@@ -36,4 +36,8 @@ services:
       - "7990:7990"
       - "7999:7999"
     volumes:
-      - ./bitbucket/data:/var/atlassian/application-data/bitbucket
+      - bb-bitbucket-data:/var/atlassian/application-data/bitbucket
+
+volumes:
+  bb-postgres-data:
+  bb-bitbucket-data:
