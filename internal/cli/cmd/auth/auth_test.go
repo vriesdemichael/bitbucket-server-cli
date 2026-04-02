@@ -764,7 +764,7 @@ func TestAuthNonJSONHumanOutputPaths(t *testing.T) {
 		out := &bytes.Buffer{}
 		cmd.SetOut(out)
 		cmd.SetErr(out)
-		cmd.SetArgs([]string{"login", "--host", "http://login-json.local:7990", "--token", "my-token"})
+		cmd.SetArgs([]string{"login", "http://login-json.local:7990", "--token", "my-token"})
 		if err := cmd.Execute(); err != nil {
 			t.Fatalf("auth login (JSON) failed: %v", err)
 		}
