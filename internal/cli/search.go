@@ -9,6 +9,7 @@ import (
 	pullrequestservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequest"
 	repositoryservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newSearchCommand(options *rootOptions) *cobra.Command {
@@ -64,13 +65,15 @@ func newSearchReposCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(repos) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No repositories found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No repositories found"))
 				return nil
 			}
 
-			for _, repo := range repos {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s/%s\t%s\n", repo.ProjectKey, repo.Slug, repo.Name)
+			rows := make([][]string, len(repos))
+			for i, repo := range repos {
+				rows[i] = []string{style.Resource.Render(repo.ProjectKey + "/" + repo.Slug), repo.Name}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -128,13 +131,15 @@ func newSearchCommitsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(commits) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No commits found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No commits found"))
 				return nil
 			}
 
-			for _, commit := range commits {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", safeString(commit.DisplayId), strings.Split(safeString(commit.Message), "\n")[0])
+			rows := make([][]string, len(commits))
+			for i, commit := range commits {
+				rows[i] = []string{style.Secondary.Render(safeString(commit.DisplayId)), strings.Split(safeString(commit.Message), "\n")[0]}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -205,17 +210,19 @@ func newSearchPRsCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(prs) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No pull requests found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No pull requests found"))
 				return nil
 			}
 
-			for _, pr := range prs {
+			rows := make([][]string, len(prs))
+			for i, pr := range prs {
 				repoStr := ""
 				if pr.Repository != nil && pr.Repository.ProjectKey != "" {
 					repoStr = fmt.Sprintf("[%s/%s] ", pr.Repository.ProjectKey, pr.Repository.Slug)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%s#%d\t%s\t%s\n", repoStr, pr.ID, pr.State, pr.Title)
+				rows[i] = []string{style.Resource.Render(fmt.Sprintf("%s#%d", repoStr, pr.ID)), style.ActionStyle(pr.State).Render(pr.State), pr.Title}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},

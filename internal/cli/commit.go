@@ -7,6 +7,7 @@ import (
 	"github.com/spf13/cobra"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	commitservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/commit"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newCommitCommand(options *rootOptions) *cobra.Command {
@@ -50,13 +51,15 @@ func newCommitCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(commits) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No commits found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No commits found"))
 				return nil
 			}
 
-			for _, commit := range commits {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", safeString(commit.DisplayId), strings.Split(safeString(commit.Message), "\n")[0])
+			rows := make([][]string, len(commits))
+			for i, commit := range commits {
+				rows[i] = []string{style.Secondary.Render(safeString(commit.DisplayId)), strings.Split(safeString(commit.Message), "\n")[0]}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -91,8 +94,8 @@ func newCommitCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "commit": commit})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Commit: %s\n", safeString(commit.Id))
-			fmt.Fprintf(cmd.OutOrStdout(), "Message: %s\n", safeString(commit.Message))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Label.Render("Commit:"), style.Secondary.Render(safeString(commit.Id)))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Label.Render("Message:"), safeString(commit.Message))
 			return nil
 		},
 	}
@@ -130,13 +133,15 @@ func newCommitCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(commits) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No commits found between refs")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No commits found between refs"))
 				return nil
 			}
 
-			for _, commit := range commits {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", safeString(commit.DisplayId), strings.Split(safeString(commit.Message), "\n")[0])
+			rows := make([][]string, len(commits))
+			for i, commit := range commits {
+				rows[i] = []string{style.Secondary.Render(safeString(commit.DisplayId)), strings.Split(safeString(commit.Message), "\n")[0]}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -184,17 +189,19 @@ func newRefCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(refs) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No refs found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No refs found"))
 				return nil
 			}
 
-			for _, ref := range refs {
+			rows := make([][]string, len(refs))
+			for i, ref := range refs {
 				t := ""
 				if ref.Type != nil {
 					t = string(*ref.Type)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", safeString(ref.DisplayId), t, safeString(ref.Id))
+				rows[i] = []string{style.Resource.Render(safeString(ref.DisplayId)), t, style.Secondary.Render(safeString(ref.Id))}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -254,7 +261,7 @@ func newRefCommand(options *rootOptions) *cobra.Command {
 			if val, ok := foundRef["type"].(string); ok {
 				t = val
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", foundRef["displayId"], t, foundRef["id"])
+			style.WriteTable(cmd.OutOrStdout(), [][]string{{style.Resource.Render(fmt.Sprintf("%v", foundRef["displayId"])), t, style.Secondary.Render(fmt.Sprintf("%v", foundRef["id"]))}})
 			return nil
 		},
 	}

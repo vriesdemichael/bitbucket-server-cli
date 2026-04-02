@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 const (
@@ -320,34 +321,30 @@ func writeDryRunPreview(writer io.Writer, asJSON bool, preview dryRunPreview) er
 		return writeJSON(writer, preview)
 	}
 
-	if _, err := fmt.Fprintf(writer, "Dry-run (%s, capability=%s)\n", preview.PlanningMode, preview.Capability); err != nil {
+	if _, err := fmt.Fprintf(writer, "%s\n", style.DryRun.Render(fmt.Sprintf("Dry-run (%s, capability=%s)", preview.PlanningMode, preview.Capability))); err != nil {
 		return err
 	}
 
 	for _, item := range preview.Items {
-		if _, err := fmt.Fprintf(writer, "- intent=%s action=%s", item.Intent, item.Action); err != nil {
-			return err
-		}
+		line := fmt.Sprintf("- %s=%s %s=%s", style.Secondary.Render("intent"), item.Intent, style.Secondary.Render("action"), item.Action)
 		if item.PredictedAction != "" {
-			if _, err := fmt.Fprintf(writer, " predicted_action=%s", item.PredictedAction); err != nil {
-				return err
-			}
+			line += fmt.Sprintf(" %s=%s", style.Secondary.Render("predicted_action"), item.PredictedAction)
 		}
-		if _, err := fmt.Fprintln(writer); err != nil {
+		if _, err := fmt.Fprintln(writer, line); err != nil {
 			return err
 		}
 		if repository, ok := item.Target["repository"].(string); ok && strings.TrimSpace(repository) != "" {
-			if _, err := fmt.Fprintf(writer, "  repository=%s\n", repository); err != nil {
+			if _, err := fmt.Fprintf(writer, "  %s=%s\n", style.Secondary.Render("repository"), style.Resource.Render(repository)); err != nil {
 				return err
 			}
 		}
 		if args, ok := item.Target["args"].([]string); ok && len(args) > 0 {
-			if _, err := fmt.Fprintf(writer, "  args=%s\n", strings.Join(args, " ")); err != nil {
+			if _, err := fmt.Fprintf(writer, "  %s=%s\n", style.Secondary.Render("args"), strings.Join(args, " ")); err != nil {
 				return err
 			}
 		}
 		if item.Reason != "" {
-			if _, err := fmt.Fprintf(writer, "  note=%s\n", item.Reason); err != nil {
+			if _, err := fmt.Fprintf(writer, "  %s=%s\n", style.Secondary.Render("note"), style.Warning.Render(item.Reason)); err != nil {
 				return err
 			}
 		}

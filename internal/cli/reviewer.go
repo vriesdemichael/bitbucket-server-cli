@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	reviewerservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reviewer"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newReviewerCommand(options *rootOptions) *cobra.Command {
@@ -142,7 +143,7 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 				if options.JSON {
 					return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok", "id": id})
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Deleted condition %s for repository %s/%s\n", id, repo.ProjectKey, repo.Slug)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %s for repository %s\n", style.Deleted.Render("Deleted condition"), style.Resource.Render(id), style.Resource.Render(repo.ProjectKey+"/"+repo.Slug))
 				return nil
 			}
 
@@ -198,7 +199,7 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok", "id": id})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted condition %s for project %s\n", id, projectKey)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s for project %s\n", style.Deleted.Render("Deleted condition"), style.Resource.Render(id), args[0])
 			return nil
 		},
 	}
@@ -303,7 +304,7 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 				if options.JSON {
 					return writeJSON(cmd.OutOrStdout(), created)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Created reviewer condition %d for repository %s/%s\n", created.Id, repo.ProjectKey, repo.Slug)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %d for repository %s\n", style.Success.Render("Created reviewer condition"), created.Id, style.Resource.Render(repo.ProjectKey+"/"+repo.Slug))
 				return nil
 			}
 
@@ -365,7 +366,7 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), created)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Created reviewer condition %d for project %s\n", created.Id, projectKey)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %d for project %s\n", style.Success.Render("Created reviewer condition"), created.Id, projectKey)
 			return nil
 		},
 	}
@@ -474,7 +475,7 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 				if options.JSON {
 					return writeJSON(cmd.OutOrStdout(), updated)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Updated reviewer condition %s for repository %s/%s\n", id, repo.ProjectKey, repo.Slug)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %s for repository %s\n", style.Updated.Render("Updated reviewer condition"), style.Resource.Render(id), style.Resource.Render(repo.ProjectKey+"/"+repo.Slug))
 				return nil
 			}
 
@@ -543,7 +544,7 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), updated)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Updated reviewer condition %s for project %s\n", id, projectKey)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s for project %s\n", style.Updated.Render("Updated reviewer condition"), style.Resource.Render(id), projectKey)
 			return nil
 		},
 	}
@@ -556,11 +557,11 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 
 func printReviewerConditions(cmd *cobra.Command, conditions []openapigenerated.RestPullRequestCondition) {
 	if len(conditions) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "No conditions found")
+		fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No conditions found"))
 		return
 	}
 	// Basic summary for human output
-	fmt.Fprintf(cmd.OutOrStdout(), "Found %d conditions\n", len(conditions))
+	fmt.Fprintf(cmd.OutOrStdout(), "Found %s conditions\n", style.Secondary.Render(fmt.Sprintf("%d", len(conditions))))
 	// We could add more details here if we cast to RestPullRequestCondition
 }
 

@@ -10,6 +10,7 @@ import (
 )
 
 func TestSearchReposCommand(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path != "/rest/api/1.0/repos" {
 			http.NotFound(w, r)
@@ -42,12 +43,13 @@ func TestSearchReposCommand(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	if !bytes.Contains(output.Bytes(), []byte("TEST/demo\tDemo")) {
+	if !bytes.Contains(output.Bytes(), []byte("TEST/demo")) || !bytes.Contains(output.Bytes(), []byte("Demo")) {
 		t.Fatalf("unexpected output: %s", output.String())
 	}
 }
 
 func TestSearchCommitsCommand(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("Commit API Request: %s", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
@@ -75,12 +77,13 @@ func TestSearchCommitsCommand(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	if !bytes.Contains(output.Bytes(), []byte("abcdef\tFix bug")) {
+	if !bytes.Contains(output.Bytes(), []byte("abcdef")) || !bytes.Contains(output.Bytes(), []byte("Fix bug")) {
 		t.Fatalf("unexpected output: %s", output.String())
 	}
 }
 
 func TestSearchPRsCommand(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t.Logf("PR API Request: %s", r.URL.Path)
 		w.Header().Set("Content-Type", "application/json")
@@ -110,7 +113,7 @@ func TestSearchPRsCommand(t *testing.T) {
 			t.Fatalf("expected no error, got: %v", err)
 		}
 
-		if !bytes.Contains(output.Bytes(), []byte("[TEST/demo] #42\tOPEN\tFix bug")) {
+		if !bytes.Contains(output.Bytes(), []byte("[TEST/demo] #42")) || !bytes.Contains(output.Bytes(), []byte("OPEN")) || !bytes.Contains(output.Bytes(), []byte("Fix bug")) {
 			t.Fatalf("unexpected output: %s", output.String())
 		}
 	})
@@ -127,8 +130,36 @@ func TestSearchPRsCommand(t *testing.T) {
 			t.Fatalf("expected no error, got: %v", err)
 		}
 
-		if !bytes.Contains(output.Bytes(), []byte("#43\tOPEN\tUpdate docs")) {
+		if !bytes.Contains(output.Bytes(), []byte("#43")) || !bytes.Contains(output.Bytes(), []byte("OPEN")) || !bytes.Contains(output.Bytes(), []byte("Update docs")) {
 			t.Fatalf("unexpected output: %s", output.String())
 		}
 	})
+}
+
+func TestSearchReposEmptyResult(t *testing.T) {
+	t.Setenv("NO_COLOR", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "repo")
+
+	options := &rootOptions{JSON: false}
+	cmd := newSearchCommand(options)
+
+	output := new(bytes.Buffer)
+	cmd.SetOut(output)
+	cmd.SetArgs([]string{"repos", "notfound"})
+
+	err := cmd.ExecuteContext(context.Background())
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+	if !bytes.Contains(output.Bytes(), []byte("No repositories found")) {
+		t.Fatalf("expected empty-state message, got: %s", output.String())
+	}
 }

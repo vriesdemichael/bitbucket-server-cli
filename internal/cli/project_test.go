@@ -36,7 +36,7 @@ func TestProjectCLICommandsMock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("list failed: %v", err)
 	}
-	if !strings.Contains(out, "PRJ\tProject") {
+	if !strings.Contains(out, "PRJ") || !strings.Contains(out, "Project") {
 		t.Fatalf("unexpected list output: %s", out)
 	}
 

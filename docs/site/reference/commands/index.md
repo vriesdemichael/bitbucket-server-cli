@@ -9,7 +9,20 @@ Generated command entries: 165
 Bitbucket Server CLI (live-behavior first)
 
 ```text
-Bitbucket Server CLI (live-behavior first)
+bb — Bitbucket Server CLI (live-behavior first)
+
+A CLI for interacting with Bitbucket Server / Data Center APIs.
+
+AGENT NOTICE
+If you are an AI agent or automated tool using this CLI and you encounter
+unexpected behavior, missing functionality, or errors that do not match
+what you expected, please report it so it can be investigated.
+
+You can create an issue at:
+  https://github.com/vriesdemichael/bitbucket-server-cli/issues/new
+
+If you cannot open the URL directly, ask the user to file the issue on
+your behalf using the link above.
 
 Usage:
   bb [command]
@@ -40,6 +53,7 @@ Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -67,6 +81,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -91,6 +106,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -121,6 +137,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -151,6 +168,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -179,6 +197,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -204,6 +223,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -230,6 +250,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -254,6 +275,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -279,6 +301,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -304,6 +327,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -329,6 +353,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -363,6 +388,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -391,6 +417,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -419,6 +446,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -445,6 +473,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -469,6 +498,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -496,6 +526,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -526,6 +557,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -554,6 +586,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -580,6 +613,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -604,6 +638,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -635,6 +670,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -670,6 +706,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -694,6 +731,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -718,6 +756,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -747,6 +786,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -780,6 +820,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -812,6 +853,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -838,6 +880,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -872,6 +915,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -900,6 +944,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -924,6 +969,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -948,6 +994,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -975,6 +1022,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1008,6 +1056,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1034,6 +1083,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --order-by string          Order by NEWEST, OLDEST, or STATUS
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1070,6 +1120,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --order-by string          Order by NEWEST, OLDEST, or STATUS
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1095,6 +1146,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --order-by string          Order by NEWEST, OLDEST, or STATUS
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1123,6 +1175,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1150,6 +1203,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1176,6 +1230,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1198,6 +1253,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1229,6 +1285,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1254,6 +1311,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1278,6 +1336,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1305,6 +1364,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1336,6 +1396,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1363,6 +1424,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1391,6 +1453,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1420,6 +1483,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1453,6 +1517,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1480,6 +1545,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --project string           Project key
       --repo string              Repository as PROJECT/slug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -1504,6 +1570,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --project string           Project key
       --repo string              Repository as PROJECT/slug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -1528,6 +1595,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --project string           Project key
       --repo string              Repository as PROJECT/slug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -1552,6 +1620,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --project string           Project key
       --repo string              Repository as PROJECT/slug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -1583,6 +1652,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1612,6 +1682,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1640,6 +1711,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1666,6 +1738,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1689,6 +1762,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1721,6 +1795,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1747,6 +1822,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1771,6 +1847,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1795,6 +1872,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1822,6 +1900,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1857,6 +1936,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1888,6 +1968,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1913,6 +1994,7 @@ Global Flags:
       --limit int                Page size for build status results (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -1943,6 +2025,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1969,6 +2052,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -1994,6 +2078,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2024,6 +2109,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2050,6 +2136,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2076,6 +2163,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2103,6 +2191,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2130,6 +2219,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2156,6 +2246,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2184,6 +2275,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2210,6 +2302,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2235,6 +2328,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2263,6 +2357,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2291,6 +2386,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2318,6 +2414,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2346,6 +2443,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2375,6 +2473,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2403,6 +2502,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2436,6 +2536,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2465,6 +2566,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2488,6 +2590,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2511,6 +2614,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2537,6 +2641,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2565,6 +2670,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2595,6 +2701,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2620,6 +2727,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2645,6 +2753,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2668,6 +2777,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2691,6 +2801,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2719,6 +2830,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2744,6 +2856,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2769,6 +2882,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2792,6 +2906,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2819,6 +2934,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2848,6 +2964,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2875,6 +2992,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -2898,6 +3016,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -2933,6 +3052,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2967,6 +3087,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2999,6 +3120,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3023,6 +3145,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3051,6 +3174,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3080,6 +3204,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3114,6 +3239,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -3142,6 +3268,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3169,6 +3296,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3195,6 +3323,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3222,6 +3351,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3249,6 +3379,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3277,6 +3408,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -3311,6 +3443,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -3340,6 +3473,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --pr string                Pull request ID context
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3370,6 +3504,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --pr string                Pull request ID context
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3399,6 +3534,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --pr string                Pull request ID context
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3430,6 +3566,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --pr string                Pull request ID context
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -3455,6 +3592,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -3484,6 +3622,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -3509,6 +3648,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3541,6 +3681,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -3573,6 +3714,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3599,6 +3741,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3626,6 +3769,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3652,6 +3796,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3676,6 +3821,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3703,6 +3849,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3730,6 +3877,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3757,6 +3905,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3787,6 +3936,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3818,6 +3968,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3844,6 +3995,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3870,6 +4022,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3894,6 +4047,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3923,6 +4077,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3949,6 +4104,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3975,6 +4131,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -3999,6 +4156,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -4026,6 +4184,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -4057,6 +4216,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -4087,6 +4247,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -4111,6 +4272,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -4135,6 +4297,7 @@ Global Flags:
       --limit int                Maximum number of results to return (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
@@ -4166,6 +4329,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -4197,6 +4361,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --project string           Project key
       --repo string              Repository as PROJECT/slug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -4224,6 +4389,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --project string           Project key
       --repo string              Repository as PROJECT/slug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -4249,6 +4415,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --project string           Project key
       --repo string              Repository as PROJECT/slug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -4274,6 +4441,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --project string           Project key
       --repo string              Repository as PROJECT/slug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -4299,6 +4467,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --project string           Project key
       --repo string              Repository as PROJECT/slug
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -4328,6 +4497,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -4361,6 +4531,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -4390,6 +4561,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -4417,6 +4589,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -4451,6 +4624,7 @@ Global Flags:
       --json                     Output as JSON
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -4481,6 +4655,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --order-by string          Tag ordering: ALPHABETICAL or MODIFICATION
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -4507,6 +4682,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --order-by string          Tag ordering: ALPHABETICAL or MODIFICATION
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -4533,6 +4709,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --order-by string          Tag ordering: ALPHABETICAL or MODIFICATION
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
@@ -4559,6 +4736,7 @@ Global Flags:
       --limit int                Page size for list operations (default 25)
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
       --order-by string          Tag ordering: ALPHABETICAL or MODIFICATION
       --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)

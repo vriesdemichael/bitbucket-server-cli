@@ -12,6 +12,7 @@ import (
 	authcmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/auth"
 	bulkcmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/bulk"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/diagnostics"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -47,13 +48,14 @@ your behalf using the link above.`,
 			if err := applyRuntimeFlagOverrides(cmd); err != nil {
 				return err
 			}
-
+			style.Init(options.NoColor)
 			return applyInferredRepositoryContext(cmd, options.JSON)
 		},
 	}
 
 	rootCmd.PersistentFlags().BoolVar(&options.JSON, "json", false, "Output as JSON")
 	rootCmd.PersistentFlags().BoolVar(&options.DryRun, "dry-run", false, "Preview server mutations without applying them")
+	rootCmd.PersistentFlags().BoolVar(&options.NoColor, "no-color", false, "Disable colored output")
 	rootCmd.PersistentFlags().String("ca-file", "", "Path to PEM CA bundle for TLS trust")
 	rootCmd.PersistentFlags().Bool("insecure-skip-verify", false, "Disable TLS certificate verification (unsafe; local/dev only)")
 	rootCmd.PersistentFlags().String("request-timeout", "", "HTTP request timeout (Go duration, e.g. 20s)")
@@ -96,6 +98,7 @@ your behalf using the link above.`,
 type rootOptions struct {
 	JSON              bool
 	DryRun            bool
+	NoColor           bool
 	permissionChecker *PermissionChecker
 }
 
@@ -117,7 +120,7 @@ func loadConfig() (config.AppConfig, error) {
 
 	if cfg.InsecureSkipVerify {
 		insecureTLSWarningOnce.Do(func() {
-			fmt.Fprintln(os.Stderr, "Warning: TLS certificate verification is disabled (--insecure-skip-verify / BB_INSECURE_SKIP_VERIFY); use only for local or development environments")
+			fmt.Fprintln(os.Stderr, style.Warning.Render("Warning: TLS certificate verification is disabled (--insecure-skip-verify / BB_INSECURE_SKIP_VERIFY); use only for local or development environments"))
 		})
 	}
 
