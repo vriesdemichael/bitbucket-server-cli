@@ -805,3 +805,118 @@ func TestLoadFromEnvUsesStoredTokenBranch(t *testing.T) {
 		t.Fatalf("expected stored auth source, got %q", loaded.AuthSource)
 	}
 }
+
+// TestResolveStoredCredentialsCrossScheme verifies that credentials stored
+// under https://host are found when the runtime URL uses http://host and vice
+// versa (issue #92).
+func TestResolveStoredCredentialsCrossScheme(t *testing.T) {
+	t.Run("https stored, http runtime", func(t *testing.T) {
+		stored := StoredConfig{
+			Hosts: map[string]StoredProfile{
+				"https://bitbucket.corp": {URL: "https://bitbucket.corp", Username: "alice", AuthMode: "token"},
+			},
+			InsecureSecrets: map[string]StoredSecret{
+				"https://bitbucket.corp": {Token: "secret-token"},
+			},
+		}
+
+		resolved, ok := resolveStoredCredentials(stored, "http://bitbucket.corp")
+		if !ok {
+			t.Fatal("expected cross-scheme fallback to find credentials")
+		}
+		if resolved.BitbucketToken != "secret-token" {
+			t.Fatalf("expected token secret-token, got %q", resolved.BitbucketToken)
+		}
+	})
+
+	t.Run("http stored, https runtime", func(t *testing.T) {
+		stored := StoredConfig{
+			Hosts: map[string]StoredProfile{
+				"http://bitbucket.corp": {URL: "http://bitbucket.corp", Username: "bob", AuthMode: "token"},
+			},
+			InsecureSecrets: map[string]StoredSecret{
+				"http://bitbucket.corp": {Token: "bob-token"},
+			},
+		}
+
+		resolved, ok := resolveStoredCredentials(stored, "https://bitbucket.corp")
+		if !ok {
+			t.Fatal("expected cross-scheme fallback to find credentials")
+		}
+		if resolved.BitbucketToken != "bob-token" {
+			t.Fatalf("expected token bob-token, got %q", resolved.BitbucketToken)
+		}
+	})
+
+	t.Run("exact scheme match takes priority", func(t *testing.T) {
+		stored := StoredConfig{
+			Hosts: map[string]StoredProfile{
+				"https://bitbucket.corp": {URL: "https://bitbucket.corp", Username: "alice", AuthMode: "token"},
+				"http://bitbucket.corp":  {URL: "http://bitbucket.corp", Username: "http-user", AuthMode: "token"},
+			},
+			InsecureSecrets: map[string]StoredSecret{
+				"https://bitbucket.corp": {Token: "https-token"},
+				"http://bitbucket.corp":  {Token: "http-token"},
+			},
+		}
+
+		resolved, ok := resolveStoredCredentials(stored, "https://bitbucket.corp")
+		if !ok {
+			t.Fatal("expected credentials to be found")
+		}
+		if resolved.BitbucketToken != "https-token" {
+			t.Fatalf("expected exact scheme match to win, got token %q", resolved.BitbucketToken)
+		}
+	})
+}
+
+func TestHostKeyAltScheme(t *testing.T) {
+	if got := hostKeyAltScheme("http://bitbucket.corp"); got != "https://bitbucket.corp" {
+		t.Fatalf("expected https alt, got %q", got)
+	}
+	if got := hostKeyAltScheme("https://bitbucket.corp:7990"); got != "http://bitbucket.corp:7990" {
+		t.Fatalf("expected http alt with port, got %q", got)
+	}
+	if got := hostKeyAltScheme("://bad"); got != "" {
+		t.Fatalf("expected empty string for invalid URL, got %q", got)
+	}
+}
+
+func TestLoadStoredAuthForHost(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	// Empty config → not found.
+	_, ok, err := LoadStoredAuthForHost("https://stored.bitbucket.example")
+	if err != nil {
+		t.Fatalf("unexpected error on empty config: %v", err)
+	}
+	if ok {
+		t.Fatal("expected not found on empty config")
+	}
+
+	// After saving, the host should resolve.
+	if _, err := SaveLogin(LoginInput{Host: "https://stored.bitbucket.example", Token: "tok", SetDefault: true}); err != nil {
+		t.Fatalf("save login failed: %v", err)
+	}
+
+	cfg, ok, err := LoadStoredAuthForHost("https://stored.bitbucket.example")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected stored auth to be found")
+	}
+	if cfg.BitbucketToken != "tok" {
+		t.Fatalf("unexpected token: %q", cfg.BitbucketToken)
+	}
+
+	// Config path that's a directory → LoadStoredConfig fails → error propagated.
+	dirAsConfig := t.TempDir()
+	t.Setenv("BB_CONFIG_PATH", dirAsConfig)
+	_, _, err = LoadStoredAuthForHost("https://stored.bitbucket.example")
+	if err == nil {
+		t.Fatal("expected error when config path is a directory")
+	}
+}
