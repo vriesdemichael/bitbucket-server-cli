@@ -14,8 +14,13 @@ import (
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 )
 
+// Version is set at build time via -ldflags "-X main.Version=<semver>".
+var Version = "dev"
+
 func main() {
-	os.Exit(executeRootCommand(cli.NewRootCommand(), os.Stderr))
+	cmd := cli.NewRootCommand()
+	cmd.Version = Version
+	os.Exit(executeRootCommand(cmd, os.Stderr))
 }
 
 func executeRootCommand(rootCmd *cobra.Command, stderr io.Writer) int {
