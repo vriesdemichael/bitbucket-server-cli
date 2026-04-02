@@ -35,48 +35,75 @@ func ClientsFromConfig(cfg config.AppConfig) (Clients, error) {
 
 // Spec pairs a tool definition with a handler factory so that metadata
 // can be listed without a live Bitbucket connection.
+// Safe marks tools whose side-effects are low-blast-radius and easily reversed
+// (e.g. opening a PR, adding a comment). Unsafe tools (e.g. merge_pull_request)
+// require opt-in via --yolo / --allow-writes.
 type Spec struct {
 	Tool    mcpgo.Tool
 	Handler func(Clients) server.ToolHandlerFunc
+	Safe    bool
 }
 
 // AllSpecs returns the full catalog of MCP tool specifications in stable order.
 func AllSpecs() []Spec {
 	return []Spec{
 		// Pull request group
-		specGetPullRequest(),
-		specListPullRequests(),
-		specCreatePullRequest(),
-		specListPRComments(),
-		specAddPRComment(),
-		specListPRTasks(),
-		specSubmitPRReview(),
-		specMergePullRequest(),
+		// Reading PR state is always safe.
+		{specGetPullRequest().Tool, specGetPullRequest().Handler, true},
+		{specListPullRequests().Tool, specListPullRequests().Handler, true},
+		// Opening a PR is low-blast-radius and easily closed — safe by default.
+		{specCreatePullRequest().Tool, specCreatePullRequest().Handler, true},
+		{specListPRComments().Tool, specListPRComments().Handler, true},
+		// Adding a comment is trivially reversed — safe by default.
+		{specAddPRComment().Tool, specAddPRComment().Handler, true},
+		{specListPRTasks().Tool, specListPRTasks().Handler, true},
+		// Submitting a review is like commenting and can be dismissed — safe by default.
+		{specSubmitPRReview().Tool, specSubmitPRReview().Handler, true},
+		// Merging is irreversible and affects the target branch — requires --yolo.
+		{specMergePullRequest().Tool, specMergePullRequest().Handler, false},
 		// Repository group
-		specSearchRepositories(),
-		specGetRepositoryCloneInfo(),
+		{specSearchRepositories().Tool, specSearchRepositories().Handler, true},
+		{specGetRepositoryCloneInfo().Tool, specGetRepositoryCloneInfo().Handler, true},
 		// Branch / ref group
-		specListBranches(),
-		specResolveRef(),
+		{specListBranches().Tool, specListBranches().Handler, true},
+		{specResolveRef().Tool, specResolveRef().Handler, true},
 		// Tag group
-		specListTags(),
-		specCreateTag(),
+		{specListTags().Tool, specListTags().Handler, true},
+		// Creating a tag is a low-risk marker operation — safe by default.
+		{specCreateTag().Tool, specCreateTag().Handler, true},
 		// Build / quality group
-		specGetBuildStatus(),
-		specSetBuildStatus(),
-		specListRequiredBuilds(),
+		{specGetBuildStatus().Tool, specGetBuildStatus().Handler, true},
+		// Setting a build status manipulates CI state — safe by default (easily overridden).
+		{specSetBuildStatus().Tool, specSetBuildStatus().Handler, true},
+		{specListRequiredBuilds().Tool, specListRequiredBuilds().Handler, true},
 		// Commit group
-		specListCommits(),
-		specGetCommit(),
-		specCompareRefs(),
+		{specListCommits().Tool, specListCommits().Handler, true},
+		{specGetCommit().Tool, specGetCommit().Handler, true},
+		{specCompareRefs().Tool, specCompareRefs().Handler, true},
 	}
+}
+
+// SafeSpecs returns only the tools marked as safe for use without --yolo.
+func SafeSpecs() []Spec {
+	all := AllSpecs()
+	out := make([]Spec, 0, len(all))
+	for _, s := range all {
+		if s.Safe {
+			out = append(out, s)
+		}
+	}
+	return out
 }
 
 // NewServer creates a configured MCPServer with optional tool filtering.
 // allow is a list of tool names to expose exclusively (empty = all).
 // exclude is a list of tool names to suppress.
-// When allow is non-empty it takes precedence; exclude is still applied afterwards.
-func NewServer(name, version string, clients Clients, allow, exclude []string) *server.MCPServer {
+// yolo enables unrestricted mode: all tools are exposed including unsafe ones
+// (e.g. merge_pull_request). In safe mode (yolo=false), only tools marked
+// Safe are exposed unless an explicit allow list is provided.
+// When allow is non-empty it takes full precedence over the safety filter;
+// exclude is still applied afterwards in all modes.
+func NewServer(name, version string, clients Clients, allow, exclude []string, yolo bool) *server.MCPServer {
 	s := server.NewMCPServer(name, version, server.WithToolCapabilities(false))
 
 	allowSet := toSet(allow)
@@ -84,7 +111,13 @@ func NewServer(name, version string, clients Clients, allow, exclude []string) *
 
 	for _, spec := range AllSpecs() {
 		toolName := spec.Tool.Name
-		if len(allowSet) > 0 && !allowSet[toolName] {
+		if len(allowSet) > 0 {
+			// Explicit allowlist takes full precedence over the safety filter.
+			if !allowSet[toolName] {
+				continue
+			}
+		} else if !yolo && !spec.Safe {
+			// Safe mode: skip tools not marked as safe.
 			continue
 		}
 		if excludeSet[toolName] {

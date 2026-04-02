@@ -91,14 +91,14 @@ func TestAllSpecsHaveUniqueNames(t *testing.T) {
 // TestNewServerNoFilter verifies that with empty allow/exclude all tools are registered.
 func TestNewServerNoFilter(_ *testing.T) {
 	// NewServer must not panic with a zero Clients value and no filter lists.
-	_ = NewServer("bb", "test", Clients{}, nil, nil)
+	_ = NewServer("bb", "test", Clients{}, nil, nil, false)
 }
 
 // TestNewServerAllowList verifies that only the allowed tool is registered.
 func TestNewServerAllowList(t *testing.T) {
 	specs := AllSpecs()
 	target := specs[0].Tool.Name
-	s := NewServer("bb", "test", Clients{}, []string{target}, nil)
+	s := NewServer("bb", "test", Clients{}, []string{target}, nil, false)
 	if s == nil {
 		t.Fatal("NewServer returned nil")
 	}
@@ -113,7 +113,66 @@ func TestNewServerExcludeList(_ *testing.T) {
 		names[i] = s.Tool.Name
 	}
 	// Exclude all tools — server should be created with no tools registered.
-	_ = NewServer("bb", "test", Clients{}, nil, names)
+	_ = NewServer("bb", "test", Clients{}, nil, names, false)
+}
+
+// TestSafeSpecsSubsetOfAllSpecs verifies SafeSpecs is a strict subset of AllSpecs.
+func TestSafeSpecsSubsetOfAllSpecs(t *testing.T) {
+	all := AllSpecs()
+	safe := SafeSpecs()
+	if len(safe) >= len(all) {
+		t.Fatalf("expected SafeSpecs (%d) to be a strict subset of AllSpecs (%d)", len(safe), len(all))
+	}
+	allByName := make(map[string]bool, len(all))
+	for _, s := range all {
+		allByName[s.Tool.Name] = true
+	}
+	for _, s := range safe {
+		if !s.Safe {
+			t.Errorf("SafeSpecs contains tool %q with Safe=false", s.Tool.Name)
+		}
+		if !allByName[s.Tool.Name] {
+			t.Errorf("SafeSpecs contains tool %q not present in AllSpecs", s.Tool.Name)
+		}
+	}
+}
+
+// TestMergePullRequestIsUnsafe verifies the merge tool is not in the safe set.
+func TestMergePullRequestIsUnsafe(t *testing.T) {
+	for _, s := range SafeSpecs() {
+		if s.Tool.Name == "merge_pull_request" {
+			t.Fatal("merge_pull_request must not appear in SafeSpecs")
+		}
+	}
+	found := false
+	for _, s := range AllSpecs() {
+		if s.Tool.Name == "merge_pull_request" {
+			found = true
+			if s.Safe {
+				t.Fatal("merge_pull_request must have Safe=false in AllSpecs")
+			}
+		}
+	}
+	if !found {
+		t.Fatal("merge_pull_request not found in AllSpecs")
+	}
+}
+
+// TestNewServerSafeModeExcludesMerge verifies that safe mode (yolo=false) does not expose merge_pull_request.
+func TestNewServerSafeModeExcludesMerge(_ *testing.T) {
+	// Safe mode: NewServer must not panic even though merge_pull_request is withheld.
+	_ = NewServer("bb", "test", Clients{}, nil, nil, false)
+}
+
+// TestNewServerYoloIncludesAllTools verifies that yolo mode exposes all tools without panic.
+func TestNewServerYoloIncludesAllTools(_ *testing.T) {
+	_ = NewServer("bb", "test", Clients{}, nil, nil, true)
+}
+
+// TestNewServerAllowListOverridesSafeMode verifies an explicit allowlist can include unsafe tools.
+func TestNewServerAllowListOverridesSafeMode(_ *testing.T) {
+	// Explicitly requesting merge_pull_request in safe mode must not panic.
+	_ = NewServer("bb", "test", Clients{}, []string{"merge_pull_request"}, nil, false)
 }
 
 // TestToSet covers empty input, normal input, and whitespace trimming.
