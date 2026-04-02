@@ -467,6 +467,16 @@ func resolveStoredCredentials(stored StoredConfig, runtimeURL string) (AppConfig
 	key := hostKey(runtimeURL)
 	profile, ok := stored.Hosts[key]
 	if !ok {
+		// Cross-scheme fallback: try alternate scheme (http↔https) for same host.
+		// This lets tokens configured for https://host match http://host and vice versa.
+		if altKey := hostKeyAltScheme(runtimeURL); altKey != key {
+			if p, found := stored.Hosts[altKey]; found {
+				profile, ok = p, true
+				key = altKey
+			}
+		}
+	}
+	if !ok {
 		if stored.DefaultHost == "" {
 			return AppConfig{}, false
 		}
@@ -498,6 +508,16 @@ func resolveStoredCredentials(stored StoredConfig, runtimeURL string) (AppConfig
 	}
 
 	return resolved, true
+}
+
+func LoadStoredAuthForHost(runtimeURL string) (AppConfig, bool, error) {
+	stored, err := LoadStoredConfig()
+	if err != nil {
+		return AppConfig{}, false, err
+	}
+
+	resolved, ok := resolveStoredCredentials(stored, runtimeURL)
+	return resolved, ok, nil
 }
 
 func (config AppConfig) Validate() error {
@@ -609,6 +629,22 @@ func hostKey(hostURL string) string {
 	}
 
 	return strings.ToLower(parsed.Scheme + "://" + parsed.Host)
+}
+
+// hostKeyAltScheme returns the hostKey with the opposite scheme (http↔https).
+// Returns an empty string when the URL is not parseable.
+func hostKeyAltScheme(hostURL string) string {
+	parsed, err := url.Parse(normalizeURL(hostURL))
+	if err != nil || parsed.Host == "" {
+		return ""
+	}
+
+	altScheme := "https"
+	if strings.ToLower(parsed.Scheme) == "https" {
+		altScheme = "http"
+	}
+
+	return altScheme + "://" + strings.ToLower(parsed.Host)
 }
 
 func envBoolOrDefault(key string, fallback bool) (bool, error) {

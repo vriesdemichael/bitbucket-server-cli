@@ -1,10 +1,12 @@
 package cli
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -16,6 +18,7 @@ type cloneBackendStub struct {
 	cloneCalls []cloneCall
 	addCalls   []addRemoteCall
 	cloneErr   error
+	cloneErrs  []error
 	addErr     error
 }
 
@@ -35,6 +38,14 @@ func (stub *cloneBackendStub) Version(context.Context) (string, error) {
 
 func (stub *cloneBackendStub) Clone(_ context.Context, repositoryURL string, options git.CloneOptions) error {
 	stub.cloneCalls = append(stub.cloneCalls, cloneCall{repositoryURL: repositoryURL, options: options})
+	if len(stub.cloneErrs) > 0 {
+		err := stub.cloneErrs[0]
+		stub.cloneErrs = stub.cloneErrs[1:]
+		if err != nil {
+			return err
+		}
+		return nil
+	}
 	if stub.cloneErr != nil {
 		return stub.cloneErr
 	}
@@ -86,7 +97,7 @@ func TestRepoCloneCommandClonesWithDefaults(t *testing.T) {
 	}
 
 	call := stub.cloneCalls[0]
-	if call.repositoryURL != "https://bitbucket.example.com/scm/PRJ/demo.git" {
+	if call.repositoryURL != "git@bitbucket.example.com:scm/PRJ/demo.git" {
 		t.Fatalf("unexpected clone url: %s", call.repositoryURL)
 	}
 	if call.options.Directory != "demo" {
@@ -122,7 +133,7 @@ func TestRepoCloneCommandHonorsDirectoryAndGitFlags(t *testing.T) {
 	}
 
 	call := stub.cloneCalls[0]
-	if call.repositoryURL != "https://bitbucket.example.com/bitbucket/scm/PRJ/demo.git" {
+	if call.repositoryURL != "git@bitbucket.example.com:scm/PRJ/demo.git" {
 		t.Fatalf("unexpected clone url: %s", call.repositoryURL)
 	}
 	if call.options.Directory != "target-dir" {
@@ -135,8 +146,79 @@ func TestRepoCloneCommandHonorsDirectoryAndGitFlags(t *testing.T) {
 		t.Fatalf("unexpected extra args: %#v", call.options.ExtraArgs)
 	}
 
-	if !strings.Contains(output, `"clone_url": "https://bitbucket.example.com/bitbucket/scm/PRJ/demo.git"`) {
+	if !strings.Contains(output, `"clone_url": "git@bitbucket.example.com:scm/PRJ/demo.git"`) {
 		t.Fatalf("unexpected json output: %s", output)
+	}
+}
+
+func TestRepoCloneCommandFallsBackToStoredHTTPToken(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed"), nil}}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "test-token")
+
+	output, err := executeTestCLI(t, "repo", "clone", "PRJ/demo")
+	if err != nil {
+		t.Fatalf("repo clone failed: %v", err)
+	}
+
+	if len(stub.cloneCalls) != 2 {
+		t.Fatalf("expected two clone attempts, got %d", len(stub.cloneCalls))
+	}
+	if stub.cloneCalls[0].repositoryURL != "git@bitbucket.example.com:scm/PRJ/demo.git" {
+		t.Fatalf("unexpected ssh clone url: %s", stub.cloneCalls[0].repositoryURL)
+	}
+	if stub.cloneCalls[1].repositoryURL != "https://x-token-auth:test-token@bitbucket.example.com/scm/PRJ/demo.git" {
+		t.Fatalf("unexpected authenticated clone url: %s", stub.cloneCalls[1].repositoryURL)
+	}
+	if !strings.Contains(output, "Cloned PRJ/demo into demo") {
+		t.Fatalf("unexpected output: %s", output)
+	}
+}
+
+func TestRepoCloneCommandPromptsForTokenAfterSSHFailure(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed"), nil}}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	command := NewRootCommand()
+	output := &bytes.Buffer{}
+	command.SetOut(output)
+	command.SetErr(output)
+	command.SetIn(bytes.NewBufferString("prompt-token\n"))
+	command.SetArgs([]string{"repo", "clone", "PRJ/demo"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("repo clone with prompt failed: %v", err)
+	}
+
+	if len(stub.cloneCalls) != 2 {
+		t.Fatalf("expected two clone attempts, got %d", len(stub.cloneCalls))
+	}
+	if stub.cloneCalls[1].repositoryURL != "https://x-token-auth:prompt-token@bitbucket.example.com/scm/PRJ/demo.git" {
+		t.Fatalf("unexpected prompted clone url: %s", stub.cloneCalls[1].repositoryURL)
+	}
+	if !strings.Contains(output.String(), "Token:") {
+		t.Fatalf("expected login prompt in output, got: %s", output.String())
 	}
 }
 
@@ -196,7 +278,7 @@ func TestRepoCloneCommandSupportsURLSelectors(t *testing.T) {
 	}
 
 	call := stub.cloneCalls[0]
-	if call.repositoryURL != "https://bitbucket.other.example/scm/OPS/tooling.git" {
+	if call.repositoryURL != "git@bitbucket.other.example:scm/OPS/tooling.git" {
 		t.Fatalf("unexpected clone URL: %s", call.repositoryURL)
 	}
 	if call.options.Directory != "tooling" {
@@ -260,6 +342,14 @@ func TestBuildBitbucketCloneURL(t *testing.T) {
 	_, err = buildBitbucketCloneURL("bad-url", "PRJ", "demo")
 	if err == nil {
 		t.Fatal("expected invalid base URL error")
+	}
+
+	sshCloneURL, err := buildBitbucketSSHCloneURL("https://bitbucket.example.com/context", "PRJ", "demo")
+	if err != nil {
+		t.Fatalf("expected valid ssh clone url, got: %v", err)
+	}
+	if sshCloneURL != "git@bitbucket.example.com:scm/PRJ/demo.git" {
+		t.Fatalf("unexpected ssh clone url: %s", sshCloneURL)
 	}
 }
 
@@ -485,4 +575,308 @@ func TestBuildBitbucketCloneURLEmptySelectorValidation(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected empty slug validation error")
 	}
+}
+
+func TestRepoCloneCommandUsesStoredConfigForOtherHost(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh: connection refused"), nil}}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	if _, err := config.SaveLogin(config.LoginInput{Host: "https://otherbucket.example.com", Token: "stored-token", SetDefault: false}); err != nil {
+		t.Fatalf("save login failed: %v", err)
+	}
+
+	t.Setenv("BITBUCKET_URL", "https://main.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	// Cloning from a URL for otherbucket.example.com (which has stored creds)
+	// triggers the LoadStoredAuthForHost path in resolveCloneHTTPAuth.
+	_, err := executeTestCLI(t, "repo", "clone", "https://otherbucket.example.com/scm/PRJ/demo.git")
+	if err != nil {
+		t.Fatalf("repo clone with stored config for other host failed: %v", err)
+	}
+
+	if len(stub.cloneCalls) != 2 {
+		t.Fatalf("expected two clone attempts (SSH then HTTP), got %d", len(stub.cloneCalls))
+	}
+	if !strings.Contains(stub.cloneCalls[1].repositoryURL, "stored-token") {
+		t.Fatalf("expected stored token in HTTP clone URL: %s", stub.cloneCalls[1].repositoryURL)
+	}
+}
+
+func TestRepoCloneCommandJSONFailsWithNoAuth(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{cloneErr: errors.New("ssh: connection refused")}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	_, err := executeTestCLI(t, "--json", "repo", "clone", "PRJ/demo")
+	if err == nil {
+		t.Fatal("expected auth error in JSON mode with no credentials")
+	}
+	if !strings.Contains(err.Error(), "no stored HTTP credentials") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
+func TestRepoCloneCommandEmptyTokenPrompt(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{cloneErr: errors.New("ssh: connection refused")}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	command := NewRootCommand()
+	output := &bytes.Buffer{}
+	command.SetOut(output)
+	command.SetErr(output)
+	command.SetIn(bytes.NewBufferString("\n")) // empty token → no prompt success
+	command.SetArgs([]string{"repo", "clone", "PRJ/demo"})
+
+	err := command.Execute()
+	if err == nil {
+		t.Fatal("expected auth error when empty token provided")
+	}
+	if !strings.Contains(err.Error(), "no stored HTTP credentials") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+	if !strings.Contains(output.String(), "Token:") {
+		t.Fatalf("expected token prompt in output, got: %s", output.String())
+	}
+}
+
+func TestNewCloneLoginRequiredError(t *testing.T) {
+	cause := errors.New("connect failed")
+	err := newCloneLoginRequiredError("https://bitbucket.example.com", cause)
+	if err == nil {
+		t.Fatal("expected non-nil error")
+	}
+	if !strings.Contains(err.Error(), "https://bitbucket.example.com") {
+		t.Fatalf("expected host in error, got: %v", err)
+	}
+	if !strings.Contains(err.Error(), "no stored HTTP credentials") {
+		t.Fatalf("expected credential message in error, got: %v", err)
+	}
+
+	// nil cause should still produce an error
+	err = newCloneLoginRequiredError("https://bitbucket.example.com", nil)
+	if err == nil {
+		t.Fatal("expected non-nil error with nil cause")
+	}
+}
+
+func TestBuildAuthenticatedCloneURLAllModes(t *testing.T) {
+	// Token auth
+	u, err := buildAuthenticatedCloneURL("https://bitbucket.example.com/scm/PRJ/demo.git", config.AppConfig{
+		BitbucketURL:   "https://bitbucket.example.com",
+		BitbucketToken: "my-token",
+	})
+	if err != nil {
+		t.Fatalf("token auth: unexpected error: %v", err)
+	}
+	if !strings.Contains(u, "x-token-auth:my-token") {
+		t.Fatalf("token auth: expected token in URL, got: %s", u)
+	}
+
+	// Basic auth
+	u, err = buildAuthenticatedCloneURL("https://bitbucket.example.com/scm/PRJ/demo.git", config.AppConfig{
+		BitbucketURL:      "https://bitbucket.example.com",
+		BitbucketUsername: "admin",
+		BitbucketPassword: "pass",
+	})
+	if err != nil {
+		t.Fatalf("basic auth: unexpected error: %v", err)
+	}
+	if !strings.Contains(u, "admin:pass") {
+		t.Fatalf("basic auth: expected credentials in URL, got: %s", u)
+	}
+
+	// No auth (should error)
+	_, err = buildAuthenticatedCloneURL("https://bitbucket.example.com/scm/PRJ/demo.git", config.AppConfig{
+		BitbucketURL: "https://bitbucket.example.com",
+	})
+	if err == nil {
+		t.Fatal("no auth: expected error")
+	}
+
+	// Invalid URL (no scheme)
+	_, err = buildAuthenticatedCloneURL("no-scheme-here", config.AppConfig{BitbucketToken: "token"})
+	if err == nil {
+		t.Fatal("invalid URL: expected error")
+	}
+}
+
+func TestSameCloneHostEdgeCasesAdditional(t *testing.T) {
+	// Missing scheme → false
+	if sameCloneHost("bitbucket.example.com", "https://bitbucket.example.com") {
+		t.Fatal("expected false when left has no scheme")
+	}
+
+	// Path-only → no host → false
+	if sameCloneHost("/path/only", "https://bitbucket.example.com") {
+		t.Fatal("expected false when left has no host")
+	}
+}
+
+func TestBuildBitbucketSSHCloneURLValidationCases(t *testing.T) {
+	// Invalid base URL (no scheme, empty host)
+	_, err := buildBitbucketSSHCloneURL("no-scheme-here", "PRJ", "demo")
+	if err == nil {
+		t.Fatal("expected error for URL with no scheme/host")
+	}
+
+	// Empty project key
+	_, err = buildBitbucketSSHCloneURL("https://bitbucket.example.com", "", "demo")
+	if err == nil {
+		t.Fatal("expected error for empty project key")
+	}
+
+	// Empty slug
+	_, err = buildBitbucketSSHCloneURL("https://bitbucket.example.com", "PRJ", "")
+	if err == nil {
+		t.Fatal("expected error for empty slug")
+	}
+
+	// URL with port but no hostname (e.g. "http://:8080/") → hostname is empty
+	_, err = buildBitbucketSSHCloneURL("http://:8080/", "PRJ", "demo")
+	if err == nil {
+		t.Fatal("expected error for URL with port but no hostname")
+	}
+}
+
+func TestCloneRepositoryWithAuthFallbackEdgeCases(t *testing.T) {
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	stub := &cloneBackendStub{}
+	command := NewRootCommand()
+	cfg := config.AppConfig{BitbucketURL: "https://test.example.com"}
+	repo := repositorySelector{ProjectKey: "PRJ", Slug: "demo"}
+	opts := git.CloneOptions{Directory: "demo"}
+
+	// buildCloneURL error: non-explicit URL with bad cloneHost
+	_, err := cloneRepositoryWithAuthFallback(command, cfg, "", false, "://bad-host", repo, opts, stub, false)
+	if err == nil {
+		t.Fatal("expected error for invalid clone host")
+	}
+
+	// resolveSSHCloneURL error: explicit URL but empty project/slug causes buildBitbucketSSHCloneURL to fail
+	_, err = cloneRepositoryWithAuthFallback(command, cfg,
+		"https://test.example.com/scm/PRJ/demo.git", true, "https://test.example.com",
+		repositorySelector{ProjectKey: "", Slug: ""},
+		opts, stub, false)
+	if err == nil {
+		t.Fatal("expected error for empty project in SSH clone URL")
+	}
+}
+
+func TestRepoCloneCommandSSHExplicitURL(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	// Clone using an explicit "git@..." URL - exercises lines 372-373 in resolveSSHCloneURL
+	_, err := executeTestCLI(t, "repo", "clone", "git@bitbucket.example.com:scm/PRJ/demo.git")
+	if err != nil {
+		t.Fatalf("clone with explicit git@ URL failed: %v", err)
+	}
+	if len(stub.cloneCalls) != 1 {
+		t.Fatalf("expected one clone call, got %d", len(stub.cloneCalls))
+	}
+	if stub.cloneCalls[0].repositoryURL != "git@bitbucket.example.com:scm/PRJ/demo.git" {
+		t.Fatalf("unexpected clone URL: %s", stub.cloneCalls[0].repositoryURL)
+	}
+}
+
+func TestRepoCloneCommandBackendFailsAfterTokenPrompt(t *testing.T) {
+	originalFactory := gitBackendFactory
+	// SSH fails, then HTTP clone also fails after user provides a token
+	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed"), errors.New("http 401")}}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	command := NewRootCommand()
+	output := &bytes.Buffer{}
+	command.SetOut(output)
+	command.SetErr(output)
+	command.SetIn(bytes.NewBufferString("valid-token\n"))
+	command.SetArgs([]string{"repo", "clone", "PRJ/demo"})
+
+	err := command.Execute()
+	if err == nil {
+		t.Fatal("expected clone error when backend fails after prompted token")
+	}
+	if !strings.Contains(err.Error(), "http 401") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(stub.cloneCalls) != 2 {
+		t.Fatalf("expected 2 clone attempts (SSH + HTTP), got %d", len(stub.cloneCalls))
+	}
+}
+
+func TestReadCloneTokenErrorPath(t *testing.T) {
+	// A reader that always returns an error (not io.EOF) triggers the error path in readCloneToken
+	errReader := &errorReader{err: errors.New("read error")}
+	_, err := readCloneToken(errReader, &bytes.Buffer{})
+	if err == nil {
+		t.Fatal("expected read error from readCloneToken")
+	}
+}
+
+type errorReader struct {
+	err error
+}
+
+func (r *errorReader) Read(p []byte) (n int, err error) {
+	return 0, r.err
 }
