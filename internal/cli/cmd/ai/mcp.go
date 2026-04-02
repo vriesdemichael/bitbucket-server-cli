@@ -29,6 +29,7 @@ func newMCPServeCommand(deps Dependencies) *cobra.Command {
 	var token string
 	var toolsFlag string
 	var excludeFlag string
+	var yolo bool
 
 	cmd := &cobra.Command{
 		Use:   "serve",
@@ -45,6 +46,14 @@ VS Code (settings.json):
       "bb": { "type": "stdio", "command": "bb", "args": ["ai", "mcp", "serve"] }
     }
   }
+
+By default the server runs in safe mode: only tools whose side-effects are
+low-blast-radius and easily reversed are exposed (e.g. create_pull_request,
+add_pr_comment). Tools that perform irreversible operations such as
+merge_pull_request are withheld unless --yolo is set.
+
+Use --tools to expose a specific subset regardless of the safety classification.
+Use --exclude to suppress individual tools in any mode.
 
 When more than one Bitbucket instance is configured the --host flag is required.
 Use --token to restrict all API calls to the rights of a specific PAT.`,
@@ -86,15 +95,17 @@ Use --token to restrict all API calls to the rights of a specific PAT.`,
 			allow := splitCSV(toolsFlag)
 			exclude := splitCSV(excludeFlag)
 
-			s := bbmcp.NewServer("bb", deps.Version(), clients, allow, exclude)
+			s := bbmcp.NewServer("bb", deps.Version(), clients, allow, exclude, yolo)
 			return server.ServeStdio(s)
 		},
 	}
 
 	cmd.Flags().StringVar(&host, "host", "", "Target Bitbucket instance URL; required when multiple instances are configured")
 	cmd.Flags().StringVar(&token, "token", "", "PAT to use; restricts all API calls to this token's rights")
-	cmd.Flags().StringVar(&toolsFlag, "tools", "", "Comma-separated allowlist of tool names to expose")
+	cmd.Flags().StringVar(&toolsFlag, "tools", "", "Comma-separated allowlist of tool names to expose (overrides safety filter)")
 	cmd.Flags().StringVar(&excludeFlag, "exclude", "", "Comma-separated denylist of tool names to suppress")
+	cmd.Flags().BoolVar(&yolo, "yolo", false, "Expose all tools including unsafe operations like merge_pull_request")
+	cmd.Flags().BoolVar(&yolo, "allow-writes", false, "Alias for --yolo")
 
 	return cmd
 }
