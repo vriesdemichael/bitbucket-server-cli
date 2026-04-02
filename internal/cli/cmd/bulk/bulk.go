@@ -10,6 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
@@ -230,12 +231,18 @@ func statusStoreDir() (string, error) {
 }
 
 func writePlanHuman(writer io.Writer, plan bulkworkflow.Plan, outputFile string) {
-	fmt.Fprintf(writer, "Bulk plan ready: %d target(s), %d operation(s), hash=%s\n", plan.Summary.TargetCount, plan.Summary.OperationCount, plan.PlanHash)
+	fmt.Fprintf(writer, "%s %d target(s), %d operation(s), %s=%s\n",
+		style.Label.Render("Bulk plan ready:"),
+		plan.Summary.TargetCount,
+		plan.Summary.OperationCount,
+		style.Secondary.Render("hash"),
+		style.Secondary.Render(plan.PlanHash),
+	)
 	if strings.TrimSpace(outputFile) != "" {
-		fmt.Fprintf(writer, "Plan artifact: %s\n", strings.TrimSpace(outputFile))
+		fmt.Fprintf(writer, "%s %s\n", style.Hint.Render("Plan artifact:"), strings.TrimSpace(outputFile))
 	}
 	for _, target := range plan.Targets {
-		fmt.Fprintf(writer, "%s/%s\n", target.Repository.ProjectKey, target.Repository.Slug)
+		fmt.Fprintln(writer, style.Resource.Render(target.Repository.ProjectKey+"/"+target.Repository.Slug))
 		for _, operation := range target.Operations {
 			fmt.Fprintf(writer, "  - %s\n", bulkworkflow.DescribeOperation(operation))
 		}
@@ -243,34 +250,45 @@ func writePlanHuman(writer io.Writer, plan bulkworkflow.Plan, outputFile string)
 }
 
 func writeStatusHuman(writer io.Writer, status bulkworkflow.ApplyStatus) {
-	fmt.Fprintf(writer, "Bulk apply %s: %s\n", status.OperationID, status.Status)
-	fmt.Fprintf(writer, "Plan hash: %s\n", status.PlanHash)
-	fmt.Fprintf(
-		writer,
-		"Targets: total=%d successful=%d failed=%d\n",
+	fmt.Fprintf(writer, "%s %s: %s\n",
+		style.Label.Render("Bulk apply"),
+		style.Secondary.Render(status.OperationID),
+		style.ActionStyle(status.Status).Render(status.Status),
+	)
+	fmt.Fprintf(writer, "%s %s\n", style.Label.Render("Plan hash:"), style.Secondary.Render(status.PlanHash))
+	fmt.Fprintf(writer,
+		"%s total=%d %s=%d %s=%d\n",
+		style.Label.Render("Targets:"),
 		status.Summary.TargetCount,
+		style.Success.Render("successful"),
 		status.Summary.SuccessfulTargets,
+		style.Deleted.Render("failed"),
 		status.Summary.FailedTargets,
 	)
-	fmt.Fprintf(
-		writer,
-		"Operations: total=%d successful=%d failed=%d skipped=%d\n",
+	fmt.Fprintf(writer,
+		"%s total=%d %s=%d %s=%d skipped=%d\n",
+		style.Label.Render("Operations:"),
 		status.Summary.OperationCount,
+		style.Success.Render("successful"),
 		status.Summary.SuccessfulOperations,
+		style.Deleted.Render("failed"),
 		status.Summary.FailedOperations,
 		status.Summary.SkippedOperations,
 	)
 	for _, target := range status.Targets {
-		fmt.Fprintf(writer, "%s/%s\t%s\n", target.Repository.ProjectKey, target.Repository.Slug, target.Status)
+		fmt.Fprintf(writer, "%s  %s\n",
+			style.Resource.Render(target.Repository.ProjectKey+"/"+target.Repository.Slug),
+			style.ActionStyle(target.Status).Render(target.Status),
+		)
 		for _, operation := range target.Operations {
 			if strings.TrimSpace(operation.Error) == "" {
-				fmt.Fprintf(writer, "  - %s\t%s\n", operation.Status, operation.Type)
+				fmt.Fprintf(writer, "  - %s  %s\n", style.ActionStyle(operation.Status).Render(operation.Status), operation.Type)
 				continue
 			}
-			fmt.Fprintf(writer, "  - %s\t%s\t%s\n", operation.Status, operation.Type, operation.Error)
+			fmt.Fprintf(writer, "  - %s  %s  %s\n", style.ActionStyle(operation.Status).Render(operation.Status), operation.Type, style.Deleted.Render(operation.Error))
 		}
 	}
-	fmt.Fprintf(writer, "Inspect saved status with: bb bulk status %s\n", status.OperationID)
+	fmt.Fprintf(writer, "%s\n", style.Hint.Render("Inspect saved status with: bb bulk status "+status.OperationID))
 }
 
 func applyFailureError(status bulkworkflow.ApplyStatus) error {

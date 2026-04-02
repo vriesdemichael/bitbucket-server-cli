@@ -12,6 +12,7 @@ import (
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	branchservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/branch"
 	qualityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/quality"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newBranchCommand(options *rootOptions) *cobra.Command {
@@ -69,20 +70,20 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(branches) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No branches found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No branches found"))
 				return nil
 			}
 
-			for _, branch := range branches {
-				fmt.Fprintf(
-					cmd.OutOrStdout(),
-					"%s\t%s\t%s\tdefault=%t\n",
-					safeString(branch.DisplayId),
-					safeString(branch.Id),
-					safeString(branch.LatestCommit),
-					branch.Default != nil && *branch.Default,
-				)
+			rows := make([][]string, len(branches))
+			for i, branch := range branches {
+				rows[i] = []string{
+					style.Resource.Render(safeString(branch.DisplayId)),
+					style.Secondary.Render(safeString(branch.Id)),
+					style.Secondary.Render(safeString(branch.LatestCommit)),
+					fmt.Sprintf("default=%t", branch.Default != nil && *branch.Default),
+				}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -174,7 +175,7 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "branch": created})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Created branch %s\n", safeString(created.DisplayId))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Success.Render("Created branch"), style.Resource.Render(safeString(created.DisplayId)))
 			return nil
 		},
 	}
@@ -239,7 +240,7 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return nil
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted branch %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Deleted.Render("Deleted branch"), style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -272,7 +273,7 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "default_branch": defaultBranch})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", safeString(defaultBranch.DisplayId), safeString(defaultBranch.Id))
+			style.WriteTable(cmd.OutOrStdout(), [][]string{{style.Resource.Render(safeString(defaultBranch.DisplayId)), style.Secondary.Render(safeString(defaultBranch.Id))}})
 			return nil
 		},
 	}
@@ -351,7 +352,7 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "default_branch": args[0]})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Default branch set to %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Updated.Render("Default branch set to"), style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -386,13 +387,15 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(refs) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No matching refs found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No matching refs found"))
 				return nil
 			}
 
-			for _, ref := range refs {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", safeString(ref.DisplayId), safeString(ref.Id))
+			rows := make([][]string, len(refs))
+			for i, ref := range refs {
+				rows[i] = []string{style.Resource.Render(safeString(ref.DisplayId)), style.Secondary.Render(safeString(ref.Id))}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -472,7 +475,7 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "default_branch": args[0]})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Branch model default updated to %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Updated.Render("Branch model default updated to"), style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -514,11 +517,12 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(restrictions) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No restrictions found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No restrictions found"))
 				return nil
 			}
 
-			for _, restriction := range restrictions {
+			rows := make([][]string, len(restrictions))
+			for i, restriction := range restrictions {
 				matcher := ""
 				if restriction.Matcher != nil && restriction.Matcher.DisplayId != nil {
 					matcher = *restriction.Matcher.DisplayId
@@ -526,16 +530,15 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 					matcher = *restriction.Matcher.Id
 				}
 
-				fmt.Fprintf(
-					cmd.OutOrStdout(),
-					"%d\t%s\t%s\tusers=%d\tgroups=%d\n",
-					safeInt32(restriction.Id),
+				rows[i] = []string{
+					style.Secondary.Render(fmt.Sprintf("%d", safeInt32(restriction.Id))),
 					safeString(restriction.Type),
 					matcher,
-					len(safeUsers(restriction.Users)),
-					len(safeStringSlice(restriction.Groups)),
-				)
+					fmt.Sprintf("users=%d", len(safeUsers(restriction.Users))),
+					fmt.Sprintf("groups=%d", len(safeStringSlice(restriction.Groups))),
+				}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -570,7 +573,7 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "restriction": restriction})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "id=%d\ttype=%s\n", safeInt32(restriction.Id), safeString(restriction.Type))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", style.Secondary.Render(fmt.Sprintf("id=%d", safeInt32(restriction.Id))), safeString(restriction.Type))
 			return nil
 		},
 	}
@@ -672,7 +675,7 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "restriction": created})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Created restriction %d\n", safeInt32(created.Id))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Success.Render("Created restriction"), style.Secondary.Render(fmt.Sprintf("%d", safeInt32(created.Id))))
 			return nil
 		},
 	}
@@ -776,7 +779,7 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "restriction": updated})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Updated restriction %d\n", safeInt32(updated.Id))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Updated.Render("Updated restriction"), style.Secondary.Render(fmt.Sprintf("%d", safeInt32(updated.Id))))
 			return nil
 		},
 	}
@@ -860,7 +863,7 @@ func newBranchCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "repository": repo, "restriction_id": args[0]})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted restriction %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Deleted.Render("Deleted restriction"), style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -1004,13 +1007,16 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(statuses) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No build statuses found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No build statuses found"))
 				return nil
 			}
 
-			for _, status := range statuses {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", safeString(status.Key), safeStringFromBuildState(status.State), safeString(status.Url))
+			rows := make([][]string, len(statuses))
+			for i, status := range statuses {
+				state := safeStringFromBuildState(status.State)
+				rows[i] = []string{style.Resource.Render(safeString(status.Key)), style.ActionStyle(state).Render(state), style.Secondary.Render(safeString(status.Url))}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -1039,11 +1045,11 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), stats)
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Successful: %d\n", safeInt32(stats.Successful))
-			fmt.Fprintf(cmd.OutOrStdout(), "Failed: %d\n", safeInt32(stats.Failed))
-			fmt.Fprintf(cmd.OutOrStdout(), "In Progress: %d\n", safeInt32(stats.InProgress))
-			fmt.Fprintf(cmd.OutOrStdout(), "Unknown: %d\n", safeInt32(stats.Unknown))
-			fmt.Fprintf(cmd.OutOrStdout(), "Cancelled: %d\n", safeInt32(stats.Cancelled))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Label.Render("Successful:"), style.Success.Render(fmt.Sprintf("%d", safeInt32(stats.Successful))))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Label.Render("Failed:"), style.Deleted.Render(fmt.Sprintf("%d", safeInt32(stats.Failed))))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %d\n", style.Label.Render("In Progress:"), safeInt32(stats.InProgress))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %d\n", style.Label.Render("Unknown:"), safeInt32(stats.Unknown))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %d\n", style.Label.Render("Cancelled:"), safeInt32(stats.Cancelled))
 			return nil
 		},
 	})
@@ -1077,13 +1083,15 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(checks) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No required build merge checks found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No required build merge checks found"))
 				return nil
 			}
 
-			for _, check := range checks {
-				fmt.Fprintf(cmd.OutOrStdout(), "id=%d buildParentKeys=%v\n", safeInt64(check.Id), safeStringSlice(check.BuildParentKeys))
+			rows := make([][]string, len(checks))
+			for i, check := range checks {
+				rows[i] = []string{style.Secondary.Render(fmt.Sprintf("id=%d", safeInt64(check.Id))), fmt.Sprintf("buildParentKeys=%v", safeStringSlice(check.BuildParentKeys))}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -1268,7 +1276,7 @@ func newBuildCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "id": id})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted required build merge check %d\n", id)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Deleted.Render("Deleted required build merge check"), style.Secondary.Render(fmt.Sprintf("%d", id)))
 			return nil
 		},
 	})

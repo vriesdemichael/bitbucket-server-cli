@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	projectservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/project"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newProjectCommand(options *rootOptions) *cobra.Command {
@@ -44,13 +45,15 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(projects) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No projects found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No projects found"))
 				return nil
 			}
 
-			for _, p := range projects {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", safeString(p.Key), safeString(p.Name))
+			rows := make([][]string, len(projects))
+			for i, p := range projects {
+				rows[i] = []string{style.Resource.Render(safeString(p.Key)), safeString(p.Name)}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -78,9 +81,9 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"project": project})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Key: %s\n", safeString(project.Key))
-			fmt.Fprintf(cmd.OutOrStdout(), "Name: %s\n", safeString(project.Name))
-			fmt.Fprintf(cmd.OutOrStdout(), "Description: %s\n", safeString(project.Description))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Label.Render("Key:"), safeString(project.Key))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Label.Render("Name:"), safeString(project.Name))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Label.Render("Description:"), safeString(project.Description))
 			return nil
 		},
 	}
@@ -159,7 +162,7 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"project": created})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Created project %s\n", safeString(created.Key))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Success.Render("Created project"), style.Resource.Render(safeString(created.Key)))
 			return nil
 		},
 	}
@@ -238,7 +241,7 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"project": updated})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Updated project %s\n", safeString(updated.Key))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Updated.Render("Updated project"), style.Resource.Render(safeString(updated.Key)))
 			return nil
 		},
 	}
@@ -308,7 +311,7 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok", "project_key": args[0]})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted project %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Deleted.Render("Deleted project"), style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -338,16 +341,18 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"users": users})
 			}
 			if len(users) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No users with project permissions found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No users with project permissions found"))
 				return nil
 			}
-			for _, user := range users {
+			rows := make([][]string, len(users))
+			for i, user := range users {
 				display := user.Display
 				if strings.TrimSpace(display) == "" {
 					display = user.Name
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", display, user.Permission)
+				rows[i] = []string{style.Resource.Render(display), user.Permission}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -429,7 +434,7 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "username": args[1], "permission": permission})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to %s for project %s\n", permission, args[1], args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s to %s for project %s\n", style.Success.Render("Granted"), permission, style.Resource.Render(args[1]), args[0])
 			return nil
 		},
 	}
@@ -500,7 +505,7 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "username": args[1]})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Revoked permissions for %s on project %s\n", args[1], args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s for %s on project %s\n", style.Deleted.Render("Revoked permissions"), style.Resource.Render(args[1]), args[0])
 			return nil
 		},
 	}
@@ -531,12 +536,14 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"groups": groups})
 			}
 			if len(groups) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No groups with project permissions found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No groups with project permissions found"))
 				return nil
 			}
-			for _, group := range groups {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", group.Name, group.Permission)
+			rows := make([][]string, len(groups))
+			for i, group := range groups {
+				rows[i] = []string{style.Resource.Render(group.Name), group.Permission}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -618,7 +625,7 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "group": args[1], "permission": permission})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to group %s for project %s\n", permission, args[1], args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s to group %s for project %s\n", style.Success.Render("Granted"), permission, style.Resource.Render(args[1]), args[0])
 			return nil
 		},
 	}
@@ -689,7 +696,7 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "project": args[0], "group": args[1]})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Revoked permissions for group %s on project %s\n", args[1], args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s for group %s on project %s\n", style.Deleted.Render("Revoked permissions"), style.Resource.Render(args[1]), args[0])
 			return nil
 		},
 	}
@@ -722,9 +729,9 @@ func newProjectCommand(options *rootOptions) *cobra.Command {
 				})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Project: %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Label.Render("Project:"), args[0])
 			for _, level := range []string{"PROJECT_READ", "PROJECT_WRITE", "PROJECT_ADMIN"} {
-				fmt.Fprintf(cmd.OutOrStdout(), "%-14s\t%t\n", level, perms[level])
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %t\n", style.Label.Render(level+":"), perms[level])
 			}
 			return nil
 		},

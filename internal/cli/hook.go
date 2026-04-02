@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	hookservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/hook"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newHookCommand(options *rootOptions) *cobra.Command {
@@ -141,7 +142,7 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 				if options.JSON {
 					return writeJSON(cmd.OutOrStdout(), map[string]any{"hook": hook})
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Enabled hook %s for repository %s/%s\n", hookKey, repo.ProjectKey, repo.Slug)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %s for repository %s\n", style.Success.Render("Enabled hook"), style.Resource.Render(hookKey), style.Resource.Render(repo.ProjectKey+"/"+repo.Slug))
 				return nil
 			}
 
@@ -203,7 +204,7 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"hook": hook})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Enabled hook %s for project %s\n", hookKey, projectKey)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s for project %s\n", style.Success.Render("Enabled hook"), style.Resource.Render(hookKey), projectKey)
 			return nil
 		},
 	}
@@ -277,7 +278,7 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 				if options.JSON {
 					return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok"})
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Disabled hook %s for repository %s/%s\n", hookKey, repo.ProjectKey, repo.Slug)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %s for repository %s\n", style.Deleted.Render("Disabled hook"), style.Resource.Render(hookKey), style.Resource.Render(repo.ProjectKey+"/"+repo.Slug))
 				return nil
 			}
 
@@ -338,7 +339,7 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok"})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Disabled hook %s for project %s\n", hookKey, projectKey)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s for project %s\n", style.Deleted.Render("Disabled hook"), style.Resource.Render(hookKey), projectKey)
 			return nil
 		},
 	}
@@ -496,7 +497,7 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 				if options.JSON {
 					return writeJSON(cmd.OutOrStdout(), result)
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "Configured hook %s for repository %s/%s\n", hookKey, repo.ProjectKey, repo.Slug)
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %s for repository %s\n", style.Updated.Render("Configured hook"), style.Resource.Render(hookKey), style.Resource.Render(repo.ProjectKey+"/"+repo.Slug))
 				return nil
 			}
 
@@ -562,7 +563,7 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), result)
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Configured hook %s for project %s\n", hookKey, projectKey)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s for project %s\n", style.Updated.Render("Configured hook"), style.Resource.Render(hookKey), projectKey)
 			return nil
 		},
 	}
@@ -574,13 +575,14 @@ func newHookCommand(options *rootOptions) *cobra.Command {
 
 func printHooks(cmd *cobra.Command, hooks []openapigenerated.RestRepositoryHook) {
 	if len(hooks) == 0 {
-		fmt.Fprintln(cmd.OutOrStdout(), "No hooks found")
+		fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No hooks found"))
 		return
 	}
-	for _, h := range hooks {
-		enabled := "disabled"
+	rows := make([][]string, len(hooks))
+	for i, h := range hooks {
+		enabledStr := "disabled"
 		if h.Enabled != nil && *h.Enabled {
-			enabled = "enabled"
+			enabledStr = "enabled"
 		}
 		name := ""
 		if h.Details != nil && h.Details.Name != nil {
@@ -590,8 +592,9 @@ func printHooks(cmd *cobra.Command, hooks []openapigenerated.RestRepositoryHook)
 		if h.Details != nil && h.Details.Key != nil {
 			key = *h.Details.Key
 		}
-		fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", key, enabled, name)
+		rows[i] = []string{style.Resource.Render(key), style.ActionStyle(enabledStr).Render(enabledStr), name}
 	}
+	style.WriteTable(cmd.OutOrStdout(), rows)
 }
 
 func findHookByKey(hooks []openapigenerated.RestRepositoryHook, hookKey string) (openapigenerated.RestRepositoryHook, bool) {

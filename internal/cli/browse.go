@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	browseservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/browse"
 	commitservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/commit"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newRepoBrowseCommand(options *rootOptions) *cobra.Command {
@@ -58,7 +59,7 @@ func newRepoBrowseCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(files) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No files found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No files found"))
 				return nil
 			}
 
@@ -253,13 +254,15 @@ func newRepoBrowseCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(commits) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No commit history found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No commit history found"))
 				return nil
 			}
 
-			for _, commit := range commits {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", safeString(commit.DisplayId), strings.Split(safeString(commit.Message), "\n")[0])
+			rows := make([][]string, len(commits))
+			for i, commit := range commits {
+				rows[i] = []string{style.Secondary.Render(safeString(commit.DisplayId)), strings.Split(safeString(commit.Message), "\n")[0]}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},

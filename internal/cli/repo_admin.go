@@ -8,6 +8,7 @@ import (
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	reposervice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newRepoAdminCommand(options *rootOptions) *cobra.Command {
@@ -106,7 +107,7 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": created})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Created repository %s/%s\n", createProject, safeString(created.Name))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Success.Render("Created repository"), style.Resource.Render(createProject+"/"+safeString(created.Name)))
 			return nil
 		},
 	}
@@ -181,7 +182,7 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": forked})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Forked repository to %s\n", safeString(forked.Name))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Success.Render("Forked repository to"), style.Resource.Render(safeString(forked.Name)))
 			return nil
 		},
 	}
@@ -258,7 +259,7 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": updated})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Updated repository %s\n", safeString(updated.Name))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Updated.Render("Updated repository"), style.Resource.Render(safeString(updated.Name)))
 			return nil
 		},
 	}
@@ -316,7 +317,7 @@ func newRepoAdminCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok", "repository": repoRef.ProjectKey + "/" + repoRef.Slug})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted repository %s/%s\n", repoRef.ProjectKey, repoRef.Slug)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Deleted.Render("Deleted repository"), style.Resource.Render(repoRef.ProjectKey+"/"+repoRef.Slug))
 			return nil
 		},
 	}

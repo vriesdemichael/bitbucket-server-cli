@@ -105,7 +105,7 @@ func TestBrowseCLICommandsMock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("history failed: %v", err)
 	}
-	if !strings.Contains(out, "hist-abc\thist") {
+	if !strings.Contains(out, "hist-abc") || !strings.Contains(out, "hist") {
 		t.Fatalf("unexpected history output: %s", out)
 	}
 

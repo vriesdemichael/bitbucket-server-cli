@@ -13,6 +13,7 @@ import (
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newRepoCommand(options *rootOptions) *cobra.Command {
@@ -46,13 +47,15 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(repos) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No repositories found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No repositories found"))
 				return nil
 			}
 
-			for _, repo := range repos {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s/%s\t%s\n", repo.ProjectKey, repo.Slug, repo.Name)
+			rows := make([][]string, len(repos))
+			for i, repo := range repos {
+				rows[i] = []string{style.Resource.Render(repo.ProjectKey + "/" + repo.Slug), repo.Name}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -109,7 +112,7 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if len(comments) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No comments found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No comments found"))
 				return nil
 			}
 
@@ -175,7 +178,7 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"context": target.Context(), "comment": created})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Created comment %s\n", commentIDString(created))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Success.Render("Created comment"), style.Secondary.Render(commentIDString(created)))
 			return nil
 		},
 	}
@@ -267,7 +270,7 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"context": target.Context(), "comment": updated})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Updated comment %s\n", commentIDString(updated))
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Updated.Render("Updated comment"), style.Secondary.Render(commentIDString(updated)))
 			return nil
 		},
 	}
@@ -367,11 +370,11 @@ func newRepoCommentCommand(options *rootOptions) *cobra.Command {
 			}
 
 			if resolvedVersion == nil {
-				fmt.Fprintf(cmd.OutOrStdout(), "Deleted comment %s\n", strings.TrimSpace(deleteCommentID))
+				fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Deleted.Render("Deleted comment"), style.Secondary.Render(strings.TrimSpace(deleteCommentID)))
 				return nil
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Deleted comment %s (version=%d)\n", strings.TrimSpace(deleteCommentID), *resolvedVersion)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s %s\n", style.Deleted.Render("Deleted comment"), style.Secondary.Render(strings.TrimSpace(deleteCommentID)), style.Secondary.Render(fmt.Sprintf("(version=%d)", *resolvedVersion)))
 			return nil
 		},
 	}
@@ -420,16 +423,18 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"users": users})
 			}
 			if len(users) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No users with repository permissions found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No users with repository permissions found"))
 				return nil
 			}
-			for _, user := range users {
+			rows := make([][]string, len(users))
+			for i, user := range users {
 				display := user.Display
 				if strings.TrimSpace(display) == "" {
 					display = user.Name
 				}
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", display, user.Permission)
+				rows[i] = []string{style.Resource.Render(display), user.Permission}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -515,7 +520,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "username": args[0], "permission": permission})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to %s\n", permission, args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s to %s\n", style.Success.Render("Granted"), permission, style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -591,7 +596,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "username": args[0]})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Revoked permissions for %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s for %s\n", style.Deleted.Render("Revoked permissions"), style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -621,12 +626,14 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"groups": groups})
 			}
 			if len(groups) == 0 {
-				fmt.Fprintln(cmd.OutOrStdout(), "No groups with repository permissions found")
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No groups with repository permissions found"))
 				return nil
 			}
-			for _, group := range groups {
-				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", group.Name, group.Permission)
+			rows := make([][]string, len(groups))
+			for i, group := range groups {
+				rows[i] = []string{style.Resource.Render(group.Name), group.Permission}
 			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
 
 			return nil
 		},
@@ -713,7 +720,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "group": args[0], "permission": permission})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Granted %s to group %s\n", permission, args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s to group %s\n", style.Success.Render("Granted"), permission, style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -789,7 +796,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "group": args[0]})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Revoked permissions for group %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s for group %s\n", style.Deleted.Render("Revoked permissions"), style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -833,7 +840,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"webhooks": webhooks.Payload})
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Webhooks configured: %d\n", webhooks.Count)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %d\n", style.Label.Render("Webhooks configured:"), webhooks.Count)
 			return nil
 		},
 	}
@@ -917,7 +924,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "webhook": payload})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Webhook created: %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Success.Render("Webhook created:"), style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -992,7 +999,7 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{"status": "ok", "webhook_id": args[0]})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "Webhook deleted: %s\n", args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Deleted.Render("Webhook deleted:"), style.Resource.Render(args[0]))
 			return nil
 		},
 	}
@@ -1046,12 +1053,12 @@ func newRepoSettingsCommand(options *rootOptions) *cobra.Command {
 				}
 			}
 
-			fmt.Fprintf(cmd.OutOrStdout(), "Required tasks complete: %t\n", requiredTasks)
-			fmt.Fprintf(cmd.OutOrStdout(), "Required approvers: %s\n", requiredApprovals)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %t\n", style.Label.Render("Required tasks complete:"), requiredTasks)
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s\n", style.Label.Render("Required approvers:"), requiredApprovals)
 
 			if mergeConfig, ok := settings["mergeConfig"].(map[string]any); ok {
 				if strategies, ok := mergeConfig["strategies"].([]any); ok {
-					fmt.Fprintf(cmd.OutOrStdout(), "Available merge strategies: %d\n", len(strategies))
+					fmt.Fprintf(cmd.OutOrStdout(), "%s %d\n", style.Label.Render("Available merge strategies:"), len(strategies))
 					for _, s := range strategies {
 						if sm, ok := s.(map[string]any); ok {
 							enabled := ""

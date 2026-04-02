@@ -11,6 +11,9 @@ import (
 func executeTestCLI(t *testing.T, args ...string) (string, error) {
 	t.Helper()
 
+	// Disable colors so assertions can match plain text without ANSI codes.
+	t.Setenv("NO_COLOR", "1")
+
 	command := NewRootCommand()
 	output := &bytes.Buffer{}
 	command.SetOut(output)
@@ -72,7 +75,7 @@ func TestCommitCLICommandsMock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("commit list failed: %v", err)
 	}
-	if !strings.Contains(out, "abc\tinit") {
+	if !strings.Contains(out, "abc") || !strings.Contains(out, "init") {
 		t.Fatalf("unexpected list output: %s", out)
 	}
 
@@ -106,7 +109,7 @@ func TestCommitCLICommandsMock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("commit compare failed: %v", err)
 	}
-	if !strings.Contains(out, "def\tfeature") {
+	if !strings.Contains(out, "def") || !strings.Contains(out, "feature") {
 		t.Fatalf("unexpected compare output: %s", out)
 	}
 
@@ -123,7 +126,7 @@ func TestCommitCLICommandsMock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ref list failed: %v", err)
 	}
-	if !strings.Contains(out, "main\tBRANCH\trefs/heads/main") {
+	if !strings.Contains(out, "main") || !strings.Contains(out, "BRANCH") || !strings.Contains(out, "refs/heads/main") {
 		t.Fatalf("unexpected ref list output: %s", out)
 	}
 
@@ -140,7 +143,7 @@ func TestCommitCLICommandsMock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ref resolve failed: %v", err)
 	}
-	if !strings.Contains(out, "main\tBRANCH\trefs/heads/main") {
+	if !strings.Contains(out, "main") || !strings.Contains(out, "BRANCH") || !strings.Contains(out, "refs/heads/main") {
 		t.Fatalf("unexpected ref resolve output: %s", out)
 	}
 
@@ -156,5 +159,27 @@ func TestCommitCLICommandsMock(t *testing.T) {
 	_, err = executeTestCLI(t, "ref", "resolve", "missing")
 	if err == nil {
 		t.Fatalf("expected error for missing ref")
+	}
+}
+
+func TestCommitListEmpty(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"isLastPage":true,"values":[]}`))
+	}))
+	t.Cleanup(server.Close)
+
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "repo")
+	t.Setenv("BITBUCKET_TOKEN", "test-token")
+
+	out, err := executeTestCLI(t, "commit", "list")
+	if err != nil {
+		t.Fatalf("commit list empty failed: %v", err)
+	}
+	if !strings.Contains(out, "No commits found") {
+		t.Fatalf("expected empty-state message, got: %s", out)
 	}
 }
