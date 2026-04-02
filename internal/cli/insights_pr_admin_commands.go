@@ -1527,6 +1527,60 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 	prCmd.AddCommand(taskCmd)
 
+	// pr build
+	var buildRepository string
+	var buildLimit int
+	buildCmd := &cobra.Command{
+		Use:   "build",
+		Short: "Pull request build status commands",
+	}
+	buildCmd.PersistentFlags().StringVar(&buildRepository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	buildCmd.PersistentFlags().IntVar(&buildLimit, "limit", 25, "Page size for build status results")
+
+	buildStatusCmd := &cobra.Command{
+		Use:   "status <id>",
+		Short: "Show build statuses for a pull request's source commit",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolvePullRequestRepositoryReference(buildRepository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg))
+			statuses, err := service.GetBuildStatuses(cmd.Context(), repo, args[0], buildLimit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{
+					"repository":   repo,
+					"pull_request": args[0],
+					"statuses":     statuses,
+				})
+			}
+
+			if len(statuses) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No build statuses found")
+				return nil
+			}
+
+			for _, s := range statuses {
+				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", s.Key, s.State, s.URL)
+			}
+
+			return nil
+		},
+	}
+	buildCmd.AddCommand(buildStatusCmd)
+	prCmd.AddCommand(buildCmd)
+
 	return prCmd
 }
 

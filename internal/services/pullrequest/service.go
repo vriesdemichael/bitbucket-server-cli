@@ -36,6 +36,7 @@ type PullRequest struct {
 	Author       string         `json:"author,omitempty"`
 	SourceBranch string         `json:"source_branch,omitempty"`
 	TargetBranch string         `json:"target_branch,omitempty"`
+	SourceCommit string         `json:"source_commit,omitempty"`
 	CreatedDate  int64          `json:"created_date,omitempty"`
 	UpdatedDate  int64          `json:"updated_date,omitempty"`
 	Reviewers    []Reviewer     `json:"reviewers,omitempty"`
@@ -467,6 +468,92 @@ func (service *Service) DeleteTask(ctx context.Context, repository RepositoryRef
 	return service.client.DeleteJSON(ctx, fmt.Sprintf("%s/%s/tasks/%s", pullRequestPath(repository), resolvedPRID, resolvedTaskID), query, nil, nil)
 }
 
+// BuildStatus represents a single CI build status associated with a pull request.
+type BuildStatus struct {
+	Key   string `json:"key,omitempty"`
+	State string `json:"state,omitempty"`
+	URL   string `json:"url,omitempty"`
+	Name  string `json:"name,omitempty"`
+}
+
+type pagedBuildStatusResponse struct {
+	Values        []buildStatusValue `json:"values"`
+	IsLastPage    bool               `json:"isLastPage"`
+	NextPageStart int                `json:"nextPageStart"`
+}
+
+type buildStatusValue struct {
+	Key   string `json:"key"`
+	State string `json:"state"`
+	URL   string `json:"url"`
+	Name  string `json:"name"`
+}
+
+// GetBuildStatuses retrieves build statuses for the source commit of the given pull request.
+func (service *Service) GetBuildStatuses(ctx context.Context, repository RepositoryRef, pullRequestID string, limit int) ([]BuildStatus, error) {
+	if err := validateRepositoryRef(repository); err != nil {
+		return nil, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return nil, err
+	}
+
+	if limit <= 0 {
+		limit = 25
+	}
+
+	// Fetch the PR to get the source commit hash.
+	var pr pullRequestValue
+	if err := service.client.GetJSON(ctx, fmt.Sprintf("%s/%s", pullRequestPath(repository), resolvedID), nil, &pr); err != nil {
+		return nil, err
+	}
+
+	commitID := sourceCommit(pr.FromRef)
+	if commitID == "" {
+		return nil, apperrors.New(apperrors.KindInternal, "pull request has no resolvable source commit", nil)
+	}
+
+	// Fetch build statuses for the source commit via the build-status API.
+	path := fmt.Sprintf("/rest/build-status/latest/commits/%s", url.PathEscape(commitID))
+	results := make([]BuildStatus, 0)
+	start := 0
+
+	for {
+		query := map[string]string{
+			"limit": strconv.Itoa(limit),
+			"start": strconv.Itoa(start),
+		}
+
+		var response pagedBuildStatusResponse
+		if err := service.client.GetJSON(ctx, path, query, &response); err != nil {
+			return nil, err
+		}
+
+		for _, v := range response.Values {
+			results = append(results, BuildStatus{
+				Key:   v.Key,
+				State: v.State,
+				URL:   v.URL,
+				Name:  v.Name,
+			})
+		}
+
+		if response.IsLastPage {
+			break
+		}
+
+		if response.NextPageStart == start {
+			break
+		}
+
+		start = response.NextPageStart
+	}
+
+	return results, nil
+}
+
 func normalizeState(state string) (string, error) {
 	resolved := strings.ToLower(strings.TrimSpace(state))
 	if resolved == "" {
@@ -553,6 +640,7 @@ func mapPullRequest(raw pullRequestValue) PullRequest {
 		Author:       author,
 		SourceBranch: branchDisplayName(raw.FromRef),
 		TargetBranch: branchDisplayName(raw.ToRef),
+		SourceCommit: sourceCommit(raw.FromRef),
 		CreatedDate:  raw.CreatedDate,
 		UpdatedDate:  raw.UpdatedDate,
 		Reviewers:    mapReviewers(raw.Participants),
@@ -830,6 +918,14 @@ func branchDisplayName(reference *pullRequestRef) string {
 	return strings.TrimSpace(reference.ID)
 }
 
+func sourceCommit(reference *pullRequestRef) string {
+	if reference == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(reference.LatestCommit)
+}
+
 type pagedPullRequestResponse struct {
 	Values        []pullRequestValue `json:"values"`
 	IsLastPage    bool               `json:"isLastPage"`
@@ -870,9 +966,10 @@ type pullRequestUserIdentity struct {
 }
 
 type pullRequestRef struct {
-	ID         string                 `json:"id"`
-	DisplayID  string                 `json:"displayId"`
-	Repository *pullRequestRepository `json:"repository"`
+	ID           string                 `json:"id"`
+	DisplayID    string                 `json:"displayId"`
+	LatestCommit string                 `json:"latestCommit"`
+	Repository   *pullRequestRepository `json:"repository"`
 }
 
 type pullRequestRepository struct {
