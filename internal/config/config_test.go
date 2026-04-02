@@ -331,7 +331,7 @@ func TestLoadFromEnvNormalizesURLAndAliasUsername(t *testing.T) {
 		t.Fatalf("expected no error, got: %v", err)
 	}
 
-	if config.BitbucketURL != "http://localhost:7990" {
+	if config.BitbucketURL != "https://localhost:7990" {
 		t.Fatalf("expected normalized URL, got %q", config.BitbucketURL)
 	}
 
@@ -369,7 +369,7 @@ func TestSaveLoginAndLoadStoredConfig(t *testing.T) {
 		t.Fatal("expected stored host profile")
 	}
 
-	if profile.URL != "http://localhost:7990" {
+	if profile.URL != "https://localhost:7990" {
 		t.Fatalf("unexpected stored URL: %q", profile.URL)
 	}
 
