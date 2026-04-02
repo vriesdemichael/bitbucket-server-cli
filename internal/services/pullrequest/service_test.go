@@ -335,3 +335,225 @@ func readBody(t *testing.T, request *http.Request) string {
 	_ = request.Body.Close()
 	return string(bodyBytes)
 }
+
+func TestGetPRBuildStatuses(t *testing.T) {
+	const prPath = "/rest/api/latest/projects/TEST/repos/demo/pull-requests/42"
+	const buildStatusPath = "/rest/build-status/latest/commits/abc123"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.URL.Path == prPath:
+			_, _ = fmt.Fprint(w, `{"id":42,"title":"My PR","state":"OPEN","open":true,"closed":false,
+				"fromRef":{"displayId":"feature/x","latestCommit":"abc123"},
+				"toRef":{"displayId":"main"}}`)
+		case r.URL.Path == buildStatusPath:
+			_, _ = fmt.Fprint(w, `{"values":[{"key":"ci/main","state":"SUCCESSFUL","url":"https://ci.example/1","name":"CI"},{"key":"ci/lint","state":"FAILED","url":"https://ci.example/2","name":"Lint"}],"isLastPage":true}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	service := NewService(httpclient.NewFromConfig(cfg))
+	statuses, err := service.GetBuildStatuses(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "42", 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(statuses) != 2 {
+		t.Fatalf("expected 2 build statuses, got %d", len(statuses))
+	}
+	if statuses[0].Key != "ci/main" || statuses[0].State != "SUCCESSFUL" {
+		t.Fatalf("unexpected first status: %+v", statuses[0])
+	}
+	if statuses[1].Key != "ci/lint" || statuses[1].State != "FAILED" {
+		t.Fatalf("unexpected second status: %+v", statuses[1])
+	}
+}
+
+func TestGetPRBuildStatusesValidation(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, _ := config.LoadFromEnv()
+	service := NewService(httpclient.NewFromConfig(cfg))
+
+	// Missing repository ref
+	_, err := service.GetBuildStatuses(context.Background(), RepositoryRef{}, "1", 25)
+	if err == nil || apperrors.ExitCode(err) != 2 {
+		t.Fatalf("expected validation error for missing repo ref, got: %v", err)
+	}
+
+	// Invalid PR ID
+	_, err = service.GetBuildStatuses(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "bad", 25)
+	if err == nil || apperrors.ExitCode(err) != 2 {
+		t.Fatalf("expected validation error for non-numeric PR ID, got: %v", err)
+	}
+}
+
+func TestGetPRBuildStatusesMissingCommit(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.HasSuffix(r.URL.Path, "/pull-requests/99") {
+			// PR response without a latestCommit
+			_, _ = fmt.Fprint(w, `{"id":99,"title":"No Commit PR","state":"OPEN","open":true,"fromRef":{"displayId":"branch"},"toRef":{"displayId":"main"}}`)
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, _ := config.LoadFromEnv()
+	service := NewService(httpclient.NewFromConfig(cfg))
+
+	_, err := service.GetBuildStatuses(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "99", 25)
+	if err == nil {
+		t.Fatal("expected error when PR has no source commit")
+	}
+}
+
+func TestGetBuildStatusesPagination(t *testing.T) {
+	const prPath = "/rest/api/latest/projects/TEST/repos/demo/pull-requests/7"
+	const buildStatusPath = "/rest/build-status/latest/commits/deadbeef"
+
+	callCount := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == prPath:
+			_, _ = fmt.Fprint(w, `{"id":7,"title":"Paginated","state":"OPEN","open":true,"fromRef":{"displayId":"f","latestCommit":"deadbeef"},"toRef":{"displayId":"main"}}`)
+		case r.URL.Path == buildStatusPath:
+			callCount++
+			if callCount == 1 {
+				// First page: not last, next starts at 1
+				_, _ = fmt.Fprint(w, `{"values":[{"key":"ci/a","state":"SUCCESSFUL","url":"u1"}],"isLastPage":false,"nextPageStart":1}`)
+			} else {
+				// Second page: last
+				_, _ = fmt.Fprint(w, `{"values":[{"key":"ci/b","state":"FAILED","url":"u2"}],"isLastPage":true,"nextPageStart":2}`)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		t.Fatalf("load config: %v", err)
+	}
+
+	service := NewService(httpclient.NewFromConfig(cfg))
+	statuses, err := service.GetBuildStatuses(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "7", 25)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(statuses) != 2 {
+		t.Fatalf("expected 2 statuses from paginated response, got %d", len(statuses))
+	}
+	if statuses[0].Key != "ci/a" || statuses[1].Key != "ci/b" {
+		t.Fatalf("unexpected statuses: %+v", statuses)
+	}
+}
+
+func TestGetBuildStatusesDefaultLimit(t *testing.T) {
+	const prPath = "/rest/api/latest/projects/TEST/repos/demo/pull-requests/5"
+	const buildStatusPath = "/rest/build-status/latest/commits/abc999"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == prPath:
+			_, _ = fmt.Fprint(w, `{"id":5,"state":"OPEN","open":true,"fromRef":{"displayId":"f","latestCommit":"abc999"},"toRef":{"displayId":"main"}}`)
+		case r.URL.Path == buildStatusPath:
+			_, _ = fmt.Fprint(w, `{"values":[],"isLastPage":true}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, _ := config.LoadFromEnv()
+	service := NewService(httpclient.NewFromConfig(cfg))
+
+	// limit <= 0 → defaults to 25 internally
+	statuses, err := service.GetBuildStatuses(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "5", 0)
+	if err != nil {
+		t.Fatalf("unexpected error with limit=0: %v", err)
+	}
+	if len(statuses) != 0 {
+		t.Fatalf("expected empty statuses, got %d", len(statuses))
+	}
+}
+
+func TestGetBuildStatusesPaginationStuck(t *testing.T) {
+	const prPath = "/rest/api/latest/projects/TEST/repos/demo/pull-requests/6"
+	const buildStatusPath = "/rest/build-status/latest/commits/fff111"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == prPath:
+			_, _ = fmt.Fprint(w, `{"id":6,"state":"OPEN","open":true,"fromRef":{"displayId":"f","latestCommit":"fff111"},"toRef":{"displayId":"main"}}`)
+		case r.URL.Path == buildStatusPath:
+			// isLastPage=false but nextPageStart=0 (same as current start) → break guard
+			_, _ = fmt.Fprint(w, `{"values":[{"key":"ci/x","state":"RUNNING","url":"u"}],"isLastPage":false,"nextPageStart":0}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, _ := config.LoadFromEnv()
+	service := NewService(httpclient.NewFromConfig(cfg))
+	statuses, err := service.GetBuildStatuses(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "6", 25)
+	if err != nil {
+		t.Fatalf("unexpected error with stuck pagination: %v", err)
+	}
+	if len(statuses) != 1 {
+		t.Fatalf("expected 1 status before stuck pagination break, got %d", len(statuses))
+	}
+}
+
+func TestGetBuildStatusesPRFetchError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Return a non-JSON response for any PR request to cause GetJSON to fail
+		w.Header().Set("Content-Type", "text/plain")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprint(w, "internal server error")
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, _ := config.LoadFromEnv()
+	service := NewService(httpclient.NewFromConfig(cfg))
+	_, err := service.GetBuildStatuses(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "10", 25)
+	if err == nil {
+		t.Fatal("expected error when PR fetch returns 500")
+	}
+}
+

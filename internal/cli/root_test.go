@@ -3853,3 +3853,135 @@ func TestProjectCreateDryRunStateful(t *testing.T) {
 		t.Fatalf("expected create prediction, got: %s", buffer.String())
 	}
 }
+
+func TestPRBuildStatusCLI(t *testing.T) {
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+
+	const prPath = "/rest/api/latest/projects/TEST/repos/demo/pull-requests/42"
+	const prPathNoCommit = "/rest/api/latest/projects/TEST/repos/demo/pull-requests/43"
+	const buildStatusPath = "/rest/build-status/latest/commits/abc123"
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		switch r.URL.Path {
+		case prPath:
+			_, _ = w.Write([]byte(`{"id":42,"title":"My PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/x","latestCommit":"abc123"},"toRef":{"displayId":"main"}}`))
+		case prPathNoCommit:
+			_, _ = w.Write([]byte(`{"id":43,"title":"NoCom PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"branch"},"toRef":{"displayId":"main"}}`))
+		case buildStatusPath:
+			if r.URL.Query().Get("start") == "0" {
+				_, _ = w.Write([]byte(`{"values":[{"key":"ci/main","state":"SUCCESSFUL","url":"https://ci.example/1","name":"CI"}],"isLastPage":true}`))
+			} else {
+				http.NotFound(w, r)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	tests := []struct {
+		name           string
+		args           []string
+		expectSnippet  string
+		expectError    bool
+	}{
+		{
+			name:          "human output with statuses",
+			args:          []string{"pr", "build", "status", "42"},
+			expectSnippet: "ci/main\tSUCCESSFUL",
+		},
+		{
+			name:          "json output",
+			args:          []string{"--json", "pr", "build", "status", "42"},
+			expectSnippet: `"statuses"`,
+		},
+		{
+			name:        "no commit on PR returns error",
+			args:        []string{"pr", "build", "status", "43"},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := NewRootCommand()
+			buf := &bytes.Buffer{}
+			cmd.SetOut(buf)
+			cmd.SetErr(buf)
+			cmd.SetArgs(tc.args)
+
+			err := cmd.Execute()
+			if tc.expectError {
+				if err == nil {
+					t.Fatalf("expected error, got none (output: %s)", buf.String())
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v (output: %s)", err, buf.String())
+			}
+			if !strings.Contains(buf.String(), tc.expectSnippet) {
+				t.Fatalf("expected %q in output, got: %s", tc.expectSnippet, buf.String())
+			}
+		})
+	}
+
+	// loadConfig fails (invalid env var) → covers error return after loadConfig
+	t.Run("loadConfig error", func(t *testing.T) {
+		t.Setenv("BB_INSECURE_SKIP_VERIFY", "notabool")
+		cmd := NewRootCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+		cmd.SetErr(buf)
+		cmd.SetArgs([]string{"pr", "build", "status", "42"})
+		if err := cmd.Execute(); err == nil {
+			t.Fatal("expected error for invalid BB_INSECURE_SKIP_VERIFY, got none")
+		}
+	})
+
+	// no repo slug and no --repo flag → resolvePullRequestRepositoryReference fails
+	t.Run("missing repo slug", func(t *testing.T) {
+		t.Setenv("BITBUCKET_REPO_SLUG", "")
+		cmd := NewRootCommand()
+		buf := &bytes.Buffer{}
+		cmd.SetOut(buf)
+		cmd.SetErr(buf)
+		cmd.SetArgs([]string{"pr", "build", "status", "42"})
+		if err := cmd.Execute(); err == nil {
+			t.Fatal("expected error for missing repo slug, got none")
+		}
+	})
+
+	// Empty build statuses response
+	emptyServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+		switch r.URL.Path {
+		case prPath:
+			_, _ = w.Write([]byte(`{"id":42,"title":"My PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/x","latestCommit":"abc123"},"toRef":{"displayId":"main"}}`))
+		case buildStatusPath:
+			_, _ = w.Write([]byte(`{"values":[],"isLastPage":true}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer emptyServer.Close()
+
+	t.Setenv("BITBUCKET_URL", emptyServer.URL)
+
+	emptyCmd := NewRootCommand()
+	emptyBuf := &bytes.Buffer{}
+	emptyCmd.SetOut(emptyBuf)
+	emptyCmd.SetErr(emptyBuf)
+	emptyCmd.SetArgs([]string{"pr", "build", "status", "42"})
+	if err := emptyCmd.Execute(); err != nil {
+		t.Fatalf("empty statuses: unexpected error: %v", err)
+	}
+	if !strings.Contains(emptyBuf.String(), "No build statuses found") {
+		t.Fatalf("expected 'No build statuses found', got: %s", emptyBuf.String())
+	}
+}
