@@ -139,22 +139,33 @@ func TestSafeSpecsSubsetOfAllSpecs(t *testing.T) {
 
 // TestMergePullRequestIsUnsafe verifies the merge tool is not in the safe set.
 func TestMergePullRequestIsUnsafe(t *testing.T) {
+	unsafeTools := []string{"merge_pull_request", "set_build_status"}
+	safeByName := make(map[string]bool)
 	for _, s := range SafeSpecs() {
-		if s.Tool.Name == "merge_pull_request" {
-			t.Fatal("merge_pull_request must not appear in SafeSpecs")
+		safeByName[s.Tool.Name] = true
+	}
+	allByName := make(map[string]bool)
+	for _, s := range AllSpecs() {
+		if s.Safe {
+			allByName[s.Tool.Name] = true
 		}
 	}
-	found := false
-	for _, s := range AllSpecs() {
-		if s.Tool.Name == "merge_pull_request" {
-			found = true
-			if s.Safe {
-				t.Fatal("merge_pull_request must have Safe=false in AllSpecs")
+	for _, name := range unsafeTools {
+		if safeByName[name] {
+			t.Errorf("%q must not appear in SafeSpecs", name)
+		}
+		if allByName[name] {
+			t.Errorf("%q must have Safe=false in AllSpecs", name)
+		}
+		found := false
+		for _, s := range AllSpecs() {
+			if s.Tool.Name == name {
+				found = true
 			}
 		}
-	}
-	if !found {
-		t.Fatal("merge_pull_request not found in AllSpecs")
+		if !found {
+			t.Errorf("%q not found in AllSpecs", name)
+		}
 	}
 }
 

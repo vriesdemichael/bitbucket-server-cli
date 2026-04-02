@@ -73,8 +73,8 @@ func AllSpecs() []Spec {
 		{specCreateTag().Tool, specCreateTag().Handler, true},
 		// Build / quality group
 		{specGetBuildStatus().Tool, specGetBuildStatus().Handler, true},
-		// Setting a build status manipulates CI state — safe by default (easily overridden).
-		{specSetBuildStatus().Tool, specSetBuildStatus().Handler, true},
+		// Setting a build status is a write operation that affects CI signal — requires --yolo.
+		{specSetBuildStatus().Tool, specSetBuildStatus().Handler, false},
 		{specListRequiredBuilds().Tool, specListRequiredBuilds().Handler, true},
 		// Commit group
 		{specListCommits().Tool, specListCommits().Handler, true},
