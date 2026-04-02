@@ -218,3 +218,12 @@ func TestNoColorFlagDisablesColorViaInit(t *testing.T) {
 		t.Errorf("expected plain text, got %q", rendered)
 	}
 }
+
+func TestInitWithRendererPanicsOnNil(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic when passing nil renderer to InitWithRenderer")
+		}
+	}()
+	style.InitWithRenderer(nil)
+}
