@@ -9,6 +9,7 @@ import (
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	aicmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/ai"
 	authcmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/auth"
 	bulkcmd "github.com/vriesdemichael/bitbucket-server-cli/internal/cli/cmd/bulk"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
@@ -64,6 +65,11 @@ your behalf using the link above.`,
 	rootCmd.PersistentFlags().String("log-level", "", "Diagnostics verbosity: error, warn, info, debug")
 	rootCmd.PersistentFlags().String("log-format", "", "Diagnostics format: text or jsonl")
 
+	rootCmd.AddCommand(aicmd.New(aicmd.Dependencies{
+		Version:    func() string { return rootCmd.Version },
+		LoadConfig: loadConfig,
+		WriteJSON:  writeJSON,
+	}))
 	rootCmd.AddCommand(authcmd.New(authcmd.Dependencies{
 		JSONEnabled: func() bool { return options.JSON },
 		LoadConfig:  loadConfig,
