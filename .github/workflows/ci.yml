@@ -153,7 +153,7 @@ jobs:
         run: docker compose -f docker/compose.yml up -d
 
       - name: Bootstrap Bitbucket (wait for ready + create admin user)
-        run: bash scripts/bootstrap-bitbucket.sh
+        run: bash scripts/bootstrap-bitbucket.sh "$BITBUCKET_URL" "$ADMIN_USER" "$ADMIN_PASSWORD"
 
       - name: Run unit tests with coverage
         run: task test:unit:coverage
@@ -167,13 +167,37 @@ jobs:
       - name: Resolve CI coverage thresholds
         run: |
           set -euo pipefail
+
+          thresholds_file=.github/coverage-thresholds.env
+          if [ ! -f "$thresholds_file" ]; then
+            echo "Missing coverage thresholds file: $thresholds_file" >&2
+            exit 1
+          fi
+
           # shellcheck disable=SC1091
-          source .github/coverage-thresholds.env
-          echo "COVERAGE_MIN_GLOBAL_COMBINED=${CI_COVERAGE_MIN_GLOBAL_COMBINED:-85}" >> "$GITHUB_ENV"
-          echo "COVERAGE_MIN_PATCH=${CI_COVERAGE_MIN_PATCH:-85}" >> "$GITHUB_ENV"
-          echo "COVERAGE_MIN_PATCH_LINES=${CI_COVERAGE_MIN_PATCH_LINES:-30}" >> "$GITHUB_ENV"
-          echo "COVERAGE_MAX_UNCOVERED_SMALL_PATCH=${CI_COVERAGE_MAX_UNCOVERED_SMALL_PATCH:-2}" >> "$GITHUB_ENV"
-          echo "COVERAGE_MIN_CONTRACT=${CI_COVERAGE_MIN_CONTRACT:-0}" >> "$GITHUB_ENV"
+          source "$thresholds_file"
+
+          COVERAGE_MIN_GLOBAL_COMBINED="${CI_COVERAGE_MIN_GLOBAL_COMBINED:-85}"
+          COVERAGE_MIN_PATCH="${CI_COVERAGE_MIN_PATCH:-85}"
+          COVERAGE_MIN_PATCH_LINES="${CI_COVERAGE_MIN_PATCH_LINES:-30}"
+          COVERAGE_MAX_UNCOVERED_SMALL_PATCH="${CI_COVERAGE_MAX_UNCOVERED_SMALL_PATCH:-2}"
+          COVERAGE_MIN_CONTRACT="${CI_COVERAGE_MIN_CONTRACT:-0}"
+
+          for var in COVERAGE_MIN_GLOBAL_COMBINED COVERAGE_MIN_PATCH COVERAGE_MIN_PATCH_LINES COVERAGE_MAX_UNCOVERED_SMALL_PATCH COVERAGE_MIN_CONTRACT; do
+            value="${!var}"
+            if ! [[ "$value" =~ ^[0-9]+([.][0-9]+)?$ ]]; then
+              echo "Invalid numeric value for $var: $value" >&2
+              exit 1
+            fi
+          done
+
+          {
+            echo "COVERAGE_MIN_GLOBAL_COMBINED=$COVERAGE_MIN_GLOBAL_COMBINED"
+            echo "COVERAGE_MIN_PATCH=$COVERAGE_MIN_PATCH"
+            echo "COVERAGE_MIN_PATCH_LINES=$COVERAGE_MIN_PATCH_LINES"
+            echo "COVERAGE_MAX_UNCOVERED_SMALL_PATCH=$COVERAGE_MAX_UNCOVERED_SMALL_PATCH"
+            echo "COVERAGE_MIN_CONTRACT=$COVERAGE_MIN_CONTRACT"
+          } >> "$GITHUB_ENV"
 
       - name: Verify committed quality report is current
         run: |
