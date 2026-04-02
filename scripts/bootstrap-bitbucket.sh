@@ -26,7 +26,8 @@ ADMIN_PASSWORD="${3:-admin}"
 ADMIN_EMAIL="admin@example.com"
 ADMIN_DISPLAY_NAME="Admin"
 COOKIE_JAR="$(mktemp /tmp/bb_bootstrap_cookies.XXXXXX)"
-trap 'rm -f "$COOKIE_JAR"' EXIT
+RESPONSE_BODY="$(mktemp /tmp/bb_bootstrap_response.XXXXXX)"
+trap 'rm -f "$COOKIE_JAR" "$RESPONSE_BODY"' EXIT
 
 MAX_WAIT_SECONDS=300
 POLL_INTERVAL=5
@@ -93,8 +94,8 @@ sys.exit(1)
 
   log "Creating admin user '${ADMIN_USERNAME}'..."
   http_code=$(
-    curl -sf -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
-      -o /dev/null -w "%{http_code}" \
+    curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+      -o "$RESPONSE_BODY" -w "%{http_code}" \
       -X POST "${BASE_URL}/setup" \
       --data-urlencode "step=user" \
       --data-urlencode "username=${ADMIN_USERNAME}" \
@@ -106,6 +107,11 @@ sys.exit(1)
       --data-urlencode "atl_token=${atl_token}"
   )
   log "Setup POST HTTP status: ${http_code}"
+  if [[ ! "$http_code" =~ ^(2[0-9]{2}|302)$ ]]; then
+    log "Unexpected HTTP status ${http_code}. Response body:"
+    cat "$RESPONSE_BODY" >&2
+    exit 1
+  fi
 
   log "Waiting for Bitbucket to reach RUNNING state..."
   wait_for_states "RUNNING"
