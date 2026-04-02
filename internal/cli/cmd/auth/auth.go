@@ -177,19 +177,25 @@ func New(deps Dependencies) *cobra.Command {
 		Use:   "token-url",
 		Short: "Show personal access token creation URL",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			// Load config once. If --host is provided, override the URL so the identity
+			// lookup targets the same server as the PAT URL being generated.
+			cfg, err := deps.LoadConfig()
+			if err != nil {
+				return err
+			}
+
 			resolvedHost := strings.TrimSpace(tokenHost)
 			if resolvedHost == "" {
-				cfg, err := deps.LoadConfig()
-				if err != nil {
-					return err
-				}
 				resolvedHost = cfg.BitbucketURL
+			} else {
+				// Apply --host override so identity resolution targets the right server.
+				cfg.BitbucketURL = resolvedHost
 			}
 
 			// Attempt to resolve the current user slug for a per-user PAT URL.
 			// If credentials are not configured, fall back to the generic URL.
 			var userSlug string
-			if cfg, err := deps.LoadConfig(); err == nil && cfg.AuthMode() != "none" {
+			if cfg.AuthMode() != "none" {
 				if identity, err := resolveIdentity(cmd.Context(), cfg, deps.NewUsersClient); err == nil {
 					userSlug = identity.Slug
 				}
@@ -439,7 +445,7 @@ func personalAccessTokenURL(host string, userSlug string) (string, error) {
 
 	slug := strings.TrimSpace(userSlug)
 	if slug != "" {
-		parsed.Path = path.Join(parsed.Path, "/plugins/servlet/access-tokens/users/"+slug+"/manage")
+		parsed.Path = path.Join(parsed.Path, "/plugins/servlet/access-tokens/users/"+url.PathEscape(slug)+"/manage")
 	} else {
 		parsed.Path = path.Join(parsed.Path, "/plugins/servlet/access-tokens/manage")
 	}

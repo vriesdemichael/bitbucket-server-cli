@@ -716,3 +716,104 @@ func TestTokenURLCommandWithUserSlug(t *testing.T) {
 		t.Fatalf("expected per-user PAT URL in output, got: %q", got)
 	}
 }
+
+// TestAuthNonJSONHumanOutputPaths covers the human-readable output branches that are skipped
+// when --json / JSONEnabled is true.
+func TestAuthNonJSONHumanOutputPaths(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	t.Run("auth status non-JSON human output", func(t *testing.T) {
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return false },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{
+					BitbucketURL:           "http://status.local:7990",
+					BitbucketVersionTarget: "9.4",
+					BitbucketToken:         "tok",
+					AuthSource:             "env/default",
+				}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+		})
+		out := &bytes.Buffer{}
+		cmd.SetOut(out)
+		cmd.SetErr(out)
+		cmd.SetArgs([]string{"status"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("auth status (non-JSON) failed: %v", err)
+		}
+		if !strings.Contains(out.String(), "status.local") {
+			t.Fatalf("expected host in output, got: %s", out.String())
+		}
+	})
+
+	t.Run("auth login JSON output", func(t *testing.T) {
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return true },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.AppConfig{BitbucketURL: "http://login-json.local:7990"}, nil
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+		})
+		out := &bytes.Buffer{}
+		cmd.SetOut(out)
+		cmd.SetErr(out)
+		cmd.SetArgs([]string{"login", "--host", "http://login-json.local:7990", "--token", "my-token"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("auth login (JSON) failed: %v", err)
+		}
+		if !strings.Contains(out.String(), "auth_mode") {
+			t.Fatalf("expected auth_mode in JSON output, got: %s", out.String())
+		}
+	})
+
+	t.Run("auth logout non-JSON human output", func(t *testing.T) {
+		if _, err := config.SaveLogin(config.LoginInput{Host: "http://logout-human.local:7990", Token: "tok", SetDefault: false}); err != nil {
+			t.Fatalf("save login for logout: %v", err)
+		}
+
+		cmd := New(Dependencies{
+			JSONEnabled: func() bool { return false },
+			LoadConfig: func() (config.AppConfig, error) {
+				return config.LoadFromEnv()
+			},
+			WriteJSON: func(writer io.Writer, payload any) error {
+				return jsonoutput.Write(writer, payload)
+			},
+		})
+		out := &bytes.Buffer{}
+		cmd.SetOut(out)
+		cmd.SetErr(out)
+		cmd.SetArgs([]string{"logout", "--host", "http://logout-human.local:7990"})
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("auth logout (non-JSON) failed: %v", err)
+		}
+		if !strings.Contains(out.String(), "Stored credentials removed") {
+			t.Fatalf("expected removal message, got: %s", out.String())
+		}
+	})
+}
+
+// TestIdentityHumanSummaryNameAndSlugBranches covers the name-only and slug-only branches
+// of identityHumanSummary (both skipped when DisplayName is set).
+func TestIdentityHumanSummaryNameAndSlugBranches(t *testing.T) {
+	t.Run("name branch when display name empty", func(t *testing.T) {
+		got := identityHumanSummary(authIdentity{Name: "alice"})
+		if !strings.Contains(got, "alice") {
+			t.Fatalf("expected 'alice' in summary, got %q", got)
+		}
+	})
+
+	t.Run("slug branch when name and display name empty", func(t *testing.T) {
+		got := identityHumanSummary(authIdentity{Slug: "alice-slug"})
+		if !strings.Contains(got, "alice-slug") {
+			t.Fatalf("expected slug in summary, got %q", got)
+		}
+	})
+}
