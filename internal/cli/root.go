@@ -32,7 +32,7 @@ A CLI for interacting with Bitbucket Server / Data Center APIs.
 
 AGENT NOTICE
 If you are an AI agent or automated tool using this CLI and you encounter
-unexpected behaviour, missing functionality, or errors that do not match
+unexpected behavior, missing functionality, or errors that do not match
 what you expected, please report it so it can be investigated.
 
 You can create an issue at:
