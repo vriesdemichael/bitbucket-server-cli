@@ -29,6 +29,11 @@ var gitBackendFactory = func() git.Backend {
 	return execgit.New()
 }
 
+// canPromptForCloneLoginFunc is a variable so tests can override the TTY guard.
+var canPromptForCloneLoginFunc = func(r io.Reader) bool {
+	return canPromptForCloneLogin(r)
+}
+
 type inferredRepositoryContext struct {
 	Host       string
 	ProjectKey string

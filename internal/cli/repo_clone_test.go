@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -183,8 +185,10 @@ func TestRepoCloneCommandFallsBackToStoredHTTPToken(t *testing.T) {
 }
 
 func TestRepoCloneCommandPromptsForTokenAfterSSHFailure(t *testing.T) {
+	// With a non-TTY (bytes.Buffer) stdin, canPromptForCloneLogin returns false and
+	// the command falls through to a "no stored credentials" error.
 	originalFactory := gitBackendFactory
-	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed"), nil}}
+	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed")}}
 	gitBackendFactory = func() git.Backend { return stub }
 	t.Cleanup(func() { gitBackendFactory = originalFactory })
 
@@ -207,18 +211,15 @@ func TestRepoCloneCommandPromptsForTokenAfterSSHFailure(t *testing.T) {
 	command.SetIn(bytes.NewBufferString("prompt-token\n"))
 	command.SetArgs([]string{"repo", "clone", "PRJ/demo"})
 
-	if err := command.Execute(); err != nil {
-		t.Fatalf("repo clone with prompt failed: %v", err)
+	err := command.Execute()
+	if err == nil {
+		t.Fatal("expected auth error when stdin is not a TTY")
 	}
-
-	if len(stub.cloneCalls) != 2 {
-		t.Fatalf("expected two clone attempts, got %d", len(stub.cloneCalls))
+	if !strings.Contains(err.Error(), "no stored HTTP credentials") {
+		t.Fatalf("expected credentials error, got: %v", err)
 	}
-	if stub.cloneCalls[1].repositoryURL != "https://x-token-auth:prompt-token@bitbucket.example.com/scm/PRJ/demo.git" {
-		t.Fatalf("unexpected prompted clone url: %s", stub.cloneCalls[1].repositoryURL)
-	}
-	if !strings.Contains(output.String(), "Token:") {
-		t.Fatalf("expected login prompt in output, got: %s", output.String())
+	if len(stub.cloneCalls) != 1 {
+		t.Fatalf("expected only SSH clone attempt, got %d", len(stub.cloneCalls))
 	}
 }
 
@@ -643,6 +644,8 @@ func TestRepoCloneCommandJSONFailsWithNoAuth(t *testing.T) {
 }
 
 func TestRepoCloneCommandEmptyTokenPrompt(t *testing.T) {
+	// With a non-TTY (bytes.Buffer) stdin, the prompt gate blocks before reaching the
+	// empty-token check; the error reflects the missing credentials, not the empty token.
 	originalFactory := gitBackendFactory
 	stub := &cloneBackendStub{cloneErr: errors.New("ssh: connection refused")}
 	gitBackendFactory = func() git.Backend { return stub }
@@ -664,18 +667,15 @@ func TestRepoCloneCommandEmptyTokenPrompt(t *testing.T) {
 	output := &bytes.Buffer{}
 	command.SetOut(output)
 	command.SetErr(output)
-	command.SetIn(bytes.NewBufferString("\n")) // empty token → no prompt success
+	command.SetIn(bytes.NewBufferString("\n"))
 	command.SetArgs([]string{"repo", "clone", "PRJ/demo"})
 
 	err := command.Execute()
 	if err == nil {
-		t.Fatal("expected auth error when empty token provided")
+		t.Fatal("expected auth error when stdin is not a TTY")
 	}
 	if !strings.Contains(err.Error(), "no stored HTTP credentials") {
 		t.Fatalf("unexpected error message: %v", err)
-	}
-	if !strings.Contains(output.String(), "Token:") {
-		t.Fatalf("expected token prompt in output, got: %s", output.String())
 	}
 }
 
@@ -741,14 +741,19 @@ func TestBuildAuthenticatedCloneURLAllModes(t *testing.T) {
 }
 
 func TestSameCloneHostEdgeCasesAdditional(t *testing.T) {
-	// Missing scheme → false
+	// Missing scheme → URL parses with empty host → false
 	if sameCloneHost("bitbucket.example.com", "https://bitbucket.example.com") {
-		t.Fatal("expected false when left has no scheme")
+		t.Fatal("expected false when left has no scheme (parses with empty host)")
 	}
 
 	// Path-only → no host → false
 	if sameCloneHost("/path/only", "https://bitbucket.example.com") {
 		t.Fatal("expected false when left has no host")
+	}
+
+	// Cross-scheme same host → true (scheme is ignored for credential matching)
+	if !sameCloneHost("http://bitbucket.example.com", "https://bitbucket.example.com") {
+		t.Fatal("expected true when same host with different schemes")
 	}
 }
 
@@ -827,8 +832,9 @@ func TestRepoCloneCommandSSHExplicitURL(t *testing.T) {
 }
 
 func TestRepoCloneCommandBackendFailsAfterTokenPrompt(t *testing.T) {
+	// With a non-TTY stdin, the prompt gate fires before the backend is reached,
+	// so only the SSH attempt occurs and we get a credentials error.
 	originalFactory := gitBackendFactory
-	// SSH fails, then HTTP clone also fails after user provides a token
 	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed"), errors.New("http 401")}}
 	gitBackendFactory = func() git.Backend { return stub }
 	t.Cleanup(func() { gitBackendFactory = originalFactory })
@@ -854,13 +860,13 @@ func TestRepoCloneCommandBackendFailsAfterTokenPrompt(t *testing.T) {
 
 	err := command.Execute()
 	if err == nil {
-		t.Fatal("expected clone error when backend fails after prompted token")
+		t.Fatal("expected clone error when stdin is not a TTY")
 	}
-	if !strings.Contains(err.Error(), "http 401") {
+	if !strings.Contains(err.Error(), "no stored HTTP credentials") {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if len(stub.cloneCalls) != 2 {
-		t.Fatalf("expected 2 clone attempts (SSH + HTTP), got %d", len(stub.cloneCalls))
+	if len(stub.cloneCalls) != 1 {
+		t.Fatalf("expected 1 clone attempt (SSH only), got %d", len(stub.cloneCalls))
 	}
 }
 
@@ -870,6 +876,187 @@ func TestReadCloneTokenErrorPath(t *testing.T) {
 	_, err := readCloneToken(errReader, &bytes.Buffer{})
 	if err == nil {
 		t.Fatal("expected read error from readCloneToken")
+	}
+}
+
+func TestReadCloneTokenSuccessPath(t *testing.T) {
+	// Non-terminal reader: readCloneToken falls back to bufio line reading
+	got, err := readCloneToken(strings.NewReader("my-token\n"), &bytes.Buffer{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if got != "my-token" {
+		t.Fatalf("expected 'my-token', got %q", got)
+	}
+}
+
+// TestPromptForCloneLoginDirect calls promptForCloneLogin directly (bypassing the TTY guard
+// in cloneRepositoryWithAuthFallback) to cover the body of the function.
+func TestPromptForCloneLoginDirect(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	cfg := config.AppConfig{BitbucketURL: "https://bitbucket.example.com"}
+
+	t.Run("success with token", func(t *testing.T) {
+		command := NewRootCommand()
+		out := &bytes.Buffer{}
+		command.SetOut(out)
+		command.SetErr(out)
+		command.SetIn(bytes.NewBufferString("my-token\n"))
+
+		auth, prompted, err := promptForCloneLogin(command, cfg, "https://bitbucket.example.com")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !prompted {
+			t.Fatal("expected prompted = true")
+		}
+		if auth.BitbucketToken != "my-token" {
+			t.Fatalf("expected 'my-token', got %q", auth.BitbucketToken)
+		}
+		if !strings.Contains(out.String(), "Token:") {
+			t.Fatalf("expected Token: prompt in output, got: %s", out.String())
+		}
+	})
+
+	t.Run("empty token returns not-prompted", func(t *testing.T) {
+		command := NewRootCommand()
+		out := &bytes.Buffer{}
+		command.SetOut(out)
+		command.SetErr(out)
+		command.SetIn(bytes.NewBufferString("\n"))
+
+		_, prompted, err := promptForCloneLogin(command, cfg, "https://bitbucket.example.com")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if prompted {
+			t.Fatal("expected prompted = false for empty token")
+		}
+	})
+}
+
+// TestRepoCloneCommandHTTPFallbackFailsBothSSHAndHTTP exercises the case where SSH fails
+// AND the HTTP clone (using stored token credentials) also fails.  This covers the
+// "hasStoredHTTPAuth=true, HTTP clone fails" else-branch in cloneRepositoryWithAuthFallback.
+func TestRepoCloneCommandHTTPFallbackFailsBothSSHAndHTTP(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed"), errors.New("http 401 unauthorized")}}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "stored-token")
+
+	_, err := executeTestCLI(t, "repo", "clone", "PRJ/demo")
+	if err == nil {
+		t.Fatal("expected error when both SSH and HTTP clone fail")
+	}
+	if !strings.Contains(err.Error(), "http 401") {
+		t.Fatalf("expected http 401 error, got: %v", err)
+	}
+	if len(stub.cloneCalls) != 2 {
+		t.Fatalf("expected 2 clone attempts (SSH + HTTP), got %d", len(stub.cloneCalls))
+	}
+}
+
+// TestCloneRepositoryWithAuthFallbackPromptPathEmptyToken exercises the interactive-prompt
+// path in cloneRepositoryWithAuthFallback when an empty token is provided.  The test injects
+// canPromptForCloneLoginFunc to bypass the TTY guard.
+func TestCloneRepositoryWithAuthFallbackPromptPathEmptyToken(t *testing.T) {
+	originalPromptFunc := canPromptForCloneLoginFunc
+	canPromptForCloneLoginFunc = func(io.Reader) bool { return true }
+	t.Cleanup(func() { canPromptForCloneLoginFunc = originalPromptFunc })
+
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{cloneErr: errors.New("ssh failed")}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	command := NewRootCommand()
+	out := &bytes.Buffer{}
+	command.SetOut(out)
+	command.SetErr(out)
+	command.SetIn(bytes.NewBufferString("\n")) // empty token → prompted=false
+	command.SetArgs([]string{"repo", "clone", "PRJ/demo"})
+
+	err := command.Execute()
+	if err == nil {
+		t.Fatal("expected error: empty token should not succeed")
+	}
+	if !strings.Contains(err.Error(), "no stored HTTP credentials") {
+		t.Fatalf("expected no-credentials error, got: %v", err)
+	}
+}
+
+// TestCloneRepositoryWithAuthFallbackPromptPathSuccess exercises the full interactive-prompt
+// path through cloneRepositoryWithAuthFallback when a valid token is entered and the clone
+// succeeds.  canPromptForCloneLoginFunc is injected to bypass the TTY guard.
+func TestCloneRepositoryWithAuthFallbackPromptPathSuccess(t *testing.T) {
+	originalPromptFunc := canPromptForCloneLoginFunc
+	canPromptForCloneLoginFunc = func(io.Reader) bool { return true }
+	t.Cleanup(func() { canPromptForCloneLoginFunc = originalPromptFunc })
+
+	originalFactory := gitBackendFactory
+	// First call (SSH) fails; second call (prompted HTTP) succeeds.
+	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed"), nil}}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	command := NewRootCommand()
+	out := &bytes.Buffer{}
+	command.SetOut(out)
+	command.SetErr(out)
+	command.SetIn(bytes.NewBufferString("my-secret-token\n"))
+	command.SetArgs([]string{"repo", "clone", "PRJ/demo"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected successful clone after prompt, got: %v", err)
+	}
+	if len(stub.cloneCalls) != 2 {
+		t.Fatalf("expected 2 clone calls (SSH + prompted HTTP), got %d", len(stub.cloneCalls))
+	}
+	if !strings.Contains(out.String(), "Cloned PRJ/demo into demo") {
+		t.Fatalf("unexpected output: %s", out.String())
+	}
+}
+
+// TestCanPromptForCloneLoginOsFile exercises the *os.File branch of canPromptForCloneLogin.
+// os.Stdin is a *os.File but is not a TTY in a test environment, so the function returns false.
+func TestCanPromptForCloneLoginOsFile(t *testing.T) {
+	result := canPromptForCloneLogin(os.Stdin)
+	// In CI/test environments os.Stdin is not a terminal.
+	if result {
+		t.Fatal("expected canPromptForCloneLogin(os.Stdin) = false in non-TTY test environment")
 	}
 }
 

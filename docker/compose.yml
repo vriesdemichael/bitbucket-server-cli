@@ -15,7 +15,7 @@ services:
 
   bitbucket:
     build:
-      context: ./secret-patch
+      context: ./custom-bitbucket
     image: atlassian/bitbucket:9.4.16-faketime
     container_name: bb-bitbucket
     depends_on:

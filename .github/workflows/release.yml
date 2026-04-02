@@ -210,7 +210,7 @@ jobs:
           BINARY_NAME="bb${BINARY_EXT}"
           ARCHIVE_BASENAME="bb_${VERSION_NO_V}_${GOOS}_${GOARCH}"
 
-          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -o "$BINARY_NAME" ./cmd/bb
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -ldflags "-X main.Version=${VERSION}" -o "$BINARY_NAME" ./cmd/bb
 
           if [[ "$ARCHIVE" == "zip" ]]; then
             ARCHIVE_NAME="${ARCHIVE_BASENAME}.zip"

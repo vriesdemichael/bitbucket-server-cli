@@ -251,18 +251,16 @@ func cloneRepositoryWithAuthFallback(
 		}
 		if err := backend.Clone(cmd.Context(), authenticatedCloneURL, cloneOptions); err == nil {
 			return canonicalCloneURL, nil
-		} else if sshErr == nil {
-			return "", err
 		} else {
 			return "", err
 		}
 	}
 
-	if jsonOutput {
+	if jsonOutput || !canPromptForCloneLoginFunc(cmd.InOrStdin()) {
 		return "", newCloneLoginRequiredError(cloneHost, sshErr)
 	}
 
-	promptedAuth, prompted, err := promptForCloneLogin(cmd, cloneHost)
+	promptedAuth, prompted, err := promptForCloneLogin(cmd, cfg, cloneHost)
 	if err != nil {
 		return "", err
 	}
@@ -282,13 +280,13 @@ func cloneRepositoryWithAuthFallback(
 }
 
 func resolveCloneHTTPAuth(cfg config.AppConfig, cloneHost string) (config.AppConfig, bool, error) {
+	// Match on host (ignoring scheme) so http↔https variants of the same server both hit.
 	if sameCloneHost(cfg.BitbucketURL, cloneHost) && cfg.AuthMode() != "none" {
-		cfg.BitbucketURL = cloneHost
 		return cfg, true, nil
 	}
 
 	if os.Getenv("BB_DISABLE_STORED_CONFIG") == "1" {
-		return config.AppConfig{BitbucketURL: cloneHost}, false, nil
+		return config.AppConfig{}, false, nil
 	}
 
 	storedAuth, ok, err := config.LoadStoredAuthForHost(cloneHost)
@@ -296,19 +294,14 @@ func resolveCloneHTTPAuth(cfg config.AppConfig, cloneHost string) (config.AppCon
 		return config.AppConfig{}, false, err
 	}
 	if !ok || storedAuth.AuthMode() == "none" {
-		return config.AppConfig{BitbucketURL: cloneHost}, false, nil
-	}
-
-	storedAuth.BitbucketURL = cloneHost
-	return storedAuth, true, nil
-}
-
-func promptForCloneLogin(cmd *cobra.Command, cloneHost string) (config.AppConfig, bool, error) {
-	input := cmd.InOrStdin()
-	if !canPromptForCloneLogin(input) {
 		return config.AppConfig{}, false, nil
 	}
 
+	return storedAuth, true, nil
+}
+
+func promptForCloneLogin(cmd *cobra.Command, cfg config.AppConfig, cloneHost string) (config.AppConfig, bool, error) {
+	input := cmd.InOrStdin()
 	output := cmd.ErrOrStderr()
 	fmt.Fprintf(output, "SSH clone failed and no stored HTTP credentials were found for %s.\n", cloneHost)
 	fmt.Fprintf(output, "Create a token with `bb auth token-url --host %s`, then paste it to store and retry.\n", cloneHost)
@@ -322,17 +315,28 @@ func promptForCloneLogin(cmd *cobra.Command, cloneHost string) (config.AppConfig
 		return config.AppConfig{}, false, nil
 	}
 
-	if _, err := config.SaveLogin(config.LoginInput{Host: cloneHost, Token: tokenValue, SetDefault: false}); err != nil {
+	// Preserve the full REST base URL (including context path) when the configured
+	// server URL resolves to the same host as the clone URL.
+	saveHost := cloneHost
+	if sameCloneHost(cfg.BitbucketURL, cloneHost) {
+		saveHost = cfg.BitbucketURL
+	}
+
+	if _, err := config.SaveLogin(config.LoginInput{Host: saveHost, Token: tokenValue, SetDefault: false}); err != nil {
 		return config.AppConfig{}, false, err
 	}
 
-	return config.AppConfig{BitbucketURL: cloneHost, BitbucketToken: tokenValue}, true, nil
+	savedCfg := cfg
+	savedCfg.BitbucketToken = tokenValue
+	return savedCfg, true, nil
 }
 
 func canPromptForCloneLogin(input io.Reader) bool {
 	file, ok := input.(*os.File)
 	if !ok {
-		return true
+		// Non-file readers (pipes, test buffers, etc.) cannot be verified as a TTY,
+		// so conservatively disable prompting.
+		return false
 	}
 
 	return term.IsTerminal(int(file.Fd()))
@@ -403,17 +407,20 @@ func isExplicitCloneURL(rawInput string) bool {
 	return strings.Contains(trimmed, "://") || strings.HasPrefix(trimmed, "git@")
 }
 
+// sameCloneHost returns true when left and right resolve to the same host:port,
+// regardless of scheme. This allows http↔https variants of the same server to match,
+// consistent with the stored-credential cross-scheme fallback in config.
 func sameCloneHost(left string, right string) bool {
 	leftParsed, leftErr := url.Parse(strings.TrimSpace(left))
 	rightParsed, rightErr := url.Parse(strings.TrimSpace(right))
 	if leftErr != nil || rightErr != nil {
 		return false
 	}
-	if leftParsed.Scheme == "" || rightParsed.Scheme == "" || leftParsed.Host == "" || rightParsed.Host == "" {
+	if leftParsed.Host == "" || rightParsed.Host == "" {
 		return false
 	}
 
-	return strings.EqualFold(leftParsed.Scheme, rightParsed.Scheme) && strings.EqualFold(leftParsed.Host, rightParsed.Host)
+	return strings.EqualFold(leftParsed.Host, rightParsed.Host)
 }
 
 func splitCloneDirectoryAndExtraArgs(defaultDirectory string, values []string) (string, []string) {
