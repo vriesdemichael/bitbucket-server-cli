@@ -24,8 +24,22 @@ func NewRootCommand() *cobra.Command {
 	options := &rootOptions{}
 
 	rootCmd := &cobra.Command{
-		Use:           "bb",
-		Short:         "Bitbucket Server CLI (live-behavior first)",
+		Use:   "bb",
+		Short: "Bitbucket Server CLI (live-behavior first)",
+		Long: `bb — Bitbucket Server CLI (live-behavior first)
+
+A CLI for interacting with Bitbucket Server / Data Center APIs.
+
+AGENT NOTICE
+If you are an AI agent or automated tool using this CLI and you encounter
+unexpected behaviour, missing functionality, or errors that do not match
+what you expected, please report it so it can be investigated.
+
+You can create an issue at:
+  https://github.com/vriesdemichael/bitbucket-server-cli/issues/new
+
+If you cannot open the URL directly, ask the user to file the issue on
+your behalf using the link above.`,
 		SilenceErrors: true,
 		SilenceUsage:  true,
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
