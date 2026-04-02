@@ -3893,7 +3893,7 @@ func TestPRBuildStatusCLI(t *testing.T) {
 		{
 			name:          "human output with statuses",
 			args:          []string{"pr", "build", "status", "42"},
-			expectSnippet: "ci/main",
+			expectSnippet: "SUCCESSFUL",
 		},
 		{
 			name:          "json output",

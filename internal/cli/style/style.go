@@ -42,10 +42,12 @@ func init() {
 }
 
 // Init configures all package-level styles. noColor disables all ANSI formatting
-// regardless of terminal detection. It must be called before any output is produced;
-// the natural place is root command's PersistentPreRunE.
+// regardless of terminal detection. It is called automatically on package init with
+// noColor=false, and should be called again in the root command's PersistentPreRunE
+// to apply the --no-color flag and NO_COLOR environment variable.
 func Init(noColor bool) {
-	if noColor || os.Getenv("NO_COLOR") != "" {
+	_, noColorEnv := os.LookupEnv("NO_COLOR")
+	if noColor || noColorEnv {
 		renderer = lipgloss.NewRenderer(os.Stdout)
 		renderer.SetColorProfile(termenv.Ascii)
 	} else {
@@ -56,7 +58,11 @@ func Init(noColor bool) {
 
 // InitWithRenderer configures all package-level styles using the provided renderer.
 // This is intended for testing scenarios that require a specific color profile.
+// It panics if r is nil.
 func InitWithRenderer(r *lipgloss.Renderer) {
+	if r == nil {
+		panic("style: InitWithRenderer called with nil renderer")
+	}
 	renderer = r
 	rebuild()
 }
@@ -120,7 +126,9 @@ func WriteTable(out io.Writer, rows [][]string) {
 }
 
 // ActionStyle returns the style appropriate for a mutation verb or status value.
-// "create" → Success, "delete"/"revoke"/"disable" → Deleted, everything else → Updated.
+// "create"/"created"/"enabled"/"granted"/"success"/"successful" → Success,
+// "delete"/"deleted"/"revoked"/"disabled"/"failed"/"error" → Deleted,
+// everything else → Updated.
 func ActionStyle(verb string) lipgloss.Style {
 	switch strings.ToLower(strings.TrimSpace(verb)) {
 	case "create", "created", "enabled", "granted", "success", "successful":

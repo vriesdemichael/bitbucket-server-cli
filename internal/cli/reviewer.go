@@ -199,7 +199,7 @@ func newReviewerCommand(options *rootOptions) *cobra.Command {
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok", "id": id})
 			}
-			fmt.Fprintf(cmd.OutOrStdout(), "%s %s for project %s\n", style.Deleted.Render("Deleted condition"), style.Resource.Render(id), args[0])
+			fmt.Fprintf(cmd.OutOrStdout(), "%s %s for project %s\n", style.Deleted.Render("Deleted condition"), style.Resource.Render(id), projectKey)
 			return nil
 		},
 	}
