@@ -109,7 +109,11 @@ jobs:
           set -euo pipefail
           if gh release download --pattern 'changelog.json' --dir .tmp 2>/dev/null; then
             python - <<'PY'
-          import json, os
+          import html
+          import json
+
+          def esc(text: str) -> str:
+              return html.escape(str(text), quote=False)
 
           with open(".tmp/changelog.json", encoding="utf-8") as f:
               releases = json.load(f)
@@ -131,19 +135,19 @@ jobs:
               for c in commits:
                   grouped.setdefault(c.get("section", "Other"), []).append(c)
 
-              lines.append(f"## {version}")
+              lines.append(f"## {esc(version)}")
               lines.append("")
               if previous_tag and compare_url:
-                  lines.append(f"Changes since {previous_tag}.")
+                  lines.append(f"Changes since {esc(previous_tag)}.")
                   lines.append("")
-                  lines.append(f"Compare: [{previous_tag}...{version}]({compare_url})")
+                  lines.append(f"Compare: [{esc(previous_tag)}...{esc(version)}]({compare_url})")
                   lines.append("")
 
               if breaking_changes:
                   lines.append("### \u26a0 Breaking Changes")
                   for item in breaking_changes:
-                      note = f" \u2014 {item['breakingNote']}" if item.get("breakingNote") else ""
-                      lines.append(f"- {item['description']} ([{item['shortSha']}]({item['url']})){note}")
+                      note = f" \u2014 {esc(item['breakingNote'])}" if item.get("breakingNote") else ""
+                      lines.append(f"- {esc(item['description'])} ([{esc(item['shortSha'])}]({item['url']})){note}")
                   lines.append("")
 
               for section in section_order:
@@ -152,8 +156,8 @@ jobs:
                       continue
                   lines.append(f"### {section}")
                   for item in entries:
-                      desc = f"{item['scope']}: {item['description']}" if item.get("scope") else item["description"]
-                      lines.append(f"- {desc} ([{item['shortSha']}]({item['url']}))")
+                      desc = f"{esc(item['scope'])}: {esc(item['description'])}" if item.get("scope") else esc(item["description"])
+                      lines.append(f"- {desc} ([{esc(item['shortSha'])}]({item['url']}))")
                   lines.append("")
 
           with open("docs/site/changelog.md", "w", encoding="utf-8") as out:
