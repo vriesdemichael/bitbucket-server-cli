@@ -49,3 +49,4 @@ nav:
       - Dry-Run Planning: advanced/dry-run-planning.md
       - Machine Mode and Diagnostics: advanced/machine-mode-diagnostics.md
   - ADR Records: adr/index.md
+  - Changelog: changelog.md
