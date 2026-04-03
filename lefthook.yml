@@ -3,13 +3,11 @@ pre-commit:
   commands:
     safe-go-tests:
       run: task test:go:safe
-    combined-patch-coverage-gate:
-      run: task quality:coverage:origin-main
 
 pre-push:
   parallel: false
   commands:
     01-docs-validate:
       run: task docs:validate
-    02-coverage-report-verify:
-      run: task quality:coverage:report:verify
+    02-coverage:
+      run: task quality:coverage:origin-main
