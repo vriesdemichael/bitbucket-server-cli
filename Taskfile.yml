@@ -56,6 +56,12 @@ tasks:
       - cp docs/reference/schemas/bulk-plan.schema.json docs/site/reference/schemas/bulk-plan.schema.json
       - cp docs/reference/schemas/bulk-apply-status.schema.json docs/site/reference/schemas/bulk-apply-status.schema.json
 
+  docs:publish-output-schemas:
+    desc: Publish per-command output JSON schema files into MkDocs docs directory
+    cmds:
+      - mkdir -p docs/site/reference/schemas/output
+      - cp docs/reference/schemas/output/*.schema.json docs/site/reference/schemas/output/
+
   docs:generate:
     desc: Generate all docs artifacts committed to repo
     cmds:
@@ -63,6 +69,8 @@ tasks:
       - task: docs:export-adr-markdown
       - task: docs:export-bulk-schemas
       - task: docs:publish-bulk-schemas
+      - task: docs:export-output-schemas
+      - task: docs:publish-output-schemas
 
   docs:verify-generated:
     desc: Verify generated docs artifacts are up to date
@@ -128,6 +136,10 @@ tasks:
   docs:export-bulk-schemas:
     desc: Export JSON Schemas for bulk policy artifacts
     cmd: go run ./tools/bulk-schema-export -out docs/reference/schemas
+
+  docs:export-output-schemas:
+    desc: Export per-command JSON output schemas for the bb.machine v2 envelope
+    cmd: go run ./tools/output-schema-export -out docs/reference/schemas/output
 
   quality:git:ensure-linear:
     desc: Fail when branch contains merge commits relative to origin/main
