@@ -184,6 +184,8 @@ jobs:
 
       - name: Setup Task
         uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate version input
         env:
@@ -260,6 +262,8 @@ jobs:
 
       - name: Setup Task
         uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download packaged artifacts
         uses: actions/download-artifact@v4

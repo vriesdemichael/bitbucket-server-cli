@@ -34,6 +34,8 @@ jobs:
 
       - name: Setup Task
         uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Verify PR branch has no merge commits
         run: task quality:git:ensure-linear
@@ -53,6 +55,8 @@ jobs:
 
       - name: Setup Task
         uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate ADR records
         run: task quality:validate-decisions
@@ -72,6 +76,8 @@ jobs:
 
       - name: Setup Task
         uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run Go tests (targeted non-live package scope)
         run: task test:go:safe
@@ -101,6 +107,8 @@ jobs:
 
       - name: Setup Task
         uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Download changelog from latest release
         env:
@@ -193,6 +201,8 @@ jobs:
 
       - name: Setup Task
         uses: arduino/setup-task@v2
+        with:
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create .env file (required by docker/compose.yml env_file directive)
         run: touch .env
