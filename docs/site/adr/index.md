@@ -4,8 +4,8 @@ Published Architecture and Development Decision Records for this project.
 
 This page and linked ADR pages are generated from `docs/decisions/*.yaml` by `task docs:export-adr-markdown`.
 
-- Total ADRs: `37`
-- Accepted ADRs: `36`
+- Total ADRs: `40`
+- Accepted ADRs: `39`
 
 ## ADR List
 
@@ -46,4 +46,7 @@ This page and linked ADR pages are generated from `docs/decisions/*.yaml` by `ta
 - [ADR 035: Dry-run capability signaling and test strategy policy](035-dry-run-capability-and-testing-policy.md) (`development`, `accepted`)
 - [ADR 036: CLI identity bb and BB namespace](036-cli-identity-bb-and-bb-namespace.md) (`architecture`, `accepted`)
 - [ADR 037: Versioned docs via MkDocs Material and mike](037-versioned-docs-via-mkdocs-material-and-mike.md) (`development`, `accepted`)
+- [ADR 038: bb ai subcommand as AI-first tooling namespace](038-bb-ai-subcommand-as-ai-first-tooling-namespace.md) (`architecture`, `accepted`)
+- [ADR 039: Built-in MCP server with explicit host scoping and token capability restriction](039-built-in-mcp-server-with-host-scoping-and-token-restriction.md) (`architecture`, `accepted`)
+- [ADR 040: Agent skill distribution via static npx packaging and dynamic CLI generation](040-agent-skill-distribution-static-npx-and-dynamic-cli.md) (`development`, `accepted`)
 
