@@ -466,6 +466,25 @@ jobs:
             gh release create "$VERSION" --title "$VERSION" --notes-file RELEASE_NOTES.md dist/* changelog.json
           fi
 
+      - name: Update changelog in repository
+        env:
+          VERSION: ${{ needs.determine-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          git pull --rebase origin main
+          if [[ -f docs/site/changelog.md ]]; then
+            tmp=$(mktemp)
+            cat RELEASE_NOTES.md > "$tmp"
+            printf '\n' >> "$tmp"
+            cat docs/site/changelog.md >> "$tmp"
+            mv "$tmp" docs/site/changelog.md
+          else
+            cp RELEASE_NOTES.md docs/site/changelog.md
+          fi
+          git add docs/site/changelog.md
+          git commit --no-verify -m "docs: update changelog for $VERSION"
+          git push origin HEAD:refs/heads/main
+
       - name: Publish versioned docs to GitHub Pages branch
         env:
           VERSION: ${{ needs.determine-version.outputs.version }}
