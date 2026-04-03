@@ -60,3 +60,40 @@ type failingWriter struct{}
 func (failingWriter) Write(_ []byte) (int, error) {
 	return 0, errors.New("boom")
 }
+
+func TestEnvelopeSchemaFor(t *testing.T) {
+	dataSchema := map[string]any{"type": "string"}
+	schema := EnvelopeSchemaFor("test.schema.json", "Test Title", "Test description", dataSchema)
+
+	if schema["$schema"] != jsonSchemaVersion {
+		t.Errorf("expected $schema=%q, got %q", jsonSchemaVersion, schema["$schema"])
+	}
+	expected := SchemaBaseURL + "test.schema.json"
+	if schema["$id"] != expected {
+		t.Errorf("expected $id=%q, got %q", expected, schema["$id"])
+	}
+	if schema["title"] != "Test Title" {
+		t.Errorf("unexpected title: %v", schema["title"])
+	}
+	if schema["description"] != "Test description" {
+		t.Errorf("unexpected description: %v", schema["description"])
+	}
+
+	props, ok := schema["properties"].(map[string]any)
+	if !ok {
+		t.Fatal("expected properties map")
+	}
+	for _, field := range []string{"version", "data", "meta"} {
+		if _, ok := props[field]; !ok {
+			t.Errorf("missing envelope property %q", field)
+		}
+	}
+	if props["data"] == nil {
+		t.Error("expected data property to be set")
+	}
+
+	req, ok := schema["required"].([]any)
+	if !ok || len(req) != 3 {
+		t.Fatalf("expected required=[version,data,meta], got %v", schema["required"])
+	}
+}
