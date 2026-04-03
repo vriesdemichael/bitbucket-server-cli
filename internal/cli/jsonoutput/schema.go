@@ -35,30 +35,3 @@ func metaSchema() map[string]any {
 		"required": []any{"contract"},
 	}
 }
-
-func stringPropSchema() map[string]any {
-	return map[string]any{"type": "string"}
-}
-
-func boolPropSchema() map[string]any {
-	return map[string]any{"type": "boolean"}
-}
-
-func stringObjectSchema(properties map[string]any, required []string) map[string]any {
-	req := make([]any, len(required))
-	for i, r := range required {
-		req[i] = r
-	}
-	return map[string]any{
-		"type":                 "object",
-		"additionalProperties": false,
-		"properties":           properties,
-		"required":             req,
-	}
-}
-
-func okStatusSchema() map[string]any {
-	return stringObjectSchema(map[string]any{
-		"status": map[string]any{"const": "ok"},
-	}, []string{"status"})
-}
