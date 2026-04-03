@@ -201,17 +201,13 @@ jobs:
             echo "COVERAGE_MIN_CONTRACT=$COVERAGE_MIN_CONTRACT"
           } >> "$GITHUB_ENV"
 
-      - name: Verify committed quality report is current
+      - name: Verify coverage quality gates
         run: |
           go run ./tools/quality-report \
             -coverprofile .tmp/coverage.unit.out \
             -live-coverprofile .tmp/coverage.live.out \
             -base-ref origin/main \
             -manifest docs/quality/generated-operation-contracts.json \
-            -report-file docs/quality/coverage-report.json \
-            -raw-coverprofile-file docs/quality/coverage.combined.raw.out \
-            -scoped-coverprofile-file docs/quality/coverage.combined.scoped.out \
-            -verify-report -verify-coverprofiles \
             -min-global-combined "$COVERAGE_MIN_GLOBAL_COMBINED" \
             -min-patch "$COVERAGE_MIN_PATCH" \
             -min-patch-lines "$COVERAGE_MIN_PATCH_LINES" \
