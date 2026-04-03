@@ -39,25 +39,71 @@ tar -xzf "bb_${VERSION#v}_linux_amd64.tar.gz"
 install -m 0755 bb /usr/local/bin/bb
 ```
 
-Authenticate and run first commands:
+**Authenticate** — store a token for your Bitbucket instance:
 
 ```bash
 bb auth login --host https://bitbucket.acme.corp --token "$BB_TOKEN"
 bb auth status
+```
+
+```text
+Target Bitbucket: https://bitbucket.acme.corp (expected version 9.4.16, auth=token, source=stored/default)
+```
+
+**Clone and browse** — no need to look up URLs:
+
+```bash
 bb repo clone PLATFORM/api
 bb browse --repo PLATFORM/api
+```
+
+```text
+Cloning into 'api'...
+Cloned PLATFORM/api into api
+# browse opens https://bitbucket.acme.corp/projects/PLATFORM/repos/api in your browser
+```
+
+**Search** — find repositories across all projects:
+
+```bash
 bb search repos --limit 20
+```
+
+```text
+PLATFORM/api      API Service
+PLATFORM/backend  Backend Service
+PLATFORM/web      Frontend Web App
+```
+
+**Machine mode** — stable JSON envelope for scripting and CI/CD:
+
+```bash
 bb --json auth status
+```
+
+```json
+{
+  "version": "v2",
+  "data": {
+    "bitbucket_url": "https://bitbucket.acme.corp",
+    "bitbucket_version_target": "9.4.16",
+    "auth_mode": "token",
+    "auth_source": "stored/default"
+  },
+  "meta": {
+    "contract": "bb.machine"
+  }
+}
 ```
 
 ## Docs
 
 - Full docs site: <https://vriesdemichael.github.io/bitbucket-server-cli/latest/>
-- Installation and Quickstart: `docs/site/installation-and-quickstart.md`
-- Basic Usage: `docs/site/basic-usage.md`
-- Advanced Topics: `docs/site/advanced/index.md`
-- Command Reference (generated): `docs/site/reference/commands/index.md`
-- ADR Index: `docs/site/adr/index.md`
+- Installation and Quickstart: [docs/site/installation-and-quickstart.md](docs/site/installation-and-quickstart.md)
+- Basic Usage: [docs/site/basic-usage.md](docs/site/basic-usage.md)
+- Advanced Topics: [docs/site/advanced/index.md](docs/site/advanced/index.md)
+- Command Reference (generated): [docs/site/reference/commands/index.md](docs/site/reference/commands/index.md)
+- ADR Index: [docs/site/adr/index.md](docs/site/adr/index.md)
 
 ## Compatibility and contracts
 
