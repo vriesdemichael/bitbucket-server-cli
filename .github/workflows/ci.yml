@@ -153,6 +153,8 @@ jobs:
         run: docker compose -f docker/compose.yml up -d
 
       - name: Bootstrap Bitbucket (wait for ready + create admin user)
+        env:
+          BITBUCKET_LICENSE_KEY: ${{ secrets.BITBUCKET_LICENSE_KEY }}
         run: bash scripts/bootstrap-bitbucket.sh "$BITBUCKET_URL" "$ADMIN_USER" "$ADMIN_PASSWORD"
 
       - name: Run unit tests with coverage

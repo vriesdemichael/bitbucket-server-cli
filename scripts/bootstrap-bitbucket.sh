@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
 # Bootstrap a fresh Bitbucket Data Center instance for CI.
 #
-# The Bitbucket container auto-applies the license from BITBUCKET_LICENSE_KEY,
-# so the only remaining setup step is creating the initial admin user.
-# This script:
-#   1. Polls /status until FIRST_RUN (license applied, user step pending)
-#      or RUNNING (already bootstrapped).
-#   2. On FIRST_RUN: fetches the setup page to obtain the session cookie and
-#      CSRF token (atl_token), then POSTs the admin-user form.
+# The Bitbucket Docker image does NOT auto-apply the license key — it must be
+# applied via the REST API after startup.  This script:
+#   1. Polls /status until FIRST_RUN or RUNNING.
+#   2. On FIRST_RUN: fetches the setup page for a session cookie and CSRF
+#      token (atl_token), then POSTs the admin-user form.
 #   3. Polls /status until RUNNING.
+#   4. If BITBUCKET_LICENSE_KEY is set in the environment, applies it via
+#      the REST API (/rest/api/latest/admin/license).
 #
 # Usage:
-#   bash scripts/bootstrap-bitbucket.sh [base_url] [username] [password]
+#   BITBUCKET_LICENSE_KEY=<key> bash scripts/bootstrap-bitbucket.sh [base_url] [username] [password]
 #
 # Arguments (all optional, with defaults):
 #   base_url  - Bitbucket base URL (default: http://localhost:7990)
@@ -115,6 +115,20 @@ sys.exit(1)
 
   log "Waiting for Bitbucket to reach RUNNING state..."
   wait_for_states "RUNNING"
+fi
+
+if [ -n "${BITBUCKET_LICENSE_KEY:-}" ]; then
+  log "Applying license key via REST API..."
+  license_response=$(curl -sf -u "${ADMIN_USERNAME}:${ADMIN_PASSWORD}" \
+    -X POST "${BASE_URL}/rest/api/latest/admin/license" \
+    -H 'Content-Type: application/json' \
+    -d "{\"license\": \"${BITBUCKET_LICENSE_KEY}\"}" 2>&1) || {
+    log "Failed to apply license. Response: ${license_response}"
+    exit 1
+  }
+  log "License applied."
+else
+  log "BITBUCKET_LICENSE_KEY not set; skipping license application."
 fi
 
 log "Bitbucket is RUNNING at ${BASE_URL} (admin user: ${ADMIN_USERNAME})"
