@@ -12,6 +12,11 @@
   --bb-secondary-button-border: rgba(20, 36, 51, 0.5);
   --bb-secondary-button-text: #203547;
   --bb-secondary-button-hover-bg: rgba(20, 36, 51, 0.08);
+  --bb-nav-title-bg: rgba(20, 36, 51, 0.06);
+  --bb-nav-title-color: #203547;
+  --bb-table-head-bg: #1b3349;
+  --bb-table-row-bg: rgba(255, 250, 242, 0.12);
+  --bb-table-row-alt-bg: rgba(20, 36, 51, 0.08);
   --bb-line: rgba(20, 36, 51, 0.14);
   --bb-panel: rgba(255, 250, 242, 0.86);
   --bb-accent: #ef6a3a;
@@ -53,6 +58,11 @@
   --bb-secondary-button-border: rgba(237, 243, 248, 0.38);
   --bb-secondary-button-text: #edf3f8;
   --bb-secondary-button-hover-bg: rgba(237, 243, 248, 0.08);
+  --bb-nav-title-bg: rgba(237, 243, 248, 0.04);
+  --bb-nav-title-color: #edf3f8;
+  --bb-table-head-bg: #1d3449;
+  --bb-table-row-bg: rgba(255, 255, 255, 0.015);
+  --bb-table-row-alt-bg: rgba(237, 243, 248, 0.06);
   --bb-line: rgba(237, 243, 248, 0.1);
   --bb-panel: rgba(19, 31, 43, 0.82);
   --md-typeset-a-color: #ff9b72;
@@ -106,6 +116,20 @@ body::before {
 .md-nav--primary .md-nav__title,
 .md-nav--secondary .md-nav__title {
   border-radius: 18px;
+}
+
+.md-nav--primary .md-nav__title,
+.md-nav--secondary .md-nav__title {
+  background: var(--bb-nav-title-bg);
+  color: var(--bb-nav-title-color);
+  box-shadow: none;
+}
+
+.md-nav--primary .md-nav__title .md-nav__icon,
+.md-nav--secondary .md-nav__title .md-nav__icon,
+.md-nav--primary .md-nav__title .md-nav__button,
+.md-nav--secondary .md-nav__title .md-nav__button {
+  color: inherit;
 }
 
 .md-sidebar__inner {
@@ -164,12 +188,21 @@ body::before {
 }
 
 .md-typeset table:not([class]) th {
-  background: rgba(23, 43, 63, 0.92);
+  background: var(--bb-table-head-bg);
   color: #fff8f1;
 }
 
+.md-typeset table:not([class]) tr {
+  background: var(--bb-table-row-bg);
+}
+
 .md-typeset table:not([class]) tr:nth-child(2n) {
-  background: rgba(255, 255, 255, 0.28);
+  background: var(--bb-table-row-alt-bg);
+}
+
+.md-typeset table:not([class]) td,
+.md-typeset table:not([class]) th {
+  border-color: var(--bb-line);
 }
 
 .md-typeset .admonition,
