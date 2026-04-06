@@ -22,6 +22,10 @@ theme:
       primary: indigo
       accent: teal
 
+extra:
+  version:
+    provider: mike
+
 markdown_extensions:
   - admonition
   - tables
