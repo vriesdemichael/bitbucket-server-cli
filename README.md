@@ -99,6 +99,8 @@ bb --json auth status
 ## Docs
 
 - Full docs site: <https://vriesdemichael.github.io/bitbucket-server-cli/latest/>
+- LLM guide (`llms.txt`): <https://vriesdemichael.github.io/bitbucket-server-cli/latest/llms.txt>
+- AI and llms.txt overview: [docs/site/ai-and-llms.md](docs/site/ai-and-llms.md)
 - Installation and Quickstart: [docs/site/installation-and-quickstart.md](docs/site/installation-and-quickstart.md)
 - Basic Usage: [docs/site/basic-usage.md](docs/site/basic-usage.md)
 - Advanced Topics: [docs/site/advanced/index.md](docs/site/advanced/index.md)
