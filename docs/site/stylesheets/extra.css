@@ -8,6 +8,10 @@
   --bb-hero-text: #152b3d;
   --bb-hero-surface: linear-gradient(180deg, rgba(255, 250, 242, 0.98) 0%, rgba(248, 241, 232, 0.98) 100%);
   --bb-hero-border: rgba(20, 36, 51, 0.12);
+  --bb-secondary-button-bg: rgba(20, 36, 51, 0.04);
+  --bb-secondary-button-border: rgba(20, 36, 51, 0.5);
+  --bb-secondary-button-text: #203547;
+  --bb-secondary-button-hover-bg: rgba(20, 36, 51, 0.08);
   --bb-line: rgba(20, 36, 51, 0.14);
   --bb-panel: rgba(255, 250, 242, 0.86);
   --bb-accent: #ef6a3a;
@@ -45,6 +49,10 @@
   --bb-hero-text: #f6f8fb;
   --bb-hero-surface: linear-gradient(180deg, rgba(17, 29, 41, 0.94) 0%, rgba(14, 24, 34, 0.96) 100%);
   --bb-hero-border: rgba(237, 243, 248, 0.1);
+  --bb-secondary-button-bg: rgba(237, 243, 248, 0.03);
+  --bb-secondary-button-border: rgba(237, 243, 248, 0.38);
+  --bb-secondary-button-text: #edf3f8;
+  --bb-secondary-button-hover-bg: rgba(237, 243, 248, 0.08);
   --bb-line: rgba(237, 243, 248, 0.1);
   --bb-panel: rgba(19, 31, 43, 0.82);
   --md-typeset-a-color: #ff9b72;
@@ -116,7 +124,7 @@ body::before {
 }
 
 .md-typeset {
-  font-size: 0.9rem;
+  font-size: 0.86rem;
 }
 
 .md-typeset h1,
@@ -128,12 +136,12 @@ body::before {
 
 .md-typeset h1 {
   margin-bottom: 1rem;
-  font-size: clamp(1.85rem, 3.2vw, 2.6rem);
+  font-size: clamp(1.72rem, 2.8vw, 2.3rem);
   line-height: 1.08;
 }
 
 .md-typeset h2 {
-  font-size: clamp(1.2rem, 1.8vw, 1.55rem);
+  font-size: clamp(1.08rem, 1.45vw, 1.32rem);
   line-height: 1.18;
 }
 
@@ -181,13 +189,25 @@ body::before {
 .md-typeset .md-button {
   border-radius: 999px;
   font-weight: 700;
-  padding: 0.72em 1.15em;
+  padding: 0.62em 1em;
 }
 
 .md-typeset .md-button--primary {
   background: linear-gradient(135deg, var(--bb-accent) 0%, #ff8d55 100%);
   border: none;
   box-shadow: 0 8px 20px rgba(239, 106, 58, 0.18);
+}
+
+.bb-actions .md-button:not(.md-button--primary) {
+  background: var(--bb-secondary-button-bg);
+  border-color: var(--bb-secondary-button-border);
+  color: var(--bb-secondary-button-text);
+}
+
+.bb-actions .md-button:not(.md-button--primary):hover {
+  background: var(--bb-secondary-button-hover-bg);
+  border-color: var(--bb-secondary-button-border);
+  color: var(--bb-secondary-button-text);
 }
 
 .bb-hero,
@@ -198,8 +218,8 @@ body::before {
 }
 
 .bb-hero {
-  padding: clamp(1.6rem, 3vw, 2.4rem);
-  margin: 0 0 2rem;
+  padding: clamp(1.3rem, 2.2vw, 1.9rem);
+  margin: 0 0 1.5rem;
   border: 1px solid var(--bb-hero-border);
   border-radius: calc(var(--bb-radius) + 8px);
   background: var(--bb-hero-surface);
@@ -212,9 +232,9 @@ body::before {
 
 .bb-hero h1 {
   max-width: 12ch;
-  margin: 0 0 0.85rem;
-  font-size: clamp(2.2rem, 4.8vw, 3.6rem);
-  line-height: 1;
+  margin: 0 0 0.7rem;
+  font-size: clamp(1.9rem, 3.8vw, 2.95rem);
+  line-height: 1.02;
   color: var(--bb-hero-text);
 }
 
@@ -230,22 +250,22 @@ body::before {
 
 .bb-lead {
   max-width: 44rem;
-  font-size: 1rem;
-  line-height: 1.7;
+  font-size: 0.92rem;
+  line-height: 1.62;
   color: var(--bb-surface-muted);
 }
 
 .bb-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.8rem;
-  margin-top: 1.4rem;
+  gap: 0.65rem;
+  margin-top: 1rem;
 }
 
 .bb-grid {
   display: grid;
-  gap: 1rem;
-  margin: 1rem 0 2rem;
+  gap: 0.85rem;
+  margin: 0.85rem 0 1.5rem;
 }
 
 .bb-grid-2 {
@@ -262,7 +282,7 @@ body::before {
   border-radius: var(--bb-radius);
   background: var(--bb-panel);
   box-shadow: var(--bb-shadow);
-  padding: 1.15rem;
+  padding: 0.95rem 1rem;
   color: var(--bb-surface-text);
 }
 
@@ -278,10 +298,17 @@ body::before {
 .bb-card h2,
 .bb-panel h2 {
   margin-top: 0;
-  margin-bottom: 0.55rem;
-  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+  margin-bottom: 0.45rem;
+  font-size: clamp(0.98rem, 1.25vw, 1.16rem);
   line-height: 1.24;
   color: var(--bb-surface-text);
+}
+
+.bb-card p,
+.bb-panel p,
+.bb-panel li {
+  font-size: 0.9rem;
+  line-height: 1.58;
 }
 
 .bb-card p,
@@ -326,15 +353,15 @@ body::before {
 
 @media screen and (max-width: 44.9375em) {
   .md-typeset h1 {
-    font-size: 1.95rem;
+    font-size: 1.72rem;
   }
 
   .bb-hero {
-    padding: 1.25rem;
+    padding: 1.05rem;
   }
 
   .bb-hero h1 {
-    font-size: 2.35rem;
+    font-size: 2.05rem;
   }
 
   .bb-actions {
