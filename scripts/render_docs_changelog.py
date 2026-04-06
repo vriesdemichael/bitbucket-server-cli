@@ -56,11 +56,36 @@ def strip_duplicate_heading(tag: str, body: str) -> str:
     return "\n".join(lines).strip()
 
 
+def flatten_body_headings(body: str) -> str:
+    text = body.strip()
+    if not text:
+        return ""
+
+    flattened: list[str] = []
+    heading_pattern = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
+
+    for line in text.splitlines():
+        match = heading_pattern.match(line.strip())
+        if not match:
+            flattened.append(line)
+            continue
+
+        label = match.group(2).strip()
+        if not label:
+            continue
+
+        if flattened and flattened[-1].strip():
+            flattened.append("")
+        flattened.append(f"**{label}**")
+
+    return "\n".join(flattened).strip()
+
+
 def render_release(release: dict[str, object]) -> list[str]:
     tag = str(release.get("tag_name") or release.get("name") or "Unversioned release")
     url = str(release.get("html_url") or "").strip()
     published_at = str(release.get("published_at") or "").strip()
-    body = strip_duplicate_heading(tag, str(release.get("body") or ""))
+    body = flatten_body_headings(strip_duplicate_heading(tag, str(release.get("body") or "")))
 
     heading = f"## [{tag}]({url})" if url else f"## {tag}"
     lines = [heading, ""]
