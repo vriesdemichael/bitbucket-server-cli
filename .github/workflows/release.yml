@@ -477,7 +477,7 @@ jobs:
           set -euo pipefail
           mkdir -p .tmp
           gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --paginate > .tmp/releases.json
-          python scripts/render_docs_changelog.py --releases-json .tmp/releases.json --output docs/site/changelog.md
+          python scripts/render_docs_changelog.py --releases-json .tmp/releases.json --releases-page-url "https://github.com/${GITHUB_REPOSITORY}/releases" --output docs/site/changelog.md
 
       - name: Publish versioned docs to GitHub Pages branch
         env:
