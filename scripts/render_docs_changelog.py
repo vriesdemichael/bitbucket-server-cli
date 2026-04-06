@@ -4,13 +4,37 @@ import argparse
 import json
 import re
 from pathlib import Path
+from typing import cast
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Render the docs changelog page from GitHub releases JSON.")
     parser.add_argument("--releases-json", required=True, help="Path to a JSON array returned by the GitHub releases API")
+    parser.add_argument("--releases-page-url", required=True, help="URL of the repository releases page")
     parser.add_argument("--output", required=True, help="Path to the markdown file to write")
     return parser.parse_args()
+
+
+def load_releases(releases_path: Path) -> list[dict[str, object]]:
+    try:
+        payload = json.loads(releases_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Failed to decode releases JSON from {releases_path}: {exc}") from exc
+
+    if not isinstance(payload, list):
+        raise SystemExit(
+            f"Expected {releases_path} to contain a JSON array of releases, got {type(payload).__name__}."
+        )
+
+    releases: list[dict[str, object]] = []
+    for index, release in enumerate(payload):
+        if not isinstance(release, dict):
+            raise SystemExit(
+                f"Expected release entry {index} in {releases_path} to be an object, got {type(release).__name__}."
+            )
+        releases.append(cast(dict[str, object], release))
+
+    return releases
 
 
 def strip_duplicate_heading(tag: str, body: str) -> str:
@@ -59,18 +83,19 @@ def main() -> None:
     releases_path = Path(args.releases_json)
     output_path = Path(args.output)
 
-    releases = json.loads(releases_path.read_text(encoding="utf-8"))
+    releases = load_releases(releases_path)
     published_releases = [release for release in releases if not release.get("draft")]
 
     lines = ["# Changelog", ""]
     if not published_releases:
         lines.append("Release notes are published on the GitHub Releases page as versions become available.")
         lines.append("")
-        lines.append("- GitHub Releases: https://github.com/vriesdemichael/bitbucket-server-cli/releases")
+        lines.append(f"- GitHub Releases: {args.releases_page_url}")
     else:
         for release in published_releases:
             lines.extend(render_release(release))
 
+    output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
 
 
