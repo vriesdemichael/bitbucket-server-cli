@@ -3,6 +3,9 @@
   --bb-paper-strong: #fffaf2;
   --bb-ink: #142433;
   --bb-ink-soft: #3d5568;
+  --bb-surface-text: #1a3044;
+  --bb-surface-muted: #496174;
+  --bb-hero-text: #152b3d;
   --bb-line: rgba(20, 36, 51, 0.14);
   --bb-panel: rgba(255, 250, 242, 0.86);
   --bb-accent: #ef6a3a;
@@ -24,7 +27,7 @@
   --md-accent-fg-color: var(--bb-accent);
   --md-code-bg-color: rgba(23, 43, 63, 0.06);
   --md-code-fg-color: #1e3348;
-  background:
+  --bb-page-bg:
     radial-gradient(circle at top left, rgba(239, 106, 58, 0.14), transparent 28%),
     radial-gradient(circle at top right, rgba(36, 64, 88, 0.18), transparent 32%),
     linear-gradient(180deg, #f9f4eb 0%, #f3eee5 100%);
@@ -35,6 +38,11 @@
   --md-default-fg-color: #ebf0f5;
   --md-default-fg-color--light: rgba(235, 240, 245, 0.74);
   --md-default-fg-color--lighter: rgba(235, 240, 245, 0.52);
+  --bb-surface-text: #edf3f8;
+  --bb-surface-muted: rgba(237, 243, 248, 0.78);
+  --bb-hero-text: #f6f8fb;
+  --bb-line: rgba(237, 243, 248, 0.1);
+  --bb-panel: rgba(19, 31, 43, 0.82);
   --md-typeset-a-color: #ff9b72;
   --md-primary-fg-color: #162738;
   --md-primary-fg-color--light: #1f3750;
@@ -42,14 +50,24 @@
   --md-accent-fg-color: #ff9b72;
   --md-code-bg-color: rgba(255, 255, 255, 0.06);
   --md-code-fg-color: #f7dbc9;
-  background:
+  --bb-page-bg:
     radial-gradient(circle at top left, rgba(255, 155, 114, 0.12), transparent 30%),
     radial-gradient(circle at top right, rgba(79, 121, 153, 0.18), transparent 34%),
     linear-gradient(180deg, #111b25 0%, #0d141c 100%);
 }
 
 body {
-  background-attachment: fixed;
+  position: relative;
+  background: transparent;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background: var(--bb-page-bg);
+  z-index: -1;
+  pointer-events: none;
 }
 
 .md-header {
@@ -106,12 +124,12 @@ body {
 
 .md-typeset h1 {
   margin-bottom: 1rem;
-  font-size: clamp(2.3rem, 5vw, 3.8rem);
-  line-height: 0.95;
+  font-size: clamp(2.1rem, 4.2vw, 3.1rem);
+  line-height: 1;
 }
 
 .md-typeset h2 {
-  font-size: clamp(1.45rem, 2vw, 2rem);
+  font-size: clamp(1.35rem, 2vw, 1.85rem);
 }
 
 .md-typeset code {
@@ -180,8 +198,8 @@ body {
   border: 1px solid var(--bb-line);
   border-radius: calc(var(--bb-radius) + 8px);
   background:
-    linear-gradient(140deg, rgba(255, 250, 242, 0.94) 0%, rgba(246, 235, 224, 0.92) 48%, rgba(244, 226, 214, 0.86) 100%),
-    radial-gradient(circle at top right, rgba(239, 106, 58, 0.22), transparent 26%);
+    linear-gradient(140deg, rgba(255, 250, 242, 0.98) 0%, rgba(246, 235, 224, 0.96) 48%, rgba(238, 224, 212, 0.94) 100%),
+    radial-gradient(circle at top right, rgba(239, 106, 58, 0.14), transparent 24%);
   box-shadow: var(--bb-shadow);
 }
 
@@ -190,11 +208,19 @@ body {
   position: absolute;
   right: clamp(1rem, 3vw, 2rem);
   bottom: -0.22em;
-  font-size: clamp(4.8rem, 16vw, 11rem);
+  font-size: clamp(4rem, 14vw, 9rem);
   line-height: 1;
   font-weight: 700;
-  color: rgba(20, 36, 51, 0.07);
+  color: rgba(20, 36, 51, 0.08);
   pointer-events: none;
+}
+
+.bb-hero h1 {
+  max-width: 10ch;
+  margin: 0 0 1rem;
+  font-size: clamp(2.8rem, 6vw, 4.9rem);
+  line-height: 0.96;
+  color: var(--bb-hero-text);
 }
 
 .bb-eyebrow,
@@ -211,7 +237,7 @@ body {
   max-width: 52rem;
   font-size: 1.08rem;
   line-height: 1.6;
-  color: var(--bb-ink-soft);
+  color: var(--bb-surface-muted);
 }
 
 .bb-actions {
@@ -242,6 +268,7 @@ body {
   background: var(--bb-panel);
   box-shadow: var(--bb-shadow);
   padding: 1.25rem;
+  color: var(--bb-surface-text);
 }
 
 .bb-card::before,
@@ -256,6 +283,35 @@ body {
 .bb-card-accent {
   background:
     linear-gradient(180deg, rgba(255, 216, 198, 0.72) 0%, rgba(255, 250, 242, 0.92) 100%);
+}
+
+.bb-card h2,
+.bb-panel h2 {
+  margin-top: 0;
+  margin-bottom: 0.65rem;
+  font-size: clamp(1.3rem, 2vw, 1.75rem);
+  line-height: 1.1;
+  color: var(--bb-surface-text);
+}
+
+.bb-card p,
+.bb-panel p,
+.bb-panel li,
+.bb-panel ul,
+.bb-link-card a {
+  color: var(--bb-surface-muted);
+}
+
+.bb-link-card h2 a,
+.bb-panel a {
+  color: var(--bb-surface-text);
+}
+
+.bb-card code,
+.bb-panel code,
+.bb-hero code {
+  background: rgba(20, 36, 51, 0.08);
+  color: var(--bb-surface-text);
 }
 
 .bb-link-card h2 {
@@ -309,11 +365,15 @@ body {
 
 @media screen and (max-width: 44.9375em) {
   .md-typeset h1 {
-    font-size: 2.3rem;
+    font-size: 2.15rem;
   }
 
   .bb-hero {
     padding: 1.25rem;
+  }
+
+  .bb-hero h1 {
+    font-size: 2.9rem;
   }
 
   .bb-actions {
