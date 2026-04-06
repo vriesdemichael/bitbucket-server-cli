@@ -77,6 +77,7 @@ hide:
 		<ul>
 			<li><a href="reference/overview/">Command Reference Overview</a></li>
 			<li><a href="reference/commands/">Complete CLI command reference</a></li>
+			<li><a href="ai-and-llms/">AI and llms.txt guide</a></li>
 			<li><a href="adr/">Architecture decision records</a></li>
 			<li><a href="changelog/">Release changelog</a></li>
 		</ul>

@@ -64,5 +64,6 @@ nav:
       - Bulk Operations: advanced/bulk-operations.md
       - Dry-Run Planning: advanced/dry-run-planning.md
       - Machine Mode and Diagnostics: advanced/machine-mode-diagnostics.md
+  - AI and llms.txt: ai-and-llms.md
   - ADR Records: adr/index.md
   - Changelog: changelog.md

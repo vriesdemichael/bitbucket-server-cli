@@ -470,6 +470,15 @@ jobs:
             gh release create "$VERSION" --title "$VERSION" --notes-file RELEASE_NOTES.md dist/* changelog.json
           fi
 
+      - name: Render changelog for published docs
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp
+          gh api "repos/${GITHUB_REPOSITORY}/releases?per_page=100" --paginate > .tmp/releases.json
+          python scripts/render_docs_changelog.py --releases-json .tmp/releases.json --output docs/site/changelog.md
+
       - name: Publish versioned docs to GitHub Pages branch
         env:
           VERSION: ${{ needs.determine-version.outputs.version }}
