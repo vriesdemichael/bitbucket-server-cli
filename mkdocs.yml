@@ -8,23 +8,35 @@ site_dir: site
 
 theme:
   name: material
+  icon:
+    logo: material/source-branch
+  font:
+    text: IBM Plex Sans
+    code: IBM Plex Mono
   features:
+    - navigation.top
+    - navigation.tracking
     - navigation.sections
     - navigation.expand
     - content.code.copy
+    - search.suggest
+    - search.highlight
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: indigo
-      accent: teal
+      primary: blue grey
+      accent: deep orange
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: indigo
-      accent: teal
+      primary: blue grey
+      accent: deep orange
 
 extra:
   version:
     provider: mike
+
+extra_css:
+  - stylesheets/extra.css
 
 markdown_extensions:
   - admonition
