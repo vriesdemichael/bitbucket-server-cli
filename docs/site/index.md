@@ -5,10 +5,10 @@ hide:
 
 <section class="bb-hero">
 	<p class="bb-eyebrow">Bitbucket Server and Data Center</p>
-	<h1>CLI automation for teams that operate Bitbucket seriously.</h1>
+	<h1>The operational CLI for Bitbucket Server.</h1>
 	<p class="bb-lead">
-		<code>bb</code> is the <code>gh</code>-style command line for Bitbucket Server/Data Center:
-		scriptable, dry-run aware, machine-readable, and validated against live behavior instead of wishful mocks.
+		<code>bb</code> gives Bitbucket Server and Data Center teams a safer command line:
+		machine-readable output, dry-run planning, repository-aware ergonomics, and behavior validated against a real server.
 	</p>
 	<div class="bb-actions">
 		<a class="md-button md-button--primary" href="installation-and-quickstart/">Get Started</a>
@@ -20,17 +20,17 @@ hide:
 <section class="bb-grid bb-grid-3">
 	<article class="bb-card bb-card-accent">
 		<p class="bb-card-kicker">Operational Safety</p>
-		<h2>Plan changes before you hit the server</h2>
+		<h2>Plan server changes before you apply them</h2>
 		<p>Dry-run planning and bulk review/apply workflows reduce the usual risk of shelling directly into enterprise Bitbucket instances.</p>
 	</article>
 	<article class="bb-card">
 		<p class="bb-card-kicker">Automation Contract</p>
-		<h2>Stable machine output for CI and agents</h2>
+		<h2>Stable output for CI, tooling, and agents</h2>
 		<p>The CLI exposes a versioned <code>bb.machine</code> envelope so scripts, pipelines, and LLM agents are not parsing human prose.</p>
 	</article>
 	<article class="bb-card">
 		<p class="bb-card-kicker">Live-Tested</p>
-		<h2>Behavior checked against a real Bitbucket server</h2>
+		<h2>Validated against real Bitbucket behavior</h2>
 		<p>Command workflows are validated against Bitbucket Data Center APIs, which keeps the docs and the binary grounded in real platform behavior.</p>
 	</article>
 </section>

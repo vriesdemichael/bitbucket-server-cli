@@ -6,6 +6,8 @@
   --bb-surface-text: #1a3044;
   --bb-surface-muted: #496174;
   --bb-hero-text: #152b3d;
+  --bb-hero-surface: linear-gradient(180deg, rgba(255, 250, 242, 0.98) 0%, rgba(248, 241, 232, 0.98) 100%);
+  --bb-hero-border: rgba(20, 36, 51, 0.12);
   --bb-line: rgba(20, 36, 51, 0.14);
   --bb-panel: rgba(255, 250, 242, 0.86);
   --bb-accent: #ef6a3a;
@@ -41,6 +43,8 @@
   --bb-surface-text: #edf3f8;
   --bb-surface-muted: rgba(237, 243, 248, 0.78);
   --bb-hero-text: #f6f8fb;
+  --bb-hero-surface: linear-gradient(180deg, rgba(17, 29, 41, 0.94) 0%, rgba(14, 24, 34, 0.96) 100%);
+  --bb-hero-border: rgba(237, 243, 248, 0.1);
   --bb-line: rgba(237, 243, 248, 0.1);
   --bb-panel: rgba(19, 31, 43, 0.82);
   --md-typeset-a-color: #ff9b72;
@@ -112,7 +116,7 @@ body::before {
 }
 
 .md-typeset {
-  font-size: 0.84rem;
+  font-size: 0.9rem;
 }
 
 .md-typeset h1,
@@ -124,12 +128,13 @@ body::before {
 
 .md-typeset h1 {
   margin-bottom: 1rem;
-  font-size: clamp(2.1rem, 4.2vw, 3.1rem);
-  line-height: 1;
+  font-size: clamp(1.85rem, 3.2vw, 2.6rem);
+  line-height: 1.08;
 }
 
 .md-typeset h2 {
-  font-size: clamp(1.35rem, 2vw, 1.85rem);
+  font-size: clamp(1.2rem, 1.8vw, 1.55rem);
+  line-height: 1.18;
 }
 
 .md-typeset code {
@@ -176,13 +181,13 @@ body::before {
 .md-typeset .md-button {
   border-radius: 999px;
   font-weight: 700;
-  padding: 0.75em 1.2em;
+  padding: 0.72em 1.15em;
 }
 
 .md-typeset .md-button--primary {
   background: linear-gradient(135deg, var(--bb-accent) 0%, #ff8d55 100%);
   border: none;
-  box-shadow: 0 14px 30px rgba(239, 106, 58, 0.24);
+  box-shadow: 0 8px 20px rgba(239, 106, 58, 0.18);
 }
 
 .bb-hero,
@@ -193,33 +198,23 @@ body::before {
 }
 
 .bb-hero {
-  padding: clamp(1.8rem, 4vw, 3.2rem);
+  padding: clamp(1.6rem, 3vw, 2.4rem);
   margin: 0 0 2rem;
-  border: 1px solid var(--bb-line);
+  border: 1px solid var(--bb-hero-border);
   border-radius: calc(var(--bb-radius) + 8px);
-  background:
-    linear-gradient(140deg, rgba(255, 250, 242, 0.98) 0%, rgba(246, 235, 224, 0.96) 48%, rgba(238, 224, 212, 0.94) 100%),
-    radial-gradient(circle at top right, rgba(239, 106, 58, 0.14), transparent 24%);
+  background: var(--bb-hero-surface);
   box-shadow: var(--bb-shadow);
 }
 
 .bb-hero::after {
-  content: "bb";
-  position: absolute;
-  right: clamp(1rem, 3vw, 2rem);
-  bottom: -0.22em;
-  font-size: clamp(4rem, 14vw, 9rem);
-  line-height: 1;
-  font-weight: 700;
-  color: rgba(20, 36, 51, 0.08);
-  pointer-events: none;
+  content: none;
 }
 
 .bb-hero h1 {
-  max-width: 10ch;
-  margin: 0 0 1rem;
-  font-size: clamp(2.8rem, 6vw, 4.9rem);
-  line-height: 0.96;
+  max-width: 12ch;
+  margin: 0 0 0.85rem;
+  font-size: clamp(2.2rem, 4.8vw, 3.6rem);
+  line-height: 1;
   color: var(--bb-hero-text);
 }
 
@@ -228,15 +223,15 @@ body::before {
   margin: 0 0 0.7rem;
   color: var(--bb-accent-deep);
   text-transform: uppercase;
-  letter-spacing: 0.18em;
-  font-size: 0.72rem;
+  letter-spacing: 0.12em;
+  font-size: 0.7rem;
   font-weight: 700;
 }
 
 .bb-lead {
-  max-width: 52rem;
-  font-size: 1.08rem;
-  line-height: 1.6;
+  max-width: 44rem;
+  font-size: 1rem;
+  line-height: 1.7;
   color: var(--bb-surface-muted);
 }
 
@@ -250,7 +245,7 @@ body::before {
 .bb-grid {
   display: grid;
   gap: 1rem;
-  margin: 1.2rem 0 2rem;
+  margin: 1rem 0 2rem;
 }
 
 .bb-grid-2 {
@@ -267,30 +262,25 @@ body::before {
   border-radius: var(--bb-radius);
   background: var(--bb-panel);
   box-shadow: var(--bb-shadow);
-  padding: 1.25rem;
+  padding: 1.15rem;
   color: var(--bb-surface-text);
 }
 
 .bb-card::before,
 .bb-panel::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent 46%);
-  pointer-events: none;
+  content: none;
 }
 
 .bb-card-accent {
-  background:
-    linear-gradient(180deg, rgba(255, 216, 198, 0.72) 0%, rgba(255, 250, 242, 0.92) 100%);
+  background: color-mix(in srgb, var(--bb-panel) 88%, var(--bb-accent-soft));
 }
 
 .bb-card h2,
 .bb-panel h2 {
   margin-top: 0;
-  margin-bottom: 0.65rem;
-  font-size: clamp(1.3rem, 2vw, 1.75rem);
-  line-height: 1.1;
+  margin-bottom: 0.55rem;
+  font-size: clamp(1.05rem, 1.6vw, 1.35rem);
+  line-height: 1.24;
   color: var(--bb-surface-text);
 }
 
@@ -310,7 +300,7 @@ body::before {
 .bb-card code,
 .bb-panel code,
 .bb-hero code {
-  background: rgba(20, 36, 51, 0.08);
+  background: rgba(20, 36, 51, 0.09);
   color: var(--bb-surface-text);
 }
 
@@ -327,35 +317,6 @@ body::before {
   margin: 0;
 }
 
-.bb-hero,
-.bb-card,
-.bb-panel,
-.md-typeset h2,
-.md-typeset .highlight,
-.md-typeset table:not([class]) {
-  animation: bb-rise 0.55s ease-out both;
-}
-
-.bb-card:nth-child(2),
-.bb-panel:nth-child(2) {
-  animation-delay: 0.08s;
-}
-
-.bb-card:nth-child(3) {
-  animation-delay: 0.16s;
-}
-
-@keyframes bb-rise {
-  from {
-    opacity: 0;
-    transform: translateY(12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @media screen and (max-width: 76.1875em) {
   .bb-grid-2,
   .bb-grid-3 {
@@ -365,7 +326,7 @@ body::before {
 
 @media screen and (max-width: 44.9375em) {
   .md-typeset h1 {
-    font-size: 2.15rem;
+    font-size: 1.95rem;
   }
 
   .bb-hero {
@@ -373,7 +334,7 @@ body::before {
   }
 
   .bb-hero h1 {
-    font-size: 2.9rem;
+    font-size: 2.35rem;
   }
 
   .bb-actions {
