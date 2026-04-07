@@ -577,7 +577,7 @@ func (config AppConfig) Validate() error {
 		}
 	}
 
-	if (config.BitbucketUsername == "") != (config.BitbucketPassword == "") {
+	if config.BitbucketToken == "" && (config.BitbucketUsername == "") != (config.BitbucketPassword == "") {
 		return apperrors.New(
 			apperrors.KindValidation,
 			"BITBUCKET_USERNAME and BITBUCKET_PASSWORD must be set together",

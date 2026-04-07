@@ -689,6 +689,10 @@ func TestValidateAndHostKeyBranches(t *testing.T) {
 		t.Fatal("expected username/password pairing validation error")
 	}
 
+	if err := (AppConfig{BitbucketURL: "http://localhost:7990", ProjectKey: "TEST", BitbucketToken: "tok", BitbucketUsername: "user", RequestTimeout: time.Second, RetryCount: 0, RetryBackoff: time.Second}).Validate(); err != nil {
+		t.Fatalf("expected token auth with optional username to validate, got: %v", err)
+	}
+
 	if err := (AppConfig{BitbucketURL: "http://localhost:7990", ProjectKey: "TEST", RequestTimeout: 0, RetryCount: 0, RetryBackoff: time.Second}).Validate(); err == nil {
 		t.Fatal("expected request timeout validation error")
 	}
