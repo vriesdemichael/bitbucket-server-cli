@@ -238,7 +238,7 @@ func resolveHTTPCloneURL(rawInput string, usedURLInput bool, cloneHost string, r
 	if usedURLInput && isExplicitHTTPCloneURL(rawInput) {
 		return strings.TrimSpace(rawInput), nil
 	}
-	return buildBitbucketCloneURL(cloneHost, repo.ProjectKey, repo.Slug)
+	return buildBitbucketCloneURL(normalizeHTTPCloneHost(cloneHost), repo.ProjectKey, repo.Slug)
 }
 
 func cloneRepositoryWithAuthFallback(
@@ -512,6 +512,23 @@ func normalizeCloneHost(rawInput, parsedHost string) string {
 	}
 
 	return "https://" + host
+}
+
+func normalizeHTTPCloneHost(cloneHost string) string {
+	parsed, err := url.Parse(strings.TrimSpace(cloneHost))
+	if err != nil || strings.TrimSpace(parsed.Host) == "" {
+		return cloneHost
+	}
+
+	parsed.User = nil
+	if !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
+		parsed.Scheme = "https"
+	}
+	parsed.Path = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+
+	return strings.TrimSuffix(parsed.String(), "/")
 }
 
 func normalizeCloneExtraArgs(extra []string) ([]string, error) {
