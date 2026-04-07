@@ -233,6 +233,10 @@ func TestRepoCloneCommandHTTPSFlagSkipsSSHAndUsesTokenUsername(t *testing.T) {
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
 	t.Setenv("BITBUCKET_TOKEN", "test-token")
 	t.Setenv("BITBUCKET_USERNAME", "admin")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
 
 	_, err := executeTestCLI(t, "repo", "clone", "--https", "PRJ/demo")
 	if err != nil {
@@ -933,6 +937,10 @@ func TestRepoCloneCommandExplicitSSHURLFallsBackToHTTPS(t *testing.T) {
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
 	t.Setenv("BITBUCKET_TOKEN", "stored-token")
 	t.Setenv("BITBUCKET_USERNAME", "admin")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
 
 	_, err := executeTestCLI(t, "repo", "clone", "git@bitbucket.example.com:scm/PRJ/demo.git")
 	if err != nil {
