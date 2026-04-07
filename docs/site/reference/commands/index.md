@@ -3854,6 +3854,9 @@ List repositories
 Usage:
   bb repo list [flags]
 
+Flags:
+      --project string   Filter by project key
+
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
       --dry-run                  Preview server mutations without applying them

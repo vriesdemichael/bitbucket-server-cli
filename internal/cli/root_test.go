@@ -2519,7 +2519,13 @@ func TestInsightsReportAndAnnotationCommandPaths(t *testing.T) {
 func TestRepoListCommandPaths(t *testing.T) {
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		if request.URL.Path != "/rest/api/1.0/repos" {
+		if got := request.URL.Query().Get("limit"); got != "25" {
+			t.Fatalf("expected limit query to be 25, got %q", got)
+		}
+		switch request.URL.Path {
+		case "/rest/api/1.0/repos":
+		case "/rest/api/1.0/projects/TEST/repos":
+		default:
 			http.NotFound(writer, request)
 			return
 		}
@@ -2534,7 +2540,7 @@ func TestRepoListCommandPaths(t *testing.T) {
 	jsonBuffer := &bytes.Buffer{}
 	jsonCommand.SetOut(jsonBuffer)
 	jsonCommand.SetErr(jsonBuffer)
-	jsonCommand.SetArgs([]string{"--json", "repo", "list", "--limit", "25"})
+	jsonCommand.SetArgs([]string{"--json", "repo", "list", "--project", "TEST", "--limit", "25"})
 	if err := jsonCommand.Execute(); err != nil {
 		t.Fatalf("repo list json failed: %v", err)
 	}
@@ -2546,12 +2552,24 @@ func TestRepoListCommandPaths(t *testing.T) {
 	humanBuffer := &bytes.Buffer{}
 	humanCommand.SetOut(humanBuffer)
 	humanCommand.SetErr(humanBuffer)
-	humanCommand.SetArgs([]string{"repo", "list", "--limit", "25"})
+	humanCommand.SetArgs([]string{"repo", "list", "--project", "TEST", "--limit", "25"})
 	if err := humanCommand.Execute(); err != nil {
 		t.Fatalf("repo list human failed: %v", err)
 	}
 	if !strings.Contains(humanBuffer.String(), "TEST/demo") {
 		t.Fatalf("expected project/slug output, got: %s", humanBuffer.String())
+	}
+
+	defaultCommand := NewRootCommand()
+	defaultBuffer := &bytes.Buffer{}
+	defaultCommand.SetOut(defaultBuffer)
+	defaultCommand.SetErr(defaultBuffer)
+	defaultCommand.SetArgs([]string{"repo", "list", "--limit", "25"})
+	if err := defaultCommand.Execute(); err != nil {
+		t.Fatalf("repo list default path failed: %v", err)
+	}
+	if !strings.Contains(defaultBuffer.String(), "TEST/demo") {
+		t.Fatalf("expected default repo list output, got: %s", defaultBuffer.String())
 	}
 }
 
@@ -3885,10 +3903,10 @@ func TestPRBuildStatusCLI(t *testing.T) {
 	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
 
 	tests := []struct {
-		name           string
-		args           []string
-		expectSnippet  string
-		expectError    bool
+		name          string
+		args          []string
+		expectSnippet string
+		expectError   bool
 	}{
 		{
 			name:          "human output with statuses",
