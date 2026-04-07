@@ -18,8 +18,14 @@ import (
 )
 
 func newRepoCloneCommand(options *rootOptions) *cobra.Command {
+	return newCloneCommand(options)
+}
+
+func newCloneCommand(options *rootOptions) *cobra.Command {
 	var noUpstream bool
 	var upstreamRemoteName string
+	var forceSSH bool
+	var forceHTTPS bool
 
 	cmd := &cobra.Command{
 		Use:   "clone <repository> [directory] [-- <gitflags>...]",
@@ -27,6 +33,11 @@ func newRepoCloneCommand(options *rootOptions) *cobra.Command {
 		Args:  cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := loadConfig()
+			if err != nil {
+				return err
+			}
+
+			transportMode, err := resolveCloneTransportMode(forceSSH, forceHTTPS)
 			if err != nil {
 				return err
 			}
@@ -51,16 +62,12 @@ func newRepoCloneCommand(options *rootOptions) *cobra.Command {
 				return err
 			}
 
-			cloneURL, err := buildCloneURL(args[0], usedURLInput, cloneHost, repo)
-			if err != nil {
-				return err
-			}
-
 			backend := gitBackendFactory()
 			if backend == nil {
 				return apperrors.New(apperrors.KindInternal, "git backend is not configured", nil)
 			}
 
+			var cloneURL string
 			cloneURL, err = cloneRepositoryWithAuthFallback(
 				cmd,
 				cfg,
@@ -68,6 +75,7 @@ func newRepoCloneCommand(options *rootOptions) *cobra.Command {
 				usedURLInput,
 				cloneHost,
 				repo,
+				transportMode,
 				git.CloneOptions{
 					Directory: directory,
 					ExtraArgs: extraCloneArgs,
@@ -126,6 +134,8 @@ func newRepoCloneCommand(options *rootOptions) *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVar(&forceSSH, "ssh", false, "Use SSH only and disable HTTPS fallback")
+	cmd.Flags().BoolVar(&forceHTTPS, "https", false, "Use HTTPS only and skip the SSH clone attempt")
 	cmd.Flags().BoolVar(&noUpstream, "no-upstream", false, "Do not add an upstream remote when cloning a fork")
 	cmd.Flags().StringVarP(&upstreamRemoteName, "upstream-remote-name", "u", "upstream", "Upstream remote name when cloning a fork")
 	cmd.Flags().SetInterspersed(false)
@@ -139,6 +149,11 @@ func resolveRepositoryCloneInput(input string, cfg config.AppConfig) (repository
 		return repositorySelector{}, "", false, apperrors.New(apperrors.KindValidation, "repository is required", nil)
 	}
 
+	host, projectKey, slug, parsed := parseBitbucketRemote(trimmed)
+	if parsed {
+		return repositorySelector{ProjectKey: projectKey, Slug: slug}, normalizeCloneHost(trimmed, host), true, nil
+	}
+
 	host, repoFromHostSelector, ok := parseHostQualifiedRepositorySelector(trimmed)
 	if ok {
 		hostURL := host
@@ -146,11 +161,6 @@ func resolveRepositoryCloneInput(input string, cfg config.AppConfig) (repository
 			hostURL = "https://" + hostURL
 		}
 		return repoFromHostSelector, hostURL, true, nil
-	}
-
-	host, projectKey, slug, parsed := parseBitbucketRemote(trimmed)
-	if parsed {
-		return repositorySelector{ProjectKey: projectKey, Slug: slug}, normalizeCloneHost(trimmed, host), true, nil
 	}
 
 	repo, parsedSelector, err := parseCloneSelector(trimmed, cfg.ProjectKey)
@@ -170,9 +180,17 @@ func resolveRepositoryCloneInput(input string, cfg config.AppConfig) (repository
 
 type cloneSelectorKind int
 
+type cloneTransportMode int
+
 const (
 	cloneSelectorProjectSlug cloneSelectorKind = iota
 	cloneSelectorSlugOnly
+)
+
+const (
+	cloneTransportAuto cloneTransportMode = iota
+	cloneTransportSSH
+	cloneTransportHTTPS
 )
 
 func parseCloneSelector(value, defaultProjectKey string) (repositorySelector, cloneSelectorKind, error) {
@@ -203,8 +221,21 @@ func parseCloneSelector(value, defaultProjectKey string) (repositorySelector, cl
 	return repositorySelector{ProjectKey: projectKey, Slug: slug}, cloneSelectorProjectSlug, nil
 }
 
-func buildCloneURL(rawInput string, usedURLInput bool, cloneHost string, repo repositorySelector) (string, error) {
-	if usedURLInput && isExplicitCloneURL(rawInput) {
+func resolveCloneTransportMode(forceSSH bool, forceHTTPS bool) (cloneTransportMode, error) {
+	if forceSSH && forceHTTPS {
+		return cloneTransportAuto, apperrors.New(apperrors.KindValidation, "--ssh and --https cannot be used together", nil)
+	}
+	if forceSSH {
+		return cloneTransportSSH, nil
+	}
+	if forceHTTPS {
+		return cloneTransportHTTPS, nil
+	}
+	return cloneTransportAuto, nil
+}
+
+func resolveHTTPCloneURL(rawInput string, usedURLInput bool, cloneHost string, repo repositorySelector) (string, error) {
+	if usedURLInput && isExplicitHTTPCloneURL(rawInput) {
 		return strings.TrimSpace(rawInput), nil
 	}
 	return buildBitbucketCloneURL(cloneHost, repo.ProjectKey, repo.Slug)
@@ -217,11 +248,12 @@ func cloneRepositoryWithAuthFallback(
 	usedURLInput bool,
 	cloneHost string,
 	repo repositorySelector,
+	transportMode cloneTransportMode,
 	cloneOptions git.CloneOptions,
 	backend git.Backend,
 	jsonOutput bool,
 ) (string, error) {
-	canonicalCloneURL, err := buildCloneURL(rawInput, usedURLInput, cloneHost, repo)
+	httpCloneURL, err := resolveHTTPCloneURL(rawInput, usedURLInput, cloneHost, repo)
 	if err != nil {
 		return "", err
 	}
@@ -232,11 +264,14 @@ func cloneRepositoryWithAuthFallback(
 	}
 
 	var sshErr error
-	if hasSSHCloneURL {
+	if transportMode != cloneTransportHTTPS && hasSSHCloneURL {
 		sshErr = backend.Clone(cmd.Context(), sshCloneURL, cloneOptions)
 		if sshErr == nil {
 			return sshCloneURL, nil
 		}
+	}
+	if transportMode == cloneTransportSSH {
+		return "", sshErr
 	}
 
 	cloneAuth, hasStoredHTTPAuth, err := resolveCloneHTTPAuth(cfg, cloneHost)
@@ -245,30 +280,30 @@ func cloneRepositoryWithAuthFallback(
 	}
 
 	if hasStoredHTTPAuth {
-		authenticatedCloneURL, err := buildAuthenticatedCloneURL(canonicalCloneURL, cloneAuth)
+		authenticatedCloneURL, err := buildAuthenticatedCloneURL(httpCloneURL, cloneAuth)
 		if err != nil {
 			return "", err
 		}
 		if err := backend.Clone(cmd.Context(), authenticatedCloneURL, cloneOptions); err == nil {
-			return canonicalCloneURL, nil
+			return httpCloneURL, nil
 		} else {
 			return "", err
 		}
 	}
 
 	if jsonOutput || !canPromptForCloneLoginFunc(cmd.InOrStdin()) {
-		return "", newCloneLoginRequiredError(cloneHost, sshErr)
+		return "", newCloneLoginRequiredError(cloneHost, sshErr, transportMode == cloneTransportAuto)
 	}
 
-	promptedAuth, prompted, err := promptForCloneLogin(cmd, cfg, cloneHost)
+	promptedAuth, prompted, err := promptForCloneLogin(cmd, cfg, cloneHost, transportMode == cloneTransportAuto)
 	if err != nil {
 		return "", err
 	}
 	if !prompted {
-		return "", newCloneLoginRequiredError(cloneHost, sshErr)
+		return "", newCloneLoginRequiredError(cloneHost, sshErr, transportMode == cloneTransportAuto)
 	}
 
-	authenticatedCloneURL, err := buildAuthenticatedCloneURL(canonicalCloneURL, promptedAuth)
+	authenticatedCloneURL, err := buildAuthenticatedCloneURL(httpCloneURL, promptedAuth)
 	if err != nil {
 		return "", err
 	}
@@ -276,7 +311,7 @@ func cloneRepositoryWithAuthFallback(
 		return "", err
 	}
 
-	return canonicalCloneURL, nil
+	return httpCloneURL, nil
 }
 
 func resolveCloneHTTPAuth(cfg config.AppConfig, cloneHost string) (config.AppConfig, bool, error) {
@@ -300,10 +335,14 @@ func resolveCloneHTTPAuth(cfg config.AppConfig, cloneHost string) (config.AppCon
 	return storedAuth, true, nil
 }
 
-func promptForCloneLogin(cmd *cobra.Command, cfg config.AppConfig, cloneHost string) (config.AppConfig, bool, error) {
+func promptForCloneLogin(cmd *cobra.Command, cfg config.AppConfig, cloneHost string, attemptedSSH bool) (config.AppConfig, bool, error) {
 	input := cmd.InOrStdin()
 	output := cmd.ErrOrStderr()
-	fmt.Fprintf(output, "SSH clone failed and no stored HTTP credentials were found for %s.\n", cloneHost)
+	if attemptedSSH {
+		fmt.Fprintf(output, "SSH clone failed and no stored HTTP credentials were found for %s.\n", cloneHost)
+	} else {
+		fmt.Fprintf(output, "No stored HTTP credentials were found for %s.\n", cloneHost)
+	}
 	fmt.Fprintf(output, "Create a token with `bb auth token-url --host %s`, then paste it to store and retry.\n", cloneHost)
 	fmt.Fprint(output, "Token: ")
 
@@ -360,12 +399,18 @@ func readCloneToken(input io.Reader, output io.Writer) (string, error) {
 	return strings.TrimSpace(value), nil
 }
 
-func newCloneLoginRequiredError(cloneHost string, cause error) error {
+func newCloneLoginRequiredError(cloneHost string, cause error, attemptedSSH bool) error {
 	message := fmt.Sprintf(
-		"ssh clone failed and no stored HTTP credentials are configured for %s; run 'bb auth login %s --token <token>' and retry",
+		"no stored HTTP credentials are configured for %s; run 'bb auth login %s --token <token>' and retry",
 		cloneHost,
 		cloneHost,
 	)
+	if attemptedSSH {
+		message = fmt.Sprintf(
+			"ssh clone failed and %s",
+			message,
+		)
+	}
 	return apperrors.New(apperrors.KindAuthentication, message, cause)
 }
 
@@ -392,7 +437,11 @@ func buildAuthenticatedCloneURL(cloneURL string, auth config.AppConfig) (string,
 
 	switch auth.AuthMode() {
 	case "token":
-		parsed.User = url.UserPassword("x-token-auth", auth.BitbucketToken)
+		username := strings.TrimSpace(auth.BitbucketUsername)
+		if username == "" {
+			username = "x-token-auth"
+		}
+		parsed.User = url.UserPassword(username, auth.BitbucketToken)
 	case "basic":
 		parsed.User = url.UserPassword(auth.BitbucketUsername, auth.BitbucketPassword)
 	default:
@@ -405,6 +454,11 @@ func buildAuthenticatedCloneURL(cloneURL string, auth config.AppConfig) (string,
 func isExplicitCloneURL(rawInput string) bool {
 	trimmed := strings.TrimSpace(rawInput)
 	return strings.Contains(trimmed, "://") || strings.HasPrefix(trimmed, "git@")
+}
+
+func isExplicitHTTPCloneURL(rawInput string) bool {
+	trimmed := strings.TrimSpace(rawInput)
+	return strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://")
 }
 
 // sameCloneHost returns true when left and right resolve to the same host:port,

@@ -35,6 +35,7 @@ Available Commands:
   browse      Open repository pages in a web browser
   build       Build status and required merge-check commands
   bulk        Plan and apply multi-repository policies
+      clone       Clone a repository to the local filesystem
   commit      Commit inspection and compare commands
   diff        Diff and patch commands
   hook        Manage repository/project hooks
@@ -1515,6 +1516,35 @@ Show the saved status for a prior bulk apply operation
 
 Usage:
   bb bulk status <operation-id> [flags]
+
+Global Flags:
+      --ca-file string           Path to PEM CA bundle for TLS trust
+      --dry-run                  Preview server mutations without applying them
+      --insecure-skip-verify     Disable TLS certificate verification (unsafe; local/dev only)
+      --json                     Output as JSON
+      --log-format string        Diagnostics format: text or jsonl
+      --log-level string         Diagnostics verbosity: error, warn, info, debug
+      --no-color                 Disable colored output
+      --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
+      --retry-backoff string     Base retry backoff duration (e.g. 250ms)
+      --retry-count int          HTTP retry attempts for transient errors (default -1)
+```
+
+## `bb clone`
+
+Clone a repository to the local filesystem
+
+```text
+Clone a repository to the local filesystem
+
+Usage:
+  bb clone <repository> [directory] [-- <gitflags>...] [flags]
+
+Flags:
+      --https                        Use HTTPS only and skip the SSH clone attempt
+      --no-upstream                   Do not add an upstream remote when cloning a fork
+      --ssh                          Use SSH only and disable HTTPS fallback
+  -u, --upstream-remote-name string   Upstream remote name when cloning a fork (default "upstream")
 
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
@@ -3667,7 +3697,9 @@ Usage:
   bb repo clone <repository> [directory] [-- <gitflags>...] [flags]
 
 Flags:
+      --https                        Use HTTPS only and skip the SSH clone attempt
       --no-upstream                   Do not add an upstream remote when cloning a fork
+      --ssh                          Use SSH only and disable HTTPS fallback
   -u, --upstream-remote-name string   Upstream remote name when cloning a fork (default "upstream")
 
 Global Flags:
