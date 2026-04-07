@@ -1130,6 +1130,14 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/demo"},"toRef":{"displayId":"master"},"participants":[{"role":"REVIEWER","status":"UNAPPROVED","approved":false,"user":{"name":"reviewer1"}}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/comments":
+			if request.URL.Query().Get("path") != "seed.txt" {
+				writer.WriteHeader(http.StatusBadRequest)
+				_, _ = writer.Write([]byte("expected path query"))
+				return
+			}
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[{"id":301,"text":"pr thread comment","version":2}]}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/merge":
 			if request.URL.Query().Get("version") != "1" {
 				writer.WriteHeader(http.StatusConflict)
@@ -1160,6 +1168,8 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 		expectSnippet string
 	}{
 		{name: "pr get json", args: []string{"--json", "pr", "get", "30"}, expectSnippet: `"reviewers"`},
+		{name: "pr comment list json", args: []string{"--json", "pr", "comment", "list", "30", "--path", "seed.txt", "--limit", "10"}, expectSnippet: `"comments"`},
+		{name: "pr comment list human", args: []string{"pr", "comment", "list", "30", "--path", "seed.txt", "--limit", "10"}, expectSnippet: "pr thread comment"},
 		{name: "pr merge human", args: []string{"pr", "merge", "30", "--version", "1"}, expectSnippet: "Merged pull request #30"},
 		{name: "pr review approve human", args: []string{"pr", "review", "approve", "30"}, expectSnippet: "Approved pull request #30"},
 		{name: "pr task list json", args: []string{"--json", "pr", "task", "list", "30", "--state", "open"}, expectSnippet: `"tasks"`},
@@ -1182,6 +1192,53 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestPRCommentListNoCommentsAndMissingRepo(t *testing.T) {
+	t.Run("no comments found", func(t *testing.T) {
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodGet || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/comments" {
+				http.NotFound(writer, request)
+				return
+			}
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[]}`))
+		}))
+		defer server.Close()
+
+		t.Setenv("BITBUCKET_URL", server.URL)
+		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+		t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+		command := NewRootCommand()
+		output := &bytes.Buffer{}
+		command.SetOut(output)
+		command.SetErr(output)
+		command.SetArgs([]string{"pr", "comment", "list", "30", "--path", "seed.txt"})
+
+		if err := command.Execute(); err != nil {
+			t.Fatalf("expected no-comments command to succeed, got: %v", err)
+		}
+		if !strings.Contains(output.String(), "No comments found") {
+			t.Fatalf("expected no comments message, got: %s", output.String())
+		}
+	})
+
+	t.Run("missing repo slug", func(t *testing.T) {
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+		t.Setenv("BITBUCKET_REPO_SLUG", "")
+
+		command := NewRootCommand()
+		output := &bytes.Buffer{}
+		command.SetOut(output)
+		command.SetErr(output)
+		command.SetArgs([]string{"pr", "comment", "list", "30", "--path", "seed.txt"})
+
+		if err := command.Execute(); err == nil {
+			t.Fatal("expected missing repo slug error")
+		}
+	})
 }
 
 func TestPRExtendedLifecycleReviewerAndTaskCommands(t *testing.T) {

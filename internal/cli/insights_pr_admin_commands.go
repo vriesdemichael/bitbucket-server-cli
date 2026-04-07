@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
+	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	pullrequestservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequest"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
 )
@@ -1240,6 +1241,62 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 
 	reviewCmd.AddCommand(reviewerCmd)
 	prCmd.AddCommand(reviewCmd)
+
+	commentCmd := &cobra.Command{Use: "comment", Short: "Pull request comment commands"}
+
+	var commentPath string
+	var commentLimit int
+	commentListCmd := &cobra.Command{
+		Use:   "list <id>",
+		Short: "List comments for a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := commentservice.NewService(client)
+			comments, err := service.List(cmd.Context(), commentservice.Target{
+				Repository: commentservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug},
+				PullRequestID: args[0],
+			}, commentPath, commentLimit)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{
+					"repository":      repo,
+					"pull_request_id": args[0],
+					"path":            commentPath,
+					"comments":        comments,
+				})
+			}
+
+			if len(comments) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No comments found")
+				return nil
+			}
+
+			for _, comment := range comments {
+				fmt.Fprintln(cmd.OutOrStdout(), formatCommentSummary(comment))
+			}
+
+			return nil
+		},
+	}
+	commentListCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	commentListCmd.Flags().StringVar(&commentPath, "path", "", "File path for pull request comment listing scope")
+	commentListCmd.Flags().IntVar(&commentLimit, "limit", 25, "Page size for pull request comment list operations")
+	_ = commentListCmd.MarkFlagRequired("path")
+	commentCmd.AddCommand(commentListCmd)
+	prCmd.AddCommand(commentCmd)
 
 	taskCmd := &cobra.Command{Use: "task", Short: "Pull request task commands"}
 

@@ -239,9 +239,11 @@ func TestCommentServiceAdditionalBranches(t *testing.T) {
 		})
 
 		target := Target{Repository: RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, CommitID: "abc"}
-
 		if _, err := service.List(context.Background(), target, "", 10); err == nil {
 			t.Fatal("expected path validation error")
+		}
+		if _, err := service.List(context.Background(), Target{Repository: RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, PullRequestID: "12"}, "", 10); err == nil {
+			t.Fatal("expected pull request path validation error")
 		}
 		if _, err := service.Create(context.Background(), target, " "); err == nil {
 			t.Fatal("expected comment text validation error")

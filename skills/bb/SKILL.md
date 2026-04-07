@@ -84,7 +84,7 @@ bb build required list --repo MYPROJ/payments
 
 ```bash
 # Read inline review comments
-bb repo comment list --repo MYPROJ/payments --pr 42
+bb pr comment list --repo MYPROJ/payments 42 --path src/main/java/com/example/PaymentService.java
 
 # Post a progress note after fixing
 bb repo comment create --repo MYPROJ/payments --pr 42 "Fixed in <commit>. Please re-review."
