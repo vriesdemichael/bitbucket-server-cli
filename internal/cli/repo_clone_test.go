@@ -368,6 +368,16 @@ func TestRepoCloneCommandSupportsURLSelectors(t *testing.T) {
 	}
 }
 
+func TestResolveHTTPCloneURLNormalizesSSHCloneHost(t *testing.T) {
+	httpCloneURL, err := resolveHTTPCloneURL("ssh://git@bitbucket.example.com/scm/PRJ/demo.git", true, "ssh://git@bitbucket.example.com", repositorySelector{ProjectKey: "PRJ", Slug: "demo"})
+	if err != nil {
+		t.Fatalf("expected HTTP clone URL resolution to succeed, got: %v", err)
+	}
+	if httpCloneURL != "https://bitbucket.example.com/scm/PRJ/demo.git" {
+		t.Fatalf("unexpected normalized HTTP clone URL: %s", httpCloneURL)
+	}
+}
+
 func TestRepoCloneCommandNoUpstreamAndAddRemoteFailure(t *testing.T) {
 	originalFactory := gitBackendFactory
 	stub := &cloneBackendStub{addErr: errors.New("add remote failed")}
@@ -951,6 +961,38 @@ func TestRepoCloneCommandExplicitSSHURLFallsBackToHTTPS(t *testing.T) {
 	}
 	if stub.cloneCalls[1].repositoryURL != "https://admin:stored-token@bitbucket.example.com/scm/PRJ/demo.git" {
 		t.Fatalf("unexpected fallback clone URL: %s", stub.cloneCalls[1].repositoryURL)
+	}
+}
+
+func TestRepoCloneCommandExplicitSSHSchemeURLFallsBackToHTTPS(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed"), nil}}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	t.Setenv("BITBUCKET_URL", "https://bitbucket.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+	t.Setenv("BITBUCKET_TOKEN", "stored-token")
+	t.Setenv("BITBUCKET_USERNAME", "admin")
+	t.Setenv("BITBUCKET_USER", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	_, err := executeTestCLI(t, "repo", "clone", "ssh://git@bitbucket.example.com/scm/PRJ/demo.git")
+	if err != nil {
+		t.Fatalf("expected ssh:// fallback clone to succeed, got: %v", err)
+	}
+	if len(stub.cloneCalls) != 2 {
+		t.Fatalf("expected two clone attempts, got %d", len(stub.cloneCalls))
+	}
+	if stub.cloneCalls[0].repositoryURL != "ssh://git@bitbucket.example.com/scm/PRJ/demo.git" {
+		t.Fatalf("unexpected initial ssh clone URL: %s", stub.cloneCalls[0].repositoryURL)
+	}
+	if stub.cloneCalls[1].repositoryURL != "https://admin:stored-token@bitbucket.example.com/scm/PRJ/demo.git" {
+		t.Fatalf("unexpected ssh:// fallback clone URL: %s", stub.cloneCalls[1].repositoryURL)
 	}
 }
 
