@@ -313,6 +313,54 @@ func TestHandlerReturnsToolErrorOnMissingRequiredArg(t *testing.T) {
 	}
 }
 
+func TestListPRCommentsHandlerSuccessAndMissingPath(t *testing.T) {
+	t.Run("success", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/comments" {
+				http.NotFound(w, r)
+				return
+			}
+			if r.URL.Query().Get("path") != "seed.txt" {
+				w.WriteHeader(http.StatusBadRequest)
+				_, _ = w.Write([]byte(`{"errors":[{"message":"expected path query"}]}`))
+				return
+			}
+			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = w.Write([]byte(`{"isLastPage":true,"values":[{"id":301,"text":"mcp pr comment","version":2}]}`))
+		}))
+		defer srv.Close()
+
+		clients, err := ClientsFromConfig(config.AppConfig{BitbucketURL: srv.URL, RequestTimeout: 5 * time.Second, RetryCount: 0, RetryBackoff: time.Millisecond})
+		if err != nil {
+			t.Fatalf("ClientsFromConfig failed: %v", err)
+		}
+
+		handler := specListPRComments().Handler(clients)
+		result, err := handler(context.Background(), mcpgo.CallToolRequest{
+			Params: mcpgo.CallToolParams{Arguments: map[string]any{"project": "TEST", "repo": "demo", "pr_id": "30", "path": "seed.txt", "limit": 10}},
+		})
+		if err != nil {
+			t.Fatalf("handler returned Go error: %v", err)
+		}
+		if result == nil || result.IsError {
+			t.Fatalf("expected success result, got: %+v", result)
+		}
+	})
+
+	t.Run("missing path", func(t *testing.T) {
+		handler := specListPRComments().Handler(Clients{})
+		result, err := handler(context.Background(), mcpgo.CallToolRequest{
+			Params: mcpgo.CallToolParams{Arguments: map[string]any{"project": "TEST", "repo": "demo", "pr_id": "30"}},
+		})
+		if err != nil {
+			t.Fatalf("handler returned Go error: %v", err)
+		}
+		if result == nil || !result.IsError {
+			t.Fatalf("expected error result for missing path, got: %+v", result)
+		}
+	})
+}
+
 // toleratesServiceFailure is the set of tools that intentionally succeed even when
 // all backend API calls fail (e.g. because the result is derived from inputs alone, or
 // because the backend lookup is best-effort).

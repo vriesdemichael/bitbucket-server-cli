@@ -102,6 +102,7 @@ func specListPRComments() Spec {
 		mcpgo.WithString("project", mcpgo.Required(), mcpgo.Description("Bitbucket project key")),
 		mcpgo.WithString("repo", mcpgo.Required(), mcpgo.Description("Repository slug")),
 		mcpgo.WithString("pr_id", mcpgo.Required(), mcpgo.Description("Pull request ID")),
+		mcpgo.WithString("path", mcpgo.Required(), mcpgo.Description("File path to restrict comments to a single diff path")),
 		mcpgo.WithNumber("limit", mcpgo.Description("Maximum number of results (default 50)")),
 	)
 	return Spec{Tool: tool, Handler: func(c Clients) server.ToolHandlerFunc {
@@ -110,12 +111,13 @@ func specListPRComments() Spec {
 			project, _ := req.RequireString("project")
 			repo, _ := req.RequireString("repo")
 			prID, _ := req.RequireString("pr_id")
+			path, _ := req.RequireString("path")
 			limit := req.GetInt("limit", 50)
 			target := commentservice.Target{
 				Repository:    commentservice.RepositoryRef{ProjectKey: project, Slug: repo},
 				PullRequestID: prID,
 			}
-			comments, err := svc.List(ctx, target, "", limit)
+			comments, err := svc.List(ctx, target, path, limit)
 			if err != nil {
 				return mcpgo.NewToolResultErrorFromErr("list_pr_comments failed", err), nil
 			}

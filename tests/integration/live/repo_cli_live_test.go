@@ -122,6 +122,22 @@ func TestLiveCLIRepoListAndComments(t *testing.T) {
 		t.Fatalf("expected comments array in pr list output: %s", listPROutput)
 	}
 
+	prCommentListOutput, err := executeLiveCLI(t, "--json", "pr", "comment", "list", pullRequestID, "--path", "repo-cli-feature.txt", "--limit", "25")
+	if err != nil {
+		t.Fatalf("pr comment list failed: %v\noutput: %s", err, prCommentListOutput)
+	}
+	if !jsonObjectHasCommentsArray(t, prCommentListOutput) {
+		t.Fatalf("expected comments array in pr comment list output: %s", prCommentListOutput)
+	}
+
+	humanPRCommentListOutput, err := executeLiveCLI(t, "pr", "comment", "list", pullRequestID, "--path", "repo-cli-feature.txt", "--limit", "25")
+	if err != nil {
+		t.Fatalf("pr comment list human failed: %v\noutput: %s", err, humanPRCommentListOutput)
+	}
+	if !strings.Contains(humanPRCommentListOutput, "[") && !strings.Contains(humanPRCommentListOutput, "No comments found") {
+		t.Fatalf("expected human pr comment list output, got: %s", humanPRCommentListOutput)
+	}
+
 	updatePRArgs := []string{"--json", "repo", "comment", "update", "--pr", pullRequestID, "--id", prCommentID, "--text", "live cli pr comment updated"}
 	if prCommentVersion != "" {
 		updatePRArgs = append(updatePRArgs, "--version", prCommentVersion)
