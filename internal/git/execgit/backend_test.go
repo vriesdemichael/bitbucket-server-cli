@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -38,6 +39,63 @@ func TestVersion(t *testing.T) {
 
 	if version == "" {
 		t.Fatal("expected non-empty git version")
+	}
+}
+
+func TestClonePlacesOptionsBeforeRepositoryAndDirectory(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("path wrapper script is shell-specific")
+	}
+
+	backend := New()
+	backend.Timeout = 5 * time.Second
+
+	temporary := t.TempDir()
+	logPath := filepath.Join(temporary, "git-args.log")
+	gitWrapper := filepath.Join(temporary, "git")
+	script := "#!/bin/sh\nprintf '%s\n' \"$@\" > \"$BB_GIT_ARGS_LOG\"\n"
+	if err := os.WriteFile(gitWrapper, []byte(script), 0o755); err != nil {
+		t.Fatalf("failed to write git wrapper: %v", err)
+	}
+
+	originalPath := os.Getenv("PATH")
+	t.Setenv("PATH", temporary+string(os.PathListSeparator)+originalPath)
+	t.Setenv("BB_GIT_ARGS_LOG", logPath)
+
+	cloneDir := filepath.Join(temporary, "clone")
+	if err := backend.Clone(context.Background(), "https://example.local/scm/PRJ/repo.git", git.CloneOptions{
+		Directory: cloneDir,
+		Branch:    "main",
+		Depth:     1,
+		ExtraArgs: []string{"--filter=blob:none", "--origin", "upstream"},
+	}); err != nil {
+		t.Fatalf("expected clone to succeed through wrapper, got: %v", err)
+	}
+
+	logged, err := os.ReadFile(logPath)
+	if err != nil {
+		t.Fatalf("failed to read logged git args: %v", err)
+	}
+	args := strings.Split(strings.TrimSpace(string(logged)), "\n")
+	expected := []string{
+		"clone",
+		"--branch",
+		"main",
+		"--depth",
+		"1",
+		"--filter=blob:none",
+		"--origin",
+		"upstream",
+		"https://example.local/scm/PRJ/repo.git",
+		cloneDir,
+	}
+	if len(args) != len(expected) {
+		t.Fatalf("unexpected git args length: got %#v want %#v", args, expected)
+	}
+	for index, want := range expected {
+		if args[index] != want {
+			t.Fatalf("unexpected git arg order at %d: got %#v want %#v", index, args, expected)
+		}
 	}
 }
 

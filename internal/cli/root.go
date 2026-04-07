@@ -81,6 +81,7 @@ your behalf using the link above.`,
 		WriteJSON:   writeJSON,
 	}))
 	rootCmd.AddCommand(newRepoCommand(options))
+	rootCmd.AddCommand(newCloneCommand(options))
 	rootCmd.AddCommand(newTagCommand(options))
 	rootCmd.AddCommand(newBranchCommand(options))
 	rootCmd.AddCommand(newDiffCommand(options))

@@ -41,7 +41,7 @@ func (backend *Backend) Clone(ctx context.Context, repositoryURL string, options
 		return apperrors.New(apperrors.KindValidation, "clone directory cannot be empty", nil)
 	}
 
-	args := []string{"clone", repositoryURL, options.Directory}
+	args := []string{"clone"}
 	if options.Branch != "" {
 		args = append(args, "--branch", options.Branch)
 	}
@@ -51,6 +51,7 @@ func (backend *Backend) Clone(ctx context.Context, repositoryURL string, options
 	if len(options.ExtraArgs) > 0 {
 		args = append(args, options.ExtraArgs...)
 	}
+	args = append(args, repositoryURL, options.Directory)
 
 	_, err := backend.run(ctx, runOptions{args: args})
 	return err
