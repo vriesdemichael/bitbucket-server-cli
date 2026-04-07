@@ -7,13 +7,13 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
-	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 )
 
 func newRepoCommand(options *rootOptions) *cobra.Command {
@@ -23,9 +23,10 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 	}
 
 	var limit int
+	var projectKey string
 	repoCmd.PersistentFlags().IntVar(&limit, "limit", 25, "Maximum number of results to return")
 
-	repoCmd.AddCommand(&cobra.Command{
+	listCmd := &cobra.Command{
 		Use:   "list",
 		Short: "List repositories",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -37,7 +38,14 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 			client := httpclient.NewFromConfig(cfg)
 			service := repository.NewService(client)
 
-			repos, err := service.List(cmd.Context(), repository.ListOptions{Limit: limit})
+			listOptions := repository.ListOptions{Limit: limit}
+
+			var repos []repository.Repository
+			if projectKey != "" {
+				repos, err = service.ListByProject(cmd.Context(), projectKey, listOptions)
+			} else {
+				repos, err = service.List(cmd.Context(), listOptions)
+			}
 			if err != nil {
 				return err
 			}
@@ -59,7 +67,9 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 
 			return nil
 		},
-	})
+	}
+	listCmd.Flags().StringVar(&projectKey, "project", "", "Filter by project key")
+	repoCmd.AddCommand(listCmd)
 
 	repoCmd.AddCommand(newRepoSettingsCommand(options))
 	repoCmd.AddCommand(newRepoCommentCommand(options))

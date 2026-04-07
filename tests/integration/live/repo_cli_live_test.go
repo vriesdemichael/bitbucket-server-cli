@@ -34,6 +34,14 @@ func TestLiveCLIRepoListAndComments(t *testing.T) {
 		t.Fatalf("expected repo slug %s in repo list output: %s", repo.Slug, repoListOutput)
 	}
 
+	projectRepoListOutput, err := executeLiveCLI(t, "--json", "repo", "list", "--project", seeded.Key, "--limit", "50")
+	if err != nil {
+		t.Fatalf("repo list with project filter failed: %v\noutput: %s", err, projectRepoListOutput)
+	}
+	if !jsonArrayContainsSlug(t, projectRepoListOutput, repo.Slug) {
+		t.Fatalf("expected repo slug %s in project-filtered repo list output: %s", repo.Slug, projectRepoListOutput)
+	}
+
 	commitID := repo.CommitIDs[0]
 	createCommitOutput, err := executeLiveCLI(t, "--json", "repo", "comment", "create", "--commit", commitID, "--text", "live cli commit comment")
 	if err != nil {
