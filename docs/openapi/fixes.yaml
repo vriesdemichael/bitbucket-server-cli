@@ -1,5 +1,5 @@
 version: 1
-updated_at: "2026-03-12"
+updated_at: "2026-04-08"
 source_openapi: docs/reference/atlassian/bitbucket-9.4-openapi.json
 fixes:
   - id: OPENAPI-001
@@ -95,3 +95,23 @@ fixes:
       commands:
         - go test ./internal/services/reposettings -run TestUpdateRepositoryPullRequestRequiredApproversCount
         - go test -tags=live ./tests/integration/live -run TestLiveRepoSettingsUpdatePullRequestRequiredApprovers
+
+  - id: OPENAPI-006
+    area: pull-request-activities-comment-payload
+    description: Parse raw pull request activity payloads to recover comment details omitted by the generated activity model.
+    reference:
+      type: endpoint
+      value: /api/latest/projects/{projectKey}/repos/{repositorySlug}/pull-requests/{pullRequestId}/activities
+      upstream_issue: generated RestPullRequestActivity omits the nested comment payload needed for aggregate PR comment retrieval
+    change:
+      files:
+        - internal/services/pullrequestactivity/service.go
+        - tests/integration/live/repo_cli_live_test.go
+      detail: >
+        The client keeps using the generated activities endpoint, but decodes the raw response body into
+        an internal activity adapter so nested comment objects and anchors remain available for aggregate
+        pull request comment listing and AI/debug activity inspection.
+    verification:
+      commands:
+        - go test ./internal/services/pullrequestactivity ./internal/cli ./internal/mcp
+        - go test -tags=live ./tests/integration/live -run TestLiveCLIRepoListAndComments -count=1

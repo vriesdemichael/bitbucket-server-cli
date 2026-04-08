@@ -130,6 +130,33 @@ func TestLiveCLIRepoListAndComments(t *testing.T) {
 		t.Fatalf("expected comments array in pr comment list output: %s", prCommentListOutput)
 	}
 
+	aggregatePRCommentListOutput, err := executeLiveCLI(t, "--json", "pr", "comment", "list", pullRequestID, "--limit", "25")
+	if err != nil {
+		t.Fatalf("aggregate pr comment list failed: %v\noutput: %s", err, aggregatePRCommentListOutput)
+	}
+	if !jsonObjectHasCommentsArray(t, aggregatePRCommentListOutput) {
+		t.Fatalf("expected comments array in aggregate pr comment list output: %s", aggregatePRCommentListOutput)
+	}
+	if !strings.Contains(aggregatePRCommentListOutput, `"source": "activities"`) {
+		t.Fatalf("expected activities source in aggregate pr comment list output: %s", aggregatePRCommentListOutput)
+	}
+
+	prCommentGetOutput, err := executeLiveCLI(t, "--json", "pr", "comment", "get", pullRequestID, prCommentID)
+	if err != nil {
+		t.Fatalf("pr comment get failed: %v\noutput: %s", err, prCommentGetOutput)
+	}
+	if !strings.Contains(prCommentGetOutput, `"comment"`) {
+		t.Fatalf("expected comment payload in pr comment get output: %s", prCommentGetOutput)
+	}
+
+	prActivityListOutput, err := executeLiveCLI(t, "--json", "pr", "activity", "list", pullRequestID, "--limit", "25")
+	if err != nil {
+		t.Fatalf("pr activity list failed: %v\noutput: %s", err, prActivityListOutput)
+	}
+	if !strings.Contains(prActivityListOutput, `"activities"`) {
+		t.Fatalf("expected activities payload in pr activity list output: %s", prActivityListOutput)
+	}
+
 	humanPRCommentListOutput, err := executeLiveCLI(t, "pr", "comment", "list", pullRequestID, "--path", "repo-cli-feature.txt", "--limit", "25")
 	if err != nil {
 		t.Fatalf("pr comment list human failed: %v\noutput: %s", err, humanPRCommentListOutput)

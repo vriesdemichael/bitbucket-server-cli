@@ -21,6 +21,7 @@ import (
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/git"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
+	pullrequestactivityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequestactivity"
 )
 
 type inferenceGitBackendStub struct {
@@ -1130,6 +1131,9 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/demo"},"toRef":{"displayId":"master"},"participants":[{"role":"REVIEWER","status":"UNAPPROVED","approved":false,"user":{"name":"reviewer1"}}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/activities":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[{"id":901,"action":"COMMENTED","createdDate":1700000000000,"comment":{"id":301,"text":"pr thread comment","version":2}},{"id":902,"action":"COMMENTED","createdDate":1700000000001,"comment":{"id":302,"text":"anchored thread comment","version":1,"anchor":{"path":{"parent":"src","name":"seed.txt"}}}},{"id":903,"action":"APPROVED","createdDate":1700000000002}]}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/comments":
 			if request.URL.Query().Get("path") != "seed.txt" {
 				writer.WriteHeader(http.StatusBadRequest)
@@ -1138,6 +1142,9 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 			}
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[{"id":301,"text":"pr thread comment","version":2}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/comments/301":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"id":301,"text":"pr thread comment\n\nwith details","version":2,"state":"OPEN","author":{"name":"reviewer1","displayName":"Reviewer One"},"anchor":{"path":{"parent":"src","name":"seed.txt"}}}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/merge":
 			if request.URL.Query().Get("version") != "1" {
 				writer.WriteHeader(http.StatusConflict)
@@ -1168,8 +1175,15 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 		expectSnippet string
 	}{
 		{name: "pr get json", args: []string{"--json", "pr", "get", "30"}, expectSnippet: `"reviewers"`},
+		{name: "pr comment list aggregate json", args: []string{"--json", "pr", "comment", "list", "30", "--limit", "10"}, expectSnippet: `"source": "activities"`},
+		{name: "pr comment list aggregate human", args: []string{"pr", "comment", "list", "30", "--limit", "10"}, expectSnippet: "anchored thread comment"},
+		{name: "pr comment list trimmed path json", args: []string{"--json", "pr", "comment", "list", "30", "--path", "  seed.txt  ", "--limit", "10"}, expectSnippet: `"path": "seed.txt"`},
 		{name: "pr comment list json", args: []string{"--json", "pr", "comment", "list", "30", "--path", "seed.txt", "--limit", "10"}, expectSnippet: `"comments"`},
 		{name: "pr comment list human", args: []string{"pr", "comment", "list", "30", "--path", "seed.txt", "--limit", "10"}, expectSnippet: "pr thread comment"},
+		{name: "pr comment get json", args: []string{"--json", "pr", "comment", "get", "30", "301"}, expectSnippet: `"comment"`},
+		{name: "pr comment get human", args: []string{"pr", "comment", "get", "30", "301"}, expectSnippet: "Reviewer One"},
+		{name: "pr activity list json", args: []string{"--json", "pr", "activity", "list", "30", "--limit", "10"}, expectSnippet: `"activities"`},
+		{name: "pr activity list human", args: []string{"pr", "activity", "list", "30", "--limit", "10"}, expectSnippet: "[901 COMMENTED]"},
 		{name: "pr merge human", args: []string{"pr", "merge", "30", "--version", "1"}, expectSnippet: "Merged pull request #30"},
 		{name: "pr review approve human", args: []string{"pr", "review", "approve", "30"}, expectSnippet: "Approved pull request #30"},
 		{name: "pr task list json", args: []string{"--json", "pr", "task", "list", "30", "--state", "open"}, expectSnippet: `"tasks"`},
@@ -1198,7 +1212,7 @@ func TestPRCommentListNoCommentsAndMissingRepo(t *testing.T) {
 	t.Run("no comments found", func(t *testing.T) {
 		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
 		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-			if request.Method != http.MethodGet || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/comments" {
+			if request.Method != http.MethodGet || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/activities" {
 				http.NotFound(writer, request)
 				return
 			}
@@ -1215,13 +1229,43 @@ func TestPRCommentListNoCommentsAndMissingRepo(t *testing.T) {
 		output := &bytes.Buffer{}
 		command.SetOut(output)
 		command.SetErr(output)
-		command.SetArgs([]string{"pr", "comment", "list", "30", "--path", "seed.txt"})
+		command.SetArgs([]string{"pr", "comment", "list", "30"})
 
 		if err := command.Execute(); err != nil {
 			t.Fatalf("expected no-comments command to succeed, got: %v", err)
 		}
 		if !strings.Contains(output.String(), "No comments found") {
 			t.Fatalf("expected no comments message, got: %s", output.String())
+		}
+	})
+
+	t.Run("no activities found", func(t *testing.T) {
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+		server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+			if request.Method != http.MethodGet || request.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/activities" {
+				http.NotFound(writer, request)
+				return
+			}
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[]}`))
+		}))
+		defer server.Close()
+
+		t.Setenv("BITBUCKET_URL", server.URL)
+		t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+		t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+		command := NewRootCommand()
+		output := &bytes.Buffer{}
+		command.SetOut(output)
+		command.SetErr(output)
+		command.SetArgs([]string{"pr", "activity", "list", "30"})
+
+		if err := command.Execute(); err != nil {
+			t.Fatalf("expected no-activities command to succeed, got: %v", err)
+		}
+		if !strings.Contains(output.String(), "No activities found") {
+			t.Fatalf("expected no activities message, got: %s", output.String())
 		}
 	})
 
@@ -1233,7 +1277,7 @@ func TestPRCommentListNoCommentsAndMissingRepo(t *testing.T) {
 		output := &bytes.Buffer{}
 		command.SetOut(output)
 		command.SetErr(output)
-		command.SetArgs([]string{"pr", "comment", "list", "30", "--path", "seed.txt"})
+		command.SetArgs([]string{"pr", "comment", "list", "30"})
 
 		if err := command.Execute(); err == nil {
 			t.Fatal("expected missing repo slug error")
@@ -2052,6 +2096,61 @@ func TestCommentHelpersAndSafeHelpers(t *testing.T) {
 	}
 	if safeStringFromInsightResult(nil) != "" {
 		t.Fatal("expected empty string for nil insight result")
+	}
+
+	var detailedComment openapigenerated.RestComment
+	if err := json.Unmarshal([]byte(`{"id":42,"version":3,"text":" hello ","state":"OPEN","author":{"name":"octocat","displayName":"Octo Cat"},"anchor":{"path":{"parent":"src","name":"main.go"}}}`), &detailedComment); err != nil {
+		t.Fatalf("unmarshal detailed comment: %v", err)
+	}
+	detail := formatCommentDetail(detailedComment)
+	if !strings.Contains(detail, "Path: src/main.go") || !strings.Contains(detail, "Author: Octo Cat") || !strings.Contains(detail, "State: OPEN") {
+		t.Fatalf("unexpected comment detail output: %s", detail)
+	}
+	if commentAnchorPath(detailedComment) != "src/main.go" {
+		t.Fatalf("unexpected anchor path: %s", commentAnchorPath(detailedComment))
+	}
+	if commentAuthorName(detailedComment) != "Octo Cat" {
+		t.Fatalf("unexpected author display name: %s", commentAuthorName(detailedComment))
+	}
+
+	detailedComment = openapigenerated.RestComment{}
+	if err := json.Unmarshal([]byte(`{"author":{"name":"octocat"},"anchor":{"path":{"name":"main.go"}}}`), &detailedComment); err != nil {
+		t.Fatalf("unmarshal fallback comment: %v", err)
+	}
+	if commentAuthorName(detailedComment) != "octocat" {
+		t.Fatalf("expected fallback author name, got: %s", commentAuthorName(detailedComment))
+	}
+	if commentAnchorPath(detailedComment) != "main.go" {
+		t.Fatalf("expected filename anchor path, got: %s", commentAnchorPath(detailedComment))
+	}
+
+	detailedComment = openapigenerated.RestComment{}
+	if commentAuthorName(detailedComment) != "" {
+		t.Fatalf("expected empty author name for nil author, got: %s", commentAuthorName(detailedComment))
+	}
+	if commentAnchorPath(detailedComment) != "" {
+		t.Fatalf("expected empty anchor path for nil anchor, got: %s", commentAnchorPath(detailedComment))
+	}
+	if err := json.Unmarshal([]byte(`{"anchor":{"path":{"parent":"src","name":""}}}`), &detailedComment); err != nil {
+		t.Fatalf("unmarshal empty-name comment: %v", err)
+	}
+	if commentAnchorPath(detailedComment) != "src" {
+		t.Fatalf("expected parent-only anchor path, got: %s", commentAnchorPath(detailedComment))
+	}
+	if err := json.Unmarshal([]byte(`{"anchor":{"path":{"parent":"","name":"main.go"}}}`), &detailedComment); err != nil {
+		t.Fatalf("unmarshal empty-parent comment: %v", err)
+	}
+	if commentAnchorPath(detailedComment) != "main.go" {
+		t.Fatalf("expected child-only anchor path, got: %s", commentAnchorPath(detailedComment))
+	}
+
+	activity := pullrequestactivityservice.Activity{ID: 77, Comment: &comment}
+	if !strings.Contains(formatPullRequestActivitySummary(activity), "UNKNOWN") {
+		t.Fatalf("expected UNKNOWN action summary, got: %s", formatPullRequestActivitySummary(activity))
+	}
+	activity.Comment = nil
+	if formatPullRequestActivitySummary(activity) != "[77 UNKNOWN]" {
+		t.Fatalf("unexpected non-comment activity summary: %s", formatPullRequestActivitySummary(activity))
 	}
 }
 

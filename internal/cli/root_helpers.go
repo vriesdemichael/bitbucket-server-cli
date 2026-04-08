@@ -20,6 +20,7 @@ import (
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	diffservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/diff"
 	pullrequestservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequest"
+	pullrequestactivityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequestactivity"
 	qualityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/quality"
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	tagservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/tag"
@@ -528,6 +529,73 @@ func formatCommentSummary(comment openapigenerated.RestComment) string {
 	}
 
 	return fmt.Sprintf("[%s v%s] %s", commentIDString(comment), version, text)
+}
+
+func formatCommentDetail(comment openapigenerated.RestComment) string {
+	lines := []string{formatCommentSummary(comment)}
+	if anchorPath := commentAnchorPath(comment); anchorPath != "" {
+		lines = append(lines, fmt.Sprintf("Path: %s", anchorPath))
+	}
+	if author := commentAuthorName(comment); author != "" {
+		lines = append(lines, fmt.Sprintf("Author: %s", author))
+	}
+	if state := safeString(comment.State); state != "" {
+		lines = append(lines, fmt.Sprintf("State: %s", state))
+	}
+	if text := strings.TrimSpace(safeString(comment.Text)); text != "" {
+		lines = append(lines, "")
+		lines = append(lines, text)
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func formatPullRequestActivitySummary(activity pullrequestactivityservice.Activity) string {
+	action := strings.TrimSpace(activity.Action)
+	if action == "" {
+		action = "UNKNOWN"
+	}
+	if activity.Comment != nil {
+		return fmt.Sprintf("[%d %s] %s", activity.ID, action, formatCommentSummary(*activity.Comment))
+	}
+
+	return fmt.Sprintf("[%d %s]", activity.ID, action)
+}
+
+func commentAnchorPath(comment openapigenerated.RestComment) string {
+	if comment.Anchor == nil || comment.Anchor.Path == nil {
+		return ""
+	}
+	if comment.Anchor.Path.Parent != nil && comment.Anchor.Path.Name != nil {
+		parent := strings.TrimSpace(*comment.Anchor.Path.Parent)
+		name := strings.TrimSpace(*comment.Anchor.Path.Name)
+		if parent == "" {
+			return name
+		}
+		if name == "" {
+			return parent
+		}
+		return parent + "/" + name
+	}
+	if comment.Anchor.Path.Name != nil {
+		return strings.TrimSpace(*comment.Anchor.Path.Name)
+	}
+
+	return ""
+}
+
+func commentAuthorName(comment openapigenerated.RestComment) string {
+	if comment.Author == nil {
+		return ""
+	}
+	if comment.Author.DisplayName != nil && strings.TrimSpace(*comment.Author.DisplayName) != "" {
+		return strings.TrimSpace(*comment.Author.DisplayName)
+	}
+	if comment.Author.Name != nil {
+		return strings.TrimSpace(*comment.Author.Name)
+	}
+
+	return ""
 }
 
 func safeString(value *string) string {

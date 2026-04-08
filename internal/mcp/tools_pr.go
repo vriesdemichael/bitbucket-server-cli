@@ -6,8 +6,10 @@ import (
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	pullrequestservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequest"
+	pullrequestactivityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequestactivity"
 )
 
 func specGetPullRequest() Spec {
@@ -98,26 +100,37 @@ func specCreatePullRequest() Spec {
 
 func specListPRComments() Spec {
 	tool := mcpgo.NewTool("list_pr_comments",
-		mcpgo.WithDescription("List comments on a pull request."),
+		mcpgo.WithDescription("List comments on a pull request. Without path this returns the aggregate pull request comment view derived from activities."),
 		mcpgo.WithString("project", mcpgo.Required(), mcpgo.Description("Bitbucket project key")),
 		mcpgo.WithString("repo", mcpgo.Required(), mcpgo.Description("Repository slug")),
 		mcpgo.WithString("pr_id", mcpgo.Required(), mcpgo.Description("Pull request ID")),
-		mcpgo.WithString("path", mcpgo.Required(), mcpgo.Description("File path to restrict comments to a single diff path")),
-		mcpgo.WithNumber("limit", mcpgo.Description("Maximum number of results (default 50)")),
+		mcpgo.WithString("path", mcpgo.Description("Optional file path to restrict comments to a single diff path")),
+		mcpgo.WithNumber("limit", mcpgo.Description("Maximum number of results (default 25)")),
 	)
 	return Spec{Tool: tool, Handler: func(c Clients) server.ToolHandlerFunc {
-		svc := commentservice.NewService(c.OpenAPI)
+		commentSvc := commentservice.NewService(c.OpenAPI)
+		activitySvc := pullrequestactivityservice.NewService(c.OpenAPI)
 		return func(ctx context.Context, req mcpgo.CallToolRequest) (*mcpgo.CallToolResult, error) {
 			project, _ := req.RequireString("project")
 			repo, _ := req.RequireString("repo")
 			prID, _ := req.RequireString("pr_id")
-			path, _ := req.RequireString("path")
-			limit := req.GetInt("limit", 50)
-			target := commentservice.Target{
-				Repository:    commentservice.RepositoryRef{ProjectKey: project, Slug: repo},
-				PullRequestID: prID,
+			path := req.GetString("path", "")
+			limit := req.GetInt("limit", 25)
+			var comments []openapigenerated.RestComment
+			var err error
+			if path == "" {
+				activities, listErr := activitySvc.List(ctx, pullrequestactivityservice.RepositoryRef{ProjectKey: project, Slug: repo}, prID, pullrequestactivityservice.ListOptions{Limit: limit})
+				if listErr != nil {
+					return mcpgo.NewToolResultErrorFromErr("list_pr_comments failed", listErr), nil
+				}
+				comments = pullrequestactivityservice.ExtractComments(activities)
+			} else {
+				target := commentservice.Target{
+					Repository:    commentservice.RepositoryRef{ProjectKey: project, Slug: repo},
+					PullRequestID: prID,
+				}
+				comments, err = commentSvc.List(ctx, target, path, limit)
 			}
-			comments, err := svc.List(ctx, target, path, limit)
 			if err != nil {
 				return mcpgo.NewToolResultErrorFromErr("list_pr_comments failed", err), nil
 			}

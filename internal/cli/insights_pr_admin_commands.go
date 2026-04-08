@@ -10,6 +10,7 @@ import (
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
 	pullrequestservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequest"
+	pullrequestactivityservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/pullrequestactivity"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
 )
 
@@ -1249,6 +1250,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 	commentListCmd := &cobra.Command{
 		Use:   "list <id>",
 		Short: "List comments for a pull request",
+		Long:  "List pull request comments. Without --path this uses the pull request activity timeline to return the aggregate comment view. With --path it uses the path-scoped comments endpoint.",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, client, err := loadConfigAndClient()
@@ -1256,25 +1258,40 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 				return err
 			}
 
+			trimmedCommentPath := strings.TrimSpace(commentPath)
+
 			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
 			if err != nil {
 				return err
 			}
 
-			service := commentservice.NewService(client)
-			comments, err := service.List(cmd.Context(), commentservice.Target{
-				Repository: commentservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug},
-				PullRequestID: args[0],
-			}, commentPath, commentLimit)
-			if err != nil {
-				return err
+			source := "comments"
+			comments := make([]openapigenerated.RestComment, 0)
+			if trimmedCommentPath == "" {
+				source = "activities"
+				activityService := pullrequestactivityservice.NewService(client)
+				activities, err := activityService.List(cmd.Context(), pullrequestactivityservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, args[0], pullrequestactivityservice.ListOptions{Limit: commentLimit})
+				if err != nil {
+					return err
+				}
+				comments = pullrequestactivityservice.ExtractComments(activities)
+			} else {
+				service := commentservice.NewService(client)
+				comments, err = service.List(cmd.Context(), commentservice.Target{
+					Repository:    commentservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug},
+					PullRequestID: args[0],
+				}, trimmedCommentPath, commentLimit)
+				if err != nil {
+					return err
+				}
 			}
 
 			if options.JSON {
 				return writeJSON(cmd.OutOrStdout(), map[string]any{
 					"repository":      repo,
 					"pull_request_id": args[0],
-					"path":            commentPath,
+					"source":          source,
+					"path":            trimmedCommentPath,
 					"comments":        comments,
 				})
 			}
@@ -1292,11 +1309,96 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		},
 	}
 	commentListCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
-	commentListCmd.Flags().StringVar(&commentPath, "path", "", "File path for pull request comment listing scope")
+	commentListCmd.Flags().StringVar(&commentPath, "path", "", "Optional file path for path-scoped pull request comment listing")
 	commentListCmd.Flags().IntVar(&commentLimit, "limit", 25, "Page size for pull request comment list operations")
-	_ = commentListCmd.MarkFlagRequired("path")
 	commentCmd.AddCommand(commentListCmd)
+
+	commentGetCmd := &cobra.Command{
+		Use:   "get <pr-id> <comment-id>",
+		Short: "Get a pull request comment",
+		Long:  "Get a single pull request comment by id. This is the authoritative single-comment view and is better suited than list output when you need the full rendered comment payload.",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := commentservice.NewService(client)
+			comment, err := service.Get(cmd.Context(), commentservice.Target{
+				Repository:    commentservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug},
+				PullRequestID: args[0],
+			}, args[1])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request_id": args[0], "comment": comment})
+			}
+
+			fmt.Fprintln(cmd.OutOrStdout(), formatCommentDetail(comment))
+			return nil
+		},
+	}
+	commentGetCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	commentCmd.AddCommand(commentGetCmd)
 	prCmd.AddCommand(commentCmd)
+
+	activityCmd := &cobra.Command{
+		Use:   "activity",
+		Short: "Pull request activity commands",
+		Long:  "Pull request activity commands. This is an explicit exception to the stable versioned API and is intended only for AI ingestion and debugging.",
+	}
+
+	var activityLimit int
+	activityListCmd := &cobra.Command{
+		Use:   "list <id>",
+		Short: "List raw pull request activity items",
+		Long:  "List raw pull request activity items. This output is an explicit exception to the stable versioned API and is intended only for AI ingestion and debugging.",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestactivityservice.NewService(client)
+			activities, err := service.List(cmd.Context(), pullrequestactivityservice.RepositoryRef{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, args[0], pullrequestactivityservice.ListOptions{Limit: activityLimit})
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request_id": args[0], "activities": activities})
+			}
+
+			if len(activities) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No activities found")
+				return nil
+			}
+
+			for _, activity := range activities {
+				fmt.Fprintln(cmd.OutOrStdout(), formatPullRequestActivitySummary(activity))
+			}
+
+			return nil
+		},
+	}
+	activityListCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+	activityListCmd.Flags().IntVar(&activityLimit, "limit", 25, "Page size for pull request activity list operations")
+	activityCmd.AddCommand(activityListCmd)
+	prCmd.AddCommand(activityCmd)
 
 	taskCmd := &cobra.Command{Use: "task", Short: "Pull request task commands"}
 
