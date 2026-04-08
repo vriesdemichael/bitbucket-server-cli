@@ -28,6 +28,12 @@ repository cloning and browser navigation ergonomics tailored to Bitbucket-hoste
 
 ## Quick start
 
+Install on Windows via WinGet:
+
+```powershell
+winget install VriesDeMichael.bb
+```
+
 Install from Releases (Linux amd64 example):
 
 ```bash
