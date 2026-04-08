@@ -503,3 +503,84 @@ jobs:
         with:
           identifier: vriesdemichael.bb
           token: ${{ secrets.WINGET_TOKEN }}
+
+  scoop-release:
+    name: Publish to Scoop
+    needs:
+      - determine-version
+      - release
+    if: ${{ needs.determine-version.outputs.should_release == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    env:
+      VERSION: ${{ needs.determine-version.outputs.version }}
+    steps:
+      - name: Download checksums from release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh release download "$VERSION" \
+            --repo "$GITHUB_REPOSITORY" \
+            --pattern "sha256sums.txt" \
+            --output sha256sums.txt
+
+      - name: Update Scoop bucket manifest
+        env:
+          SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
+        run: |
+          set -euo pipefail
+          export VERSION_NO_V="${VERSION#v}"
+          export HASH_AMD64
+          HASH_AMD64=$(grep "bb_${VERSION_NO_V}_windows_amd64.zip" sha256sums.txt | awk '{print $1}')
+          export HASH_ARM64
+          HASH_ARM64=$(grep "bb_${VERSION_NO_V}_windows_arm64.zip" sha256sums.txt | awk '{print $1}')
+          export BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}"
+
+          git clone \
+            "https://x-access-token:${SCOOP_BUCKET_TOKEN}@github.com/vriesdemichael/scoop-bb.git" \
+            scoop-bucket
+          cd scoop-bucket
+
+          python - <<'PY'
+          import json, os
+          version_no_v = os.environ["VERSION_NO_V"]
+          hash_amd64   = os.environ["HASH_AMD64"]
+          hash_arm64   = os.environ["HASH_ARM64"]
+          base_url     = os.environ["BASE_URL"]
+          repo_url     = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}"
+          manifest = {
+              "version": version_no_v,
+              "description": "A CLI for Bitbucket Server / Bitbucket Data Center",
+              "homepage": repo_url,
+              "license": "MIT",
+              "architecture": {
+                  "64bit": {
+                      "url": f"{base_url}/bb_{version_no_v}_windows_amd64.zip",
+                      "hash": hash_amd64,
+                  },
+                  "arm64": {
+                      "url": f"{base_url}/bb_{version_no_v}_windows_arm64.zip",
+                      "hash": hash_arm64,
+                  },
+              },
+              "bin": "bb.exe",
+              "checkver": {"github": repo_url},
+              "autoupdate": {
+                  "architecture": {
+                      "64bit": {"url": f"{repo_url}/releases/download/v$version/bb_$version_windows_amd64.zip"},
+                      "arm64": {"url": f"{repo_url}/releases/download/v$version/bb_$version_windows_arm64.zip"},
+                  },
+              },
+          }
+          with open("bb.json", "w", encoding="utf-8") as f:
+              json.dump(manifest, f, indent=2)
+              f.write("\n")
+          PY
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bb.json
+          git diff --cached --quiet || git commit -m "Update bb to ${VERSION}"
+          git push

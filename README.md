@@ -34,6 +34,13 @@ Install on Windows via WinGet:
 winget install vriesdemichael.bb
 ```
 
+Install on Windows via Scoop:
+
+```powershell
+scoop bucket add scoop-bb https://github.com/vriesdemichael/scoop-bb
+scoop install scoop-bb/bb
+```
+
 Install from Releases (Linux amd64 example):
 
 ```bash

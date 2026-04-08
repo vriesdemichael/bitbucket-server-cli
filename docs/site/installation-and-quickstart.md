@@ -6,6 +6,13 @@
 winget install vriesdemichael.bb
 ```
 
+## Install on Windows via Scoop
+
+```powershell
+scoop bucket add scoop-bb https://github.com/vriesdemichael/scoop-bb
+scoop install scoop-bb/bb
+```
+
 ## Install from release artifacts
 
 1. Select a release version (example: `v0.1.0`).
