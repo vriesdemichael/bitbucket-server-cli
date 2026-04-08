@@ -1131,6 +1131,9 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/demo"},"toRef":{"displayId":"master"},"participants":[{"role":"REVIEWER","status":"UNAPPROVED","approved":false,"user":{"name":"reviewer1"}}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/merge":
+			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = writer.Write([]byte(`{"conflicted":true,"outcome":"CONFLICTED","vetoes":[{"summaryMessage":"Required builds failed","detailedMessage":"1 required build is failing"},{"summaryMessage":"Minimum approvals not met","detailedMessage":"At least 1 approval is required"}]}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/activities":
 			writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
 			_, _ = writer.Write([]byte(`{"isLastPage":true,"values":[{"id":901,"action":"COMMENTED","createdDate":1700000000000,"comment":{"id":301,"text":"pr thread comment","version":2}},{"id":902,"action":"COMMENTED","createdDate":1700000000001,"comment":{"id":302,"text":"anchored thread comment","version":1,"anchor":{"path":{"parent":"src","name":"seed.txt"}}}},{"id":903,"action":"APPROVED","createdDate":1700000000002}]}`))
@@ -1174,7 +1177,9 @@ func TestPRLifecycleReviewAndTaskCommands(t *testing.T) {
 		args          []string
 		expectSnippet string
 	}{
-		{name: "pr get json", args: []string{"--json", "pr", "get", "30"}, expectSnippet: `"reviewers"`},
+		{name: "pr get json", args: []string{"--json", "pr", "get", "30"}, expectSnippet: `"mergeability"`},
+		{name: "pr get human mergeability", args: []string{"pr", "get", "30"}, expectSnippet: "Mergeable: no"},
+		{name: "pr get human mergeability blockers", args: []string{"pr", "get", "30"}, expectSnippet: "Required builds failed (1 required build is failing)"},
 		{name: "pr comment list aggregate json", args: []string{"--json", "pr", "comment", "list", "30", "--limit", "10"}, expectSnippet: `"source": "activities"`},
 		{name: "pr comment list aggregate human", args: []string{"pr", "comment", "list", "30", "--limit", "10"}, expectSnippet: "anchored thread comment"},
 		{name: "pr comment list trimmed path json", args: []string{"--json", "pr", "comment", "list", "30", "--path", "  seed.txt  ", "--limit", "10"}, expectSnippet: `"path": "seed.txt"`},
@@ -1577,6 +1582,8 @@ func TestPRCommandsUseInferredRepositoryContext(t *testing.T) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30":
 			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/demo"},"toRef":{"displayId":"master"},"participants":[{"role":"REVIEWER","status":"UNAPPROVED","approved":false,"user":{"name":"reviewer1"}}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/merge":
+			_, _ = writer.Write([]byte(`{"conflicted":false,"outcome":"CLEAN","vetoes":[]}`))
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/approve":
 			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"participants":[{"role":"REVIEWER","status":"APPROVED","approved":true,"user":{"name":"reviewer1"}}]}`))
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/42":
@@ -1637,6 +1644,40 @@ func TestPRCommandsUseInferredRepositoryContext(t *testing.T) {
 				t.Fatalf("expected output to contain %q, got: %s", testCase.expectSnippet, output.String())
 			}
 		})
+	}
+}
+
+func TestPRGetHumanMergeabilityDetailOnlyBlocker(t *testing.T) {
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30":
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/demo"},"toRef":{"displayId":"master"}}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/merge":
+			_, _ = writer.Write([]byte(`{"conflicted":false,"outcome":"UNKNOWN","vetoes":[{"summaryMessage":"","detailedMessage":"detail only blocker"}]}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+	t.Setenv("BITBUCKET_REPO_SLUG", "demo")
+
+	command := NewRootCommand()
+	output := &bytes.Buffer{}
+	command.SetOut(output)
+	command.SetErr(output)
+	command.SetArgs([]string{"pr", "get", "30"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("expected pr get to succeed, got: %v (output: %s)", err, output.String())
+	}
+	if !strings.Contains(output.String(), "- detail only blocker") {
+		t.Fatalf("expected detail-only merge blocker in output, got: %s", output.String())
 	}
 }
 

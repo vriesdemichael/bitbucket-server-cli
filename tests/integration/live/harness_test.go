@@ -43,6 +43,7 @@ type liveHarness struct {
 
 func newLiveHarness(t *testing.T) *liveHarness {
 	t.Helper()
+	applyLocalLiveDefaults(t)
 
 	cfg, err := config.LoadFromEnv()
 	if err != nil {
@@ -63,6 +64,34 @@ func newLiveHarness(t *testing.T) *liveHarness {
 	}
 
 	return &liveHarness{t: t, config: cfg, client: client}
+}
+
+func applyLocalLiveDefaults(t *testing.T) {
+	t.Helper()
+
+	if strings.TrimSpace(os.Getenv("BB_DISABLE_STORED_CONFIG")) == "" {
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	}
+
+	bitbucketURL := strings.TrimSpace(os.Getenv("BITBUCKET_URL"))
+	if bitbucketURL == "" {
+		t.Setenv("BITBUCKET_URL", "http://localhost:7990")
+	} else if strings.Contains(bitbucketURL, "://") == false && isLocalBitbucketHost(bitbucketURL) {
+		t.Setenv("BITBUCKET_URL", "http://"+bitbucketURL)
+	}
+
+	hasExplicitUser := strings.TrimSpace(os.Getenv("BITBUCKET_USERNAME")) != "" || strings.TrimSpace(os.Getenv("BITBUCKET_USER")) != ""
+	hasExplicitPassword := strings.TrimSpace(os.Getenv("BITBUCKET_PASSWORD")) != ""
+	hasAdminFallback := strings.TrimSpace(os.Getenv("ADMIN_USER")) != "" || strings.TrimSpace(os.Getenv("ADMIN_PASSWORD")) != ""
+	if !hasExplicitUser && !hasExplicitPassword && !hasAdminFallback {
+		t.Setenv("ADMIN_USER", "admin")
+		t.Setenv("ADMIN_PASSWORD", "admin")
+	}
+}
+
+func isLocalBitbucketHost(host string) bool {
+	trimmed := strings.TrimSpace(strings.ToLower(host))
+	return strings.HasPrefix(trimmed, "localhost:") || strings.HasPrefix(trimmed, "127.0.0.1:") || trimmed == "localhost" || trimmed == "127.0.0.1"
 }
 
 func (h *liveHarness) seedProjectWithRepositories(ctx context.Context, repositoryCount int, commitsPerRepository int) (seededProject, error) {
@@ -600,6 +629,67 @@ func configureLiveCLIEnvForUser(t *testing.T, harness *liveHarness, projectKey, 
 	t.Setenv("BITBUCKET_USERNAME", user.Username)
 	t.Setenv("BITBUCKET_PASSWORD", user.Password)
 	t.Setenv("BITBUCKET_TOKEN", "")
+}
+
+func TestApplyLocalLiveDefaults(t *testing.T) {
+	t.Run("local live defaults are applied when env is absent", func(t *testing.T) {
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+		t.Setenv("BITBUCKET_URL", "")
+		t.Setenv("BITBUCKET_USERNAME", "")
+		t.Setenv("BITBUCKET_USER", "")
+		t.Setenv("BITBUCKET_PASSWORD", "")
+		t.Setenv("ADMIN_USER", "")
+		t.Setenv("ADMIN_PASSWORD", "")
+
+		applyLocalLiveDefaults(t)
+
+		if got := os.Getenv("BB_DISABLE_STORED_CONFIG"); got != "1" {
+			t.Fatalf("expected BB_DISABLE_STORED_CONFIG=1, got %q", got)
+		}
+		if got := os.Getenv("BITBUCKET_URL"); got != "http://localhost:7990" {
+			t.Fatalf("expected BITBUCKET_URL=http://localhost:7990, got %q", got)
+		}
+		if got := os.Getenv("ADMIN_USER"); got != "admin" {
+			t.Fatalf("expected ADMIN_USER=admin, got %q", got)
+		}
+		if got := os.Getenv("ADMIN_PASSWORD"); got != "admin" {
+			t.Fatalf("expected ADMIN_PASSWORD=admin, got %q", got)
+		}
+	})
+
+	t.Run("local live defaults preserve explicit env", func(t *testing.T) {
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "0")
+		t.Setenv("BITBUCKET_URL", "http://custom.local:7990")
+		t.Setenv("BITBUCKET_USERNAME", "alice")
+		t.Setenv("BITBUCKET_PASSWORD", "secret")
+		t.Setenv("ADMIN_USER", "root")
+		t.Setenv("ADMIN_PASSWORD", "toor")
+
+		applyLocalLiveDefaults(t)
+
+		if got := os.Getenv("BB_DISABLE_STORED_CONFIG"); got != "0" {
+			t.Fatalf("expected BB_DISABLE_STORED_CONFIG to remain explicit, got %q", got)
+		}
+		if got := os.Getenv("BITBUCKET_URL"); got != "http://custom.local:7990" {
+			t.Fatalf("expected BITBUCKET_URL to remain explicit, got %q", got)
+		}
+		if got := os.Getenv("ADMIN_USER"); got != "root" {
+			t.Fatalf("expected ADMIN_USER to remain explicit, got %q", got)
+		}
+		if got := os.Getenv("ADMIN_PASSWORD"); got != "toor" {
+			t.Fatalf("expected ADMIN_PASSWORD to remain explicit, got %q", got)
+		}
+	})
+
+	t.Run("schemeless local bitbucket url is normalized to http", func(t *testing.T) {
+		t.Setenv("BITBUCKET_URL", "localhost:7990")
+
+		applyLocalLiveDefaults(t)
+
+		if got := os.Getenv("BITBUCKET_URL"); got != "http://localhost:7990" {
+			t.Fatalf("expected schemeless localhost url to normalize to http, got %q", got)
+		}
+	})
 }
 
 func TestRetryAfterParsingHelpers(t *testing.T) {

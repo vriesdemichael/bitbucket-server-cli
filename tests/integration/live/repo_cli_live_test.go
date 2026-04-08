@@ -753,6 +753,29 @@ func TestLiveCLIPRUpdateDryRunNoSideEffect(t *testing.T) {
 	}
 }
 
+func TestLiveCLIPRGetIncludesMergeability(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	output, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get failed: %v\noutput: %s", err, output)
+	}
+
+	payload := decodeJSONMap(t, output)
+	pullRequest, ok := payload["pull_request"].(map[string]any)
+	if !ok {
+		t.Fatalf("pull_request field missing from output: %s", output)
+	}
+	mergeability, ok := pullRequest["mergeability"].(map[string]any)
+	if !ok {
+		t.Fatalf("mergeability field missing from pr get output: %s", output)
+	}
+	if _, ok := mergeability["mergeable"].(bool); !ok {
+		t.Fatalf("mergeability.mergeable missing from pr get output: %s", output)
+	}
+}
+
 func TestLiveCLIPRMergeDryRunNoSideEffect(t *testing.T) {
 	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
 	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)

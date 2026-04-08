@@ -40,6 +40,19 @@ type PullRequest struct {
 	CreatedDate  int64          `json:"created_date,omitempty"`
 	UpdatedDate  int64          `json:"updated_date,omitempty"`
 	Reviewers    []Reviewer     `json:"reviewers,omitempty"`
+	Mergeability *Mergeability  `json:"mergeability,omitempty"`
+}
+
+type Mergeability struct {
+	Mergeable  bool           `json:"mergeable"`
+	Outcome    string         `json:"outcome,omitempty"`
+	Conflicted bool           `json:"conflicted"`
+	Blockers   []MergeBlocker `json:"blockers,omitempty"`
+}
+
+type MergeBlocker struct {
+	Summary string `json:"summary,omitempty"`
+	Detail  string `json:"detail,omitempty"`
 }
 
 type Reviewer struct {
@@ -230,7 +243,38 @@ func (service *Service) Get(ctx context.Context, repository RepositoryRef, pullR
 		return PullRequest{}, err
 	}
 
-	return mapPullRequest(response), nil
+	pullRequest := mapPullRequest(response)
+	if pullRequest.Open {
+		mergeability, err := service.GetMergeability(ctx, repository, resolvedID)
+		switch {
+		case err == nil:
+			pullRequest.Mergeability = &mergeability
+		case apperrors.IsKind(err, apperrors.KindNotFound), apperrors.IsKind(err, apperrors.KindConflict):
+			// Older Bitbucket variants or non-open PR states can omit mergeability details.
+		default:
+			return PullRequest{}, err
+		}
+	}
+
+	return pullRequest, nil
+}
+
+func (service *Service) GetMergeability(ctx context.Context, repository RepositoryRef, pullRequestID string) (Mergeability, error) {
+	if err := validateRepositoryRef(repository); err != nil {
+		return Mergeability{}, err
+	}
+
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return Mergeability{}, err
+	}
+
+	var response mergeabilityValue
+	if err := service.client.GetJSON(ctx, fmt.Sprintf("%s/%s/merge", pullRequestPath(repository), resolvedID), nil, &response); err != nil {
+		return Mergeability{}, err
+	}
+
+	return mapMergeability(response), nil
 }
 
 func (service *Service) Create(ctx context.Context, repository RepositoryRef, input CreateInput) (PullRequest, error) {
@@ -489,6 +533,17 @@ type buildStatusValue struct {
 	Name  string `json:"name"`
 }
 
+type mergeabilityValue struct {
+	Conflicted bool             `json:"conflicted"`
+	Outcome    string           `json:"outcome"`
+	Vetoes     []mergeVetoValue `json:"vetoes"`
+}
+
+type mergeVetoValue struct {
+	DetailedMessage string `json:"detailedMessage"`
+	SummaryMessage  string `json:"summaryMessage"`
+}
+
 // GetBuildStatuses retrieves build statuses for the source commit of the given pull request.
 func (service *Service) GetBuildStatuses(ctx context.Context, repository RepositoryRef, pullRequestID string, limit int) ([]BuildStatus, error) {
 	if err := validateRepositoryRef(repository); err != nil {
@@ -688,6 +743,35 @@ func mapReviewers(participants []pullRequestParticipant) []Reviewer {
 	}
 
 	return reviewers
+}
+
+func mapMergeability(raw mergeabilityValue) Mergeability {
+	blockers := make([]MergeBlocker, 0, len(raw.Vetoes))
+	for _, veto := range raw.Vetoes {
+		summary := strings.TrimSpace(veto.SummaryMessage)
+		detail := strings.TrimSpace(veto.DetailedMessage)
+		if summary == "" && detail == "" {
+			continue
+		}
+
+		blockers = append(blockers, MergeBlocker{
+			Summary: summary,
+			Detail:  detail,
+		})
+	}
+
+	mergedOutcome := strings.TrimSpace(raw.Outcome)
+	mergeable := !raw.Conflicted && len(blockers) == 0
+	if mergedOutcome != "" {
+		mergeable = mergeable && strings.EqualFold(mergedOutcome, "CLEAN")
+	}
+
+	return Mergeability{
+		Mergeable:  mergeable,
+		Outcome:    mergedOutcome,
+		Conflicted: raw.Conflicted,
+		Blockers:   blockers,
+	}
 }
 
 func mapTask(raw taskValue) Task {
