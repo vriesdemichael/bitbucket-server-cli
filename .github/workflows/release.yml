@@ -487,3 +487,19 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           task docs:deploy-version VERSION="$VERSION"
+
+  winget-release:
+    name: Publish to WinGet
+    needs:
+      - determine-version
+      - release
+    if: ${{ needs.determine-version.outputs.should_release == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Publish to WinGet
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: VriesDeMichael.bb
+          token: ${{ secrets.WINGET_TOKEN }}

@@ -1,5 +1,11 @@
 # Installation and Quickstart
 
+## Install on Windows via WinGet
+
+```powershell
+winget install VriesDeMichael.bb
+```
+
 ## Install from release artifacts
 
 1. Select a release version (example: `v0.1.0`).
