@@ -1,40 +1,40 @@
 {
   "version": 2,
   "coverage": {
-    "unit_raw_percent": 17.435855229316267,
-    "unit_scoped_percent": 87.5210970464135,
-    "live_raw_percent": 18.458076591449178,
-    "live_scoped_percent": 53.95477226881834,
-    "combined_raw_percent": 25.454208761136606,
-    "combined_scoped_percent": 89.65189873417721,
-    "patch_percent": 88.23529411764706,
+    "unit_raw_percent": 17.735423711445844,
+    "unit_scoped_percent": 87.62662807525325,
+    "live_raw_percent": 18.720284846580793,
+    "live_scoped_percent": 53.9477790492042,
+    "combined_raw_percent": 25.836663592581203,
+    "combined_scoped_percent": 89.70436220798015,
+    "patch_percent": 86.1244019138756,
     "unit_statements": {
-      "covered": 8474,
-      "total": 48601
+      "covered": 8654,
+      "total": 48795
     },
     "live_statements": {
-      "covered": 8777,
-      "total": 47551
+      "covered": 8938,
+      "total": 47745
     },
     "combined_statements": {
-      "covered": 12371,
-      "total": 48601
+      "covered": 12607,
+      "total": 48795
     },
     "unit_scoped_statements": {
-      "covered": 8297,
-      "total": 9480
+      "covered": 8477,
+      "total": 9674
     },
     "live_scoped_statements": {
-      "covered": 5082,
-      "total": 9419
+      "covered": 5186,
+      "total": 9613
     },
     "combined_scoped_statements": {
-      "covered": 8499,
-      "total": 9480
+      "covered": 8678,
+      "total": 9674
     },
     "patch_lines": {
-      "covered": 45,
-      "total": 51
+      "covered": 180,
+      "total": 209
     },
     "scope": {
       "include_prefixes": [
@@ -48,7 +48,7 @@
     }
   },
   "generated_contracts": {
-    "coverage_percent": 43.61702127659575,
+    "coverage_percent": 43.15789473684211,
     "used_operations": [
       "AddAnnotationsWithResponse",
       "AddBuildStatusWithResponse",
@@ -83,6 +83,7 @@
       "FindWebhooks1WithResponse",
       "ForkRepositoryWithResponse",
       "GetACodeInsightsReportWithResponse",
+      "GetActivitiesWithResponse",
       "GetAnnotationsWithResponse",
       "GetBranchesWithResponse",
       "GetBuildStatusStatsWithResponse",
@@ -206,6 +207,7 @@
       "EnableHookWithResponse",
       "FindByCommitWithResponse",
       "ForkRepositoryWithResponse",
+      "GetActivitiesWithResponse",
       "GetBranchesWithResponse",
       "GetCommitWithResponse",
       "GetCommitsWithResponse",

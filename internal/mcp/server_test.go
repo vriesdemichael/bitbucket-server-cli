@@ -39,7 +39,6 @@ func testClients(t *testing.T) Clients {
 	return clients
 }
 
-
 // TestAllSpecsReturnsExpectedCount ensures the catalog has exactly the expected number of tools.
 func TestAllSpecsReturnsExpectedCount(t *testing.T) {
 	const wantCount = 20
@@ -313,7 +312,7 @@ func TestHandlerReturnsToolErrorOnMissingRequiredArg(t *testing.T) {
 	}
 }
 
-func TestListPRCommentsHandlerSuccessAndMissingPath(t *testing.T) {
+func TestListPRCommentsHandlerPathScopedAndAggregate(t *testing.T) {
 	t.Run("success", func(t *testing.T) {
 		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method != http.MethodGet || r.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/comments" {
@@ -347,16 +346,31 @@ func TestListPRCommentsHandlerSuccessAndMissingPath(t *testing.T) {
 		}
 	})
 
-	t.Run("missing path", func(t *testing.T) {
-		handler := specListPRComments().Handler(Clients{})
+	t.Run("aggregate without path", func(t *testing.T) {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Method != http.MethodGet || r.URL.Path != "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/activities" {
+				http.NotFound(w, r)
+				return
+			}
+			w.Header().Set("Content-Type", "application/json;charset=UTF-8")
+			_, _ = w.Write([]byte(`{"isLastPage":true,"values":[{"id":301,"action":"COMMENTED","comment":{"id":401,"text":"aggregate comment","version":3}}]}`))
+		}))
+		defer srv.Close()
+
+		clients, err := ClientsFromConfig(config.AppConfig{BitbucketURL: srv.URL, RequestTimeout: 5 * time.Second, RetryCount: 0, RetryBackoff: time.Millisecond})
+		if err != nil {
+			t.Fatalf("ClientsFromConfig failed: %v", err)
+		}
+
+		handler := specListPRComments().Handler(clients)
 		result, err := handler(context.Background(), mcpgo.CallToolRequest{
 			Params: mcpgo.CallToolParams{Arguments: map[string]any{"project": "TEST", "repo": "demo", "pr_id": "30"}},
 		})
 		if err != nil {
 			t.Fatalf("handler returned Go error: %v", err)
 		}
-		if result == nil || !result.IsError {
-			t.Fatalf("expected error result for missing path, got: %+v", result)
+		if result == nil || result.IsError {
+			t.Fatalf("expected aggregate success result, got: %+v", result)
 		}
 	})
 }
