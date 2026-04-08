@@ -1,40 +1,40 @@
 {
   "version": 2,
   "coverage": {
-    "unit_raw_percent": 17.735423711445844,
-    "unit_scoped_percent": 87.62662807525325,
-    "live_raw_percent": 18.720284846580793,
-    "live_scoped_percent": 53.9477790492042,
-    "combined_raw_percent": 25.836663592581203,
-    "combined_scoped_percent": 89.70436220798015,
-    "patch_percent": 86.1244019138756,
+    "unit_raw_percent": 18.293302963128674,
+    "unit_scoped_percent": 87.7412935323383,
+    "live_raw_percent": 18.539839561079013,
+    "live_scoped_percent": 51.76246745443621,
+    "combined_raw_percent": 26.332594415407456,
+    "combined_scoped_percent": 89.7412935323383,
+    "patch_percent": 85.08634222919937,
     "unit_statements": {
-      "covered": 8654,
-      "total": 48795
+      "covered": 8995,
+      "total": 49171
     },
     "live_statements": {
-      "covered": 8938,
-      "total": 47745
+      "covered": 8921,
+      "total": 48118
     },
     "combined_statements": {
-      "covered": 12607,
-      "total": 48795
+      "covered": 12948,
+      "total": 49171
     },
     "unit_scoped_statements": {
-      "covered": 8477,
-      "total": 9674
+      "covered": 8818,
+      "total": 10050
     },
     "live_scoped_statements": {
-      "covered": 5186,
-      "total": 9613
+      "covered": 5169,
+      "total": 9986
     },
     "combined_scoped_statements": {
-      "covered": 8678,
-      "total": 9674
+      "covered": 9019,
+      "total": 10050
     },
     "patch_lines": {
-      "covered": 180,
-      "total": 209
+      "covered": 542,
+      "total": 637
     },
     "scope": {
       "include_prefixes": [
