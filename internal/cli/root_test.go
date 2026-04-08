@@ -1563,6 +1563,83 @@ func TestApplyInferredRepositoryContext(t *testing.T) {
 	})
 }
 
+func TestPRCommandsUseInferredRepositoryContext(t *testing.T) {
+	originalFactory := gitBackendFactory
+	t.Cleanup(func() {
+		gitBackendFactory = originalFactory
+	})
+
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json;charset=UTF-8")
+
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30":
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/demo"},"toRef":{"displayId":"master"},"participants":[{"role":"REVIEWER","status":"UNAPPROVED","approved":false,"user":{"name":"reviewer1"}}]}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/30/approve":
+			_, _ = writer.Write([]byte(`{"id":30,"title":"Feature PR","state":"OPEN","open":true,"closed":false,"participants":[{"role":"REVIEWER","status":"APPROVED","approved":true,"user":{"name":"reviewer1"}}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/42":
+			_, _ = writer.Write([]byte(`{"id":42,"title":"Build PR","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/x","latestCommit":"abc123"},"toRef":{"displayId":"main"}}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/build-status/latest/commits/abc123":
+			_, _ = writer.Write([]byte(`{"values":[{"key":"ci/main","state":"SUCCESSFUL","url":"https://ci.example/1","name":"CI"}],"isLastPage":true}`))
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "")
+	t.Setenv("BITBUCKET_REPO_SLUG", "")
+	t.Setenv("BITBUCKET_TOKEN", "")
+	t.Setenv("BITBUCKET_USERNAME", "")
+	t.Setenv("BITBUCKET_PASSWORD", "")
+	t.Setenv("ADMIN_USER", "")
+	t.Setenv("ADMIN_PASSWORD", "")
+
+	gitBackendFactory = func() git.Backend {
+		return inferenceGitBackendStub{
+			repoRoot: "/tmp/repo",
+			remotes: []git.Remote{{
+				Name: "origin",
+				URL:  server.URL + "/scm/TEST/demo.git",
+			}},
+		}
+	}
+
+	testCases := []struct {
+		name          string
+		args          []string
+		expectSnippet string
+	}{
+		{name: "pr get", args: []string{"pr", "get", "30"}, expectSnippet: "Feature PR"},
+		{name: "pr review approve", args: []string{"pr", "review", "approve", "30"}, expectSnippet: "Approved pull request #30"},
+		{name: "pr build status", args: []string{"pr", "build", "status", "42"}, expectSnippet: "SUCCESSFUL"},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.name, func(t *testing.T) {
+			command := NewRootCommand()
+			output := &bytes.Buffer{}
+			command.SetOut(output)
+			command.SetErr(output)
+			command.SetArgs(testCase.args)
+
+			if err := command.Execute(); err != nil {
+				t.Fatalf("expected command to succeed, got: %v (output: %s)", err, output.String())
+			}
+
+			if !strings.Contains(output.String(), "Using repository context from git remote") {
+				t.Fatalf("expected inference banner, got: %s", output.String())
+			}
+			if !strings.Contains(output.String(), testCase.expectSnippet) {
+				t.Fatalf("expected output to contain %q, got: %s", testCase.expectSnippet, output.String())
+			}
+		})
+	}
+}
+
 func TestInferenceHelperFunctions(t *testing.T) {
 	originalFactory := gitBackendFactory
 	t.Cleanup(func() {

@@ -401,6 +401,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 		Use:   "pr",
 		Short: "Pull request commands",
 	}
+	prCmd.PersistentFlags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)")
 
 	listCmd := &cobra.Command{
 		Use:   "list",
@@ -456,8 +457,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-
-	listCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	listCmd.Flags().StringVar(&state, "state", "open", "Pull request state filter: open, closed, all")
 	listCmd.Flags().IntVar(&limit, "limit", 25, "Page size for Bitbucket pull request list operations")
 	listCmd.Flags().IntVar(&start, "start", 0, "Start offset for Bitbucket pull request list operations")
@@ -498,7 +497,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	getCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	prCmd.AddCommand(getCmd)
 
 	var createFromRef string
@@ -596,7 +594,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	createCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	createCmd.Flags().StringVar(&createFromRef, "from-ref", "", "Source branch (name or refs/heads/name)")
 	createCmd.Flags().StringVar(&createToRef, "to-ref", "", "Target branch (name or refs/heads/name)")
 	createCmd.Flags().StringVar(&createTitle, "title", "", "Pull request title")
@@ -686,7 +683,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	updateCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	updateCmd.Flags().StringVar(&updateTitle, "title", "", "Updated pull request title")
 	updateCmd.Flags().StringVar(&updateDescription, "description", "", "Updated pull request description")
 	updateCmd.Flags().IntVar(&updateVersion, "version", 0, "Expected pull request version")
@@ -778,7 +774,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	mergeCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	mergeCmd.Flags().IntVar(&transitionVersion, "version", 0, "Expected pull request version")
 	prCmd.AddCommand(mergeCmd)
 
@@ -858,7 +853,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	declineCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	declineCmd.Flags().IntVar(&transitionVersion, "version", 0, "Expected pull request version")
 	prCmd.AddCommand(declineCmd)
 
@@ -938,7 +932,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	reopenCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	reopenCmd.Flags().IntVar(&transitionVersion, "version", 0, "Expected pull request version")
 	prCmd.AddCommand(reopenCmd)
 
@@ -1014,7 +1007,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	reviewApproveCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	reviewCmd.AddCommand(reviewApproveCmd)
 
 	reviewUnapproveCmd := &cobra.Command{
@@ -1087,7 +1079,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	reviewUnapproveCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	reviewCmd.AddCommand(reviewUnapproveCmd)
 
 	reviewerCmd := &cobra.Command{Use: "reviewer", Short: "Manage pull request reviewers"}
@@ -1161,7 +1152,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	reviewerAddCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	reviewerAddCmd.Flags().StringVar(&reviewerUsername, "user", "", "Reviewer username")
 	_ = reviewerAddCmd.MarkFlagRequired("user")
 	reviewerCmd.AddCommand(reviewerAddCmd)
@@ -1235,7 +1225,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	reviewerRemoveCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	reviewerRemoveCmd.Flags().StringVar(&reviewerUsername, "user", "", "Reviewer username")
 	_ = reviewerRemoveCmd.MarkFlagRequired("user")
 	reviewerCmd.AddCommand(reviewerRemoveCmd)
@@ -1308,7 +1297,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	commentListCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	commentListCmd.Flags().StringVar(&commentPath, "path", "", "Optional file path for path-scoped pull request comment listing")
 	commentListCmd.Flags().IntVar(&commentLimit, "limit", 25, "Page size for pull request comment list operations")
 	commentCmd.AddCommand(commentListCmd)
@@ -1346,7 +1334,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	commentGetCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	commentCmd.AddCommand(commentGetCmd)
 	prCmd.AddCommand(commentCmd)
 
@@ -1395,7 +1382,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	activityListCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	activityListCmd.Flags().IntVar(&activityLimit, "limit", 25, "Page size for pull request activity list operations")
 	activityCmd.AddCommand(activityListCmd)
 	prCmd.AddCommand(activityCmd)
@@ -1441,7 +1427,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	taskListCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	taskListCmd.Flags().StringVar(&taskState, "state", "open", "Task state filter: open, resolved, all")
 	taskListCmd.Flags().IntVar(&taskLimit, "limit", 25, "Page size for task list operations")
 	taskListCmd.Flags().IntVar(&taskStart, "start", 0, "Start offset for task list operations")
@@ -1500,7 +1485,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	taskCreateCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	taskCreateCmd.Flags().StringVar(&taskText, "text", "", "Task text")
 	_ = taskCreateCmd.MarkFlagRequired("text")
 	taskCmd.AddCommand(taskCreateCmd)
@@ -1596,7 +1580,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	taskUpdateCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	taskUpdateCmd.Flags().StringVar(&taskID, "task", "", "Task ID")
 	taskUpdateCmd.Flags().StringVar(&taskText, "text", "", "Task text")
 	taskUpdateCmd.Flags().BoolVar(&taskResolved, "resolved", false, "Mark task as resolved/unresolved")
@@ -1678,7 +1661,6 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			return nil
 		},
 	}
-	taskDeleteCmd.Flags().StringVar(&repository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	taskDeleteCmd.Flags().StringVar(&taskID, "task", "", "Task ID")
 	taskDeleteCmd.Flags().IntVar(&taskVersion, "version", 0, "Expected task version")
 	_ = taskDeleteCmd.MarkFlagRequired("task")
@@ -1687,13 +1669,11 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 	prCmd.AddCommand(taskCmd)
 
 	// pr build
-	var buildRepository string
 	var buildLimit int
 	buildCmd := &cobra.Command{
 		Use:   "build",
 		Short: "Pull request build status commands",
 	}
-	buildCmd.PersistentFlags().StringVar(&buildRepository, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
 	buildCmd.PersistentFlags().IntVar(&buildLimit, "limit", 25, "Page size for build status results")
 
 	buildStatusCmd := &cobra.Command{
@@ -1706,7 +1686,7 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 				return err
 			}
 
-			repo, err := resolvePullRequestRepositoryReference(buildRepository, cfg)
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
 			if err != nil {
 				return err
 			}

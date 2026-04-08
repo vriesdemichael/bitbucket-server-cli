@@ -2231,6 +2231,9 @@ Available Commands:
   task        Pull request task commands
   update      Update pull request metadata
 
+Flags:
+      --repo string   Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
+
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
       --dry-run                  Preview server mutations without applying them
@@ -2267,6 +2270,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2285,8 +2289,7 @@ Usage:
   bb pr activity list <id> [flags]
 
 Flags:
-      --limit int     Page size for pull request activity list operations (default 25)
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
+      --limit int   Page size for pull request activity list operations (default 25)
 
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
@@ -2296,6 +2299,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2315,8 +2319,7 @@ Available Commands:
   status      Show build statuses for a pull request's source commit
 
 Flags:
-      --limit int     Page size for build status results (default 25)
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
+      --limit int   Page size for build status results (default 25)
 
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
@@ -2326,6 +2329,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2352,7 +2356,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
-      --repo string              Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2380,6 +2384,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2397,9 +2402,6 @@ Get a single pull request comment by id. This is the authoritative single-commen
 Usage:
   bb pr comment get <pr-id> <comment-id> [flags]
 
-Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
-
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
       --dry-run                  Preview server mutations without applying them
@@ -2408,6 +2410,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2426,7 +2429,6 @@ Usage:
 Flags:
       --limit int     Page size for pull request comment list operations (default 25)
       --path string   Optional file path for path-scoped pull request comment listing
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
 
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
@@ -2436,6 +2438,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2454,7 +2457,6 @@ Usage:
 Flags:
       --description string   Pull request description
       --from-ref string      Source branch (name or refs/heads/name)
-      --repo string          Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --title string         Pull request title
       --to-ref string        Target branch (name or refs/heads/name)
 
@@ -2466,6 +2468,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2482,7 +2485,6 @@ Usage:
   bb pr decline <id> [flags]
 
 Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --version int   Expected pull request version
 
 Global Flags:
@@ -2493,6 +2495,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2508,9 +2511,6 @@ Get pull request details
 Usage:
   bb pr get <id> [flags]
 
-Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
-
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
       --dry-run                  Preview server mutations without applying them
@@ -2519,6 +2519,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2536,7 +2537,6 @@ Usage:
 
 Flags:
       --limit int              Page size for Bitbucket pull request list operations (default 25)
-      --repo string            Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --source-branch string   Optional source branch filter
       --start int              Start offset for Bitbucket pull request list operations
       --state string           Pull request state filter: open, closed, all (default "open")
@@ -2550,6 +2550,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2566,7 +2567,6 @@ Usage:
   bb pr merge <id> [flags]
 
 Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --version int   Expected pull request version
 
 Global Flags:
@@ -2577,6 +2577,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2593,7 +2594,6 @@ Usage:
   bb pr reopen <id> [flags]
 
 Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --version int   Expected pull request version
 
 Global Flags:
@@ -2604,6 +2604,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2632,6 +2633,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2649,9 +2651,6 @@ Approve a pull request
 Usage:
   bb pr review approve <id> [flags]
 
-Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
-
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
       --dry-run                  Preview server mutations without applying them
@@ -2660,6 +2659,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2687,6 +2687,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2705,7 +2706,6 @@ Usage:
   bb pr review reviewer add <id> [flags]
 
 Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --user string   Reviewer username
 
 Global Flags:
@@ -2716,6 +2716,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2732,7 +2733,6 @@ Usage:
   bb pr review reviewer remove <id> [flags]
 
 Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --user string   Reviewer username
 
 Global Flags:
@@ -2743,6 +2743,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2758,9 +2759,6 @@ Remove pull request approval
 Usage:
   bb pr review unapprove <id> [flags]
 
-Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
-
 Global Flags:
       --ca-file string           Path to PEM CA bundle for TLS trust
       --dry-run                  Preview server mutations without applying them
@@ -2769,6 +2767,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2798,6 +2797,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2816,7 +2816,6 @@ Usage:
   bb pr task create <id> [flags]
 
 Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --text string   Task text
 
 Global Flags:
@@ -2827,6 +2826,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2843,7 +2843,6 @@ Usage:
   bb pr task delete <id> [flags]
 
 Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --task string   Task ID
       --version int   Expected task version
 
@@ -2855,6 +2854,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2872,7 +2872,6 @@ Usage:
 
 Flags:
       --limit int      Page size for task list operations (default 25)
-      --repo string    Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --start int      Start offset for task list operations
       --state string   Task state filter: open, resolved, all (default "open")
 
@@ -2884,6 +2883,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2900,7 +2900,6 @@ Usage:
   bb pr task update <id> [flags]
 
 Flags:
-      --repo string   Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --resolved      Mark task as resolved/unresolved
       --task string   Task ID
       --text string   Task text
@@ -2914,6 +2913,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
@@ -2931,7 +2931,6 @@ Usage:
 
 Flags:
       --description string   Updated pull request description
-      --repo string          Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)
       --title string         Updated pull request title
       --version int          Expected pull request version
 
@@ -2943,6 +2942,7 @@ Global Flags:
       --log-format string        Diagnostics format: text or jsonl
       --log-level string         Diagnostics verbosity: error, warn, info, debug
       --no-color                 Disable colored output
+      --repo string              Repository as PROJECT/slug (defaults to inferred repository context; otherwise requires BITBUCKET_PROJECT_KEY and BITBUCKET_REPO_SLUG)
       --request-timeout string   HTTP request timeout (Go duration, e.g. 20s)
       --retry-backoff string     Base retry backoff duration (e.g. 250ms)
       --retry-count int          HTTP retry attempts for transient errors (default -1)
