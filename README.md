@@ -31,7 +31,7 @@ repository cloning and browser navigation ergonomics tailored to Bitbucket-hoste
 Install on Windows via WinGet:
 
 ```powershell
-winget install VriesDeMichael.bb
+winget install vriesdemichael.bb
 ```
 
 Install from Releases (Linux amd64 example):

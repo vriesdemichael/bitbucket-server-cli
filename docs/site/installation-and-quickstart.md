@@ -3,7 +3,7 @@
 ## Install on Windows via WinGet
 
 ```powershell
-winget install VriesDeMichael.bb
+winget install vriesdemichael.bb
 ```
 
 ## Install from release artifacts
