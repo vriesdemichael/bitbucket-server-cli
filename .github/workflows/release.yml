@@ -526,6 +526,11 @@ jobs:
             --pattern "sha256sums.txt" \
             --output sha256sums.txt
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
       - name: Update Scoop bucket manifest
         env:
           SCOOP_BUCKET_TOKEN: ${{ secrets.SCOOP_BUCKET_TOKEN }}
@@ -538,10 +543,10 @@ jobs:
           HASH_ARM64=$(grep "bb_${VERSION_NO_V}_windows_arm64.zip" sha256sums.txt | awk '{print $1}')
           export BASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/${VERSION}"
 
-          git clone \
-            "https://x-access-token:${SCOOP_BUCKET_TOKEN}@github.com/vriesdemichael/scoop.git" \
-            scoop-bucket
+          git clone https://github.com/vriesdemichael/scoop.git scoop-bucket
           cd scoop-bucket
+          git config credential.helper \
+            '!f() { printf "username=x-access-token\npassword=%s\n" "${SCOOP_BUCKET_TOKEN}"; }; f'
 
           python - <<'PY'
           import json, os
@@ -554,7 +559,7 @@ jobs:
               "version": version_no_v,
               "description": "A CLI for Bitbucket Server / Bitbucket Data Center",
               "homepage": repo_url,
-              "license": "MIT",
+              "license": "Apache-2.0",
               "architecture": {
                   "64bit": {
                       "url": f"{base_url}/bb_{version_no_v}_windows_amd64.zip",
