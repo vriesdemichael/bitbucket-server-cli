@@ -19,6 +19,8 @@ import (
 )
 
 func TestOpenAPIParity(t *testing.T) {
+	applyLocalLiveDefaults(t)
+
 	cfg, err := config.LoadFromEnv()
 	if err != nil {
 		t.Fatalf("load config: %v", err)

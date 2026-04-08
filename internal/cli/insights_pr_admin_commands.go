@@ -493,6 +493,32 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 			if len(pullRequest.Reviewers) > 0 {
 				fmt.Fprintf(cmd.OutOrStdout(), "Reviewers: %d\n", len(pullRequest.Reviewers))
 			}
+			if pullRequest.Mergeability != nil {
+				mergeability := pullRequest.Mergeability
+				mergeableLabel := "no"
+				if mergeability.Mergeable {
+					mergeableLabel = "yes"
+				}
+				fmt.Fprintf(cmd.OutOrStdout(), "Mergeable: %s\n", mergeableLabel)
+				if mergeability.Outcome != "" {
+					fmt.Fprintf(cmd.OutOrStdout(), "Merge outcome: %s\n", mergeability.Outcome)
+				}
+				if mergeability.Conflicted {
+					fmt.Fprintln(cmd.OutOrStdout(), "Merge conflicts: yes")
+				}
+				if len(mergeability.Blockers) > 0 {
+					fmt.Fprintln(cmd.OutOrStdout(), "Merge blockers:")
+					for _, blocker := range mergeability.Blockers {
+						message := blocker.Summary
+						if message == "" {
+							message = blocker.Detail
+						} else if blocker.Detail != "" && !strings.EqualFold(blocker.Detail, blocker.Summary) {
+							message = fmt.Sprintf("%s (%s)", blocker.Summary, blocker.Detail)
+						}
+						fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", message)
+					}
+				}
+			}
 
 			return nil
 		},

@@ -175,6 +175,8 @@ func TestPullRequestLifecycleReviewAndTaskOperations(t *testing.T) {
 		switch {
 		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/22":
 			_, _ = fmt.Fprint(w, `{"id":22,"title":"Feature","state":"OPEN","open":true,"closed":false,"version":2,"participants":[{"role":"REVIEWER","status":"UNAPPROVED","approved":false,"user":{"name":"reviewer1","displayName":"Reviewer One"}}],"fromRef":{"displayId":"feature/a"},"toRef":{"displayId":"master"}}`)
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/22/merge":
+			_, _ = fmt.Fprint(w, `{"conflicted":false,"outcome":"CLEAN","vetoes":[]}`)
 		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests":
 			if !strings.Contains(readBody(t, request), "refs/heads/feature/new") {
 				w.WriteHeader(http.StatusBadRequest)
@@ -234,6 +236,9 @@ func TestPullRequestLifecycleReviewAndTaskOperations(t *testing.T) {
 	}
 	if len(fetched.Reviewers) != 1 || fetched.Reviewers[0].Name != "reviewer1" {
 		t.Fatalf("expected reviewer mapping in get response, got: %#v", fetched.Reviewers)
+	}
+	if fetched.Mergeability == nil || !fetched.Mergeability.Mergeable || fetched.Mergeability.Outcome != "CLEAN" {
+		t.Fatalf("expected mergeability mapping in get response, got: %#v", fetched.Mergeability)
 	}
 
 	created, err := service.Create(context.Background(), repo, CreateInput{FromRef: "feature/new", ToRef: "master", Title: "New PR"})
@@ -554,6 +559,156 @@ func TestGetBuildStatusesPRFetchError(t *testing.T) {
 	_, err := service.GetBuildStatuses(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "10", 25)
 	if err == nil {
 		t.Fatal("expected error when PR fetch returns 500")
+	}
+}
+
+func TestGetPullRequestIgnoresMissingMergeabilityEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/rest/api/latest/projects/TEST/repos/demo/pull-requests/22":
+			_, _ = fmt.Fprint(w, `{"id":22,"title":"Feature","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/a"},"toRef":{"displayId":"master"}}`)
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	service := NewService(httpclient.NewFromConfig(cfg))
+	fetched, err := service.Get(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "22")
+	if err != nil {
+		t.Fatalf("expected get to succeed when mergeability endpoint is missing, got: %v", err)
+	}
+	if fetched.Mergeability != nil {
+		t.Fatalf("expected mergeability to be omitted when endpoint is unavailable, got: %#v", fetched.Mergeability)
+	}
+}
+
+func TestGetPullRequestIgnoresConflictMergeabilityEndpoint(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/rest/api/latest/projects/TEST/repos/demo/pull-requests/22":
+			_, _ = fmt.Fprint(w, `{"id":22,"title":"Feature","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/a"},"toRef":{"displayId":"master"}}`)
+		case "/rest/api/latest/projects/TEST/repos/demo/pull-requests/22/merge":
+			w.WriteHeader(http.StatusConflict)
+			_, _ = fmt.Fprint(w, `{"errors":[{"message":"mergeability unavailable"}]}`)
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	service := NewService(httpclient.NewFromConfig(cfg))
+	fetched, err := service.Get(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "22")
+	if err != nil {
+		t.Fatalf("expected get to succeed when mergeability endpoint conflicts, got: %v", err)
+	}
+	if fetched.Mergeability != nil {
+		t.Fatalf("expected mergeability to be omitted on mergeability conflict, got: %#v", fetched.Mergeability)
+	}
+}
+
+func TestGetPullRequestReturnsMergeabilityError(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/rest/api/latest/projects/TEST/repos/demo/pull-requests/22":
+			_, _ = fmt.Fprint(w, `{"id":22,"title":"Feature","state":"OPEN","open":true,"closed":false,"fromRef":{"displayId":"feature/a"},"toRef":{"displayId":"master"}}`)
+		case "/rest/api/latest/projects/TEST/repos/demo/pull-requests/22/merge":
+			w.WriteHeader(http.StatusInternalServerError)
+			_, _ = fmt.Fprint(w, `{"errors":[{"message":"boom"}]}`)
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	service := NewService(httpclient.NewFromConfig(cfg))
+	_, err = service.Get(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "22")
+	if err == nil {
+		t.Fatal("expected mergeability error to be returned")
+	}
+}
+
+func TestGetPullRequestClosedSkipsMergeability(t *testing.T) {
+	mergeCalls := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/rest/api/latest/projects/TEST/repos/demo/pull-requests/22":
+			_, _ = fmt.Fprint(w, `{"id":22,"title":"Feature","state":"MERGED","open":false,"closed":true,"fromRef":{"displayId":"feature/a"},"toRef":{"displayId":"master"}}`)
+		case "/rest/api/latest/projects/TEST/repos/demo/pull-requests/22/merge":
+			mergeCalls++
+			_, _ = fmt.Fprint(w, `{"conflicted":false,"outcome":"CLEAN","vetoes":[]}`)
+		default:
+			http.NotFound(w, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+	t.Setenv("BITBUCKET_PROJECT_KEY", "TEST")
+
+	cfg, err := config.LoadFromEnv()
+	if err != nil {
+		t.Fatalf("failed to load config: %v", err)
+	}
+
+	service := NewService(httpclient.NewFromConfig(cfg))
+	fetched, err := service.Get(context.Background(), RepositoryRef{ProjectKey: "TEST", Slug: "demo"}, "22")
+	if err != nil {
+		t.Fatalf("expected closed get to succeed, got: %v", err)
+	}
+	if fetched.Mergeability != nil {
+		t.Fatalf("expected closed pull request to omit mergeability, got: %#v", fetched.Mergeability)
+	}
+	if mergeCalls != 0 {
+		t.Fatalf("expected closed pull request to skip mergeability lookup, got %d calls", mergeCalls)
+	}
+}
+
+func TestMapMergeabilityBranches(t *testing.T) {
+	mapped := mapMergeability(mergeabilityValue{
+		Outcome:    "UNKNOWN",
+		Conflicted: false,
+		Vetoes: []mergeVetoValue{
+			{SummaryMessage: "", DetailedMessage: "detail only blocker"},
+			{SummaryMessage: " ", DetailedMessage: " "},
+		},
+	})
+
+	if mapped.Mergeable {
+		t.Fatalf("expected unknown outcome with blocker to be non-mergeable, got %#v", mapped)
+	}
+	if mapped.Outcome != "UNKNOWN" {
+		t.Fatalf("expected outcome UNKNOWN, got %#v", mapped)
+	}
+	if len(mapped.Blockers) != 1 {
+		t.Fatalf("expected blank vetoes to be skipped, got %#v", mapped.Blockers)
+	}
+	if mapped.Blockers[0].Summary != "" || mapped.Blockers[0].Detail != "detail only blocker" {
+		t.Fatalf("expected detail-only blocker to be preserved, got %#v", mapped.Blockers[0])
 	}
 }
 
