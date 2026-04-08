@@ -501,5 +501,5 @@ jobs:
       - name: Publish to WinGet
         uses: vedantmgoyal9/winget-releaser@v2
         with:
-          identifier: VriesDeMichael.bb
+          identifier: vriesdemichael.bb
           token: ${{ secrets.WINGET_TOKEN }}
