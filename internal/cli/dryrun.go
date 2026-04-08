@@ -6,8 +6,8 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
-	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 )
 
 const (
@@ -64,15 +64,15 @@ type dryRunPreview struct {
 // interceptor generates a static (intent-only) preview using newDryRunPreview.
 var dryRunProfiles = map[string]dryRunProfile{
 	// branch
-	"branch delete":                                {Intent: "branch.delete", Action: "delete", Stateful: true},
-	"branch create":                                {Intent: "branch.create", Action: "create", Stateful: true},
-	"branch default set":                           {Intent: "branch.default.set", Action: "update", Stateful: true},
-	"branch model update":                          {Intent: "branch.model.update", Action: "update", Stateful: true},
-	"branch restriction create":                    {Intent: "branch.restriction.create", Action: "create", Stateful: true},
-	"branch restriction update":                    {Intent: "branch.restriction.update", Action: "update", Stateful: true},
-	"branch restriction delete":                    {Intent: "branch.restriction.delete", Action: "delete", Stateful: true},
+	"branch delete":             {Intent: "branch.delete", Action: "delete", Stateful: true},
+	"branch create":             {Intent: "branch.create", Action: "create", Stateful: true},
+	"branch default set":        {Intent: "branch.default.set", Action: "update", Stateful: true},
+	"branch model update":       {Intent: "branch.model.update", Action: "update", Stateful: true},
+	"branch restriction create": {Intent: "branch.restriction.create", Action: "create", Stateful: true},
+	"branch restriction update": {Intent: "branch.restriction.update", Action: "update", Stateful: true},
+	"branch restriction delete": {Intent: "branch.restriction.delete", Action: "delete", Stateful: true},
 	// build
-	"build status set":    {Intent: "build.status.set", Action: "update", Stateful: true},
+	"build status set":      {Intent: "build.status.set", Action: "update", Stateful: true},
 	"build required create": {Intent: "build.required.create", Action: "create", Stateful: true},
 	"build required update": {Intent: "build.required.update", Action: "update", Stateful: true},
 	"build required delete": {Intent: "build.required.delete", Action: "delete", Stateful: true},
@@ -84,38 +84,38 @@ var dryRunProfiles = map[string]dryRunProfile{
 	"repo comment update": {Intent: "repo.comment.update", Action: "update", Stateful: true},
 	"repo comment delete": {Intent: "repo.comment.delete", Action: "delete", Stateful: true},
 	// repo settings
-	"repo settings workflow webhooks create":                  {Intent: "repo.webhook.create", Action: "create", Stateful: true},
-	"repo settings workflow webhooks delete":                  {Intent: "repo.webhook.delete", Action: "delete", Stateful: true},
-	"repo settings pull-requests update":                      {Intent: "repo.pull-request-settings.update", Action: "update", Stateful: true},
-	"repo settings pull-requests update-approvers":            {Intent: "repo.pull-request-settings.update-approvers", Action: "update", Stateful: true},
-	"repo settings pull-requests set-strategy":                {Intent: "repo.pull-request-settings.set-strategy", Action: "update", Stateful: true},
-	"repo settings security permissions users grant":          {Intent: "repo.permission.user.grant", Action: "update", Stateful: true},
-	"repo settings security permissions users revoke":         {Intent: "repo.permission.user.revoke", Action: "delete", Stateful: true},
-	"repo settings security permissions groups grant":         {Intent: "repo.permission.group.grant", Action: "update", Stateful: true},
-	"repo settings security permissions groups revoke":        {Intent: "repo.permission.group.revoke", Action: "delete", Stateful: true},
+	"repo settings workflow webhooks create":           {Intent: "repo.webhook.create", Action: "create", Stateful: true},
+	"repo settings workflow webhooks delete":           {Intent: "repo.webhook.delete", Action: "delete", Stateful: true},
+	"repo settings pull-requests update":               {Intent: "repo.pull-request-settings.update", Action: "update", Stateful: true},
+	"repo settings pull-requests update-approvers":     {Intent: "repo.pull-request-settings.update-approvers", Action: "update", Stateful: true},
+	"repo settings pull-requests set-strategy":         {Intent: "repo.pull-request-settings.set-strategy", Action: "update", Stateful: true},
+	"repo settings security permissions users grant":   {Intent: "repo.permission.user.grant", Action: "update", Stateful: true},
+	"repo settings security permissions users revoke":  {Intent: "repo.permission.user.revoke", Action: "delete", Stateful: true},
+	"repo settings security permissions groups grant":  {Intent: "repo.permission.group.grant", Action: "update", Stateful: true},
+	"repo settings security permissions groups revoke": {Intent: "repo.permission.group.revoke", Action: "delete", Stateful: true},
 	// repo admin
 	"repo admin create": {Intent: "repo.admin.create", Action: "create", Stateful: true},
 	"repo admin fork":   {Intent: "repo.admin.fork", Action: "create", Stateful: true},
 	"repo admin update": {Intent: "repo.admin.update", Action: "update", Stateful: true},
 	"repo admin delete": {Intent: "repo.admin.delete", Action: "delete", Stateful: true},
 	// insights
-	"insights report set":      {Intent: "insights.report.set", Action: "update", Stateful: true},
-	"insights report delete":   {Intent: "insights.report.delete", Action: "delete", Stateful: true},
-	"insights annotation add":  {Intent: "insights.annotation.add", Action: "create", Stateful: true},
+	"insights report set":        {Intent: "insights.report.set", Action: "update", Stateful: true},
+	"insights report delete":     {Intent: "insights.report.delete", Action: "delete", Stateful: true},
+	"insights annotation add":    {Intent: "insights.annotation.add", Action: "create", Stateful: true},
 	"insights annotation delete": {Intent: "insights.annotation.delete", Action: "delete", Stateful: true},
 	// pr
-	"pr create":              {Intent: "pr.create", Action: "create", Stateful: true},
-	"pr update":              {Intent: "pr.update", Action: "update", Stateful: true},
-	"pr merge":               {Intent: "pr.merge", Action: "update", Stateful: true},
-	"pr decline":             {Intent: "pr.decline", Action: "update", Stateful: true},
-	"pr reopen":              {Intent: "pr.reopen", Action: "update", Stateful: true},
-	"pr review approve":      {Intent: "pr.review.approve", Action: "update", Stateful: true},
-	"pr review unapprove":    {Intent: "pr.review.unapprove", Action: "update", Stateful: true},
+	"pr create":                 {Intent: "pr.create", Action: "create", Stateful: true},
+	"pr update":                 {Intent: "pr.update", Action: "update", Stateful: true},
+	"pr merge":                  {Intent: "pr.merge", Action: "update", Stateful: true},
+	"pr decline":                {Intent: "pr.decline", Action: "update", Stateful: true},
+	"pr reopen":                 {Intent: "pr.reopen", Action: "update", Stateful: true},
+	"pr review approve":         {Intent: "pr.review.approve", Action: "update", Stateful: true},
+	"pr review unapprove":       {Intent: "pr.review.unapprove", Action: "update", Stateful: true},
 	"pr review reviewer add":    {Intent: "pr.review.reviewer.add", Action: "update", Stateful: true},
 	"pr review reviewer remove": {Intent: "pr.review.reviewer.remove", Action: "delete", Stateful: true},
-	"pr task create": {Intent: "pr.task.create", Action: "create", Stateful: true},
-	"pr task update": {Intent: "pr.task.update", Action: "update", Stateful: true},
-	"pr task delete": {Intent: "pr.task.delete", Action: "delete", Stateful: true},
+	"pr task create":            {Intent: "pr.task.create", Action: "create", Stateful: true},
+	"pr task update":            {Intent: "pr.task.update", Action: "update", Stateful: true},
+	"pr task delete":            {Intent: "pr.task.delete", Action: "delete", Stateful: true},
 	// reviewer conditions
 	"reviewer condition create": {Intent: "reviewer.condition.create", Action: "create", Stateful: true},
 	"reviewer condition update": {Intent: "reviewer.condition.update", Action: "update", Stateful: true},
@@ -188,6 +188,9 @@ func registerGlobalDryRunInterceptors(root *cobra.Command, options *rootOptions)
 func isServerMutatingPath(path string) bool {
 	trimmedPath := strings.TrimSpace(path)
 	if trimmedPath == "" {
+		return false
+	}
+	if strings.EqualFold(trimmedPath, "update") {
 		return false
 	}
 

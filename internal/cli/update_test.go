@@ -1,0 +1,222 @@
+package cli
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"fmt"
+	"testing"
+
+	"github.com/spf13/cobra"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
+	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	githubrelease "github.com/vriesdemichael/bitbucket-server-cli/internal/transport/githubrelease"
+	updateworkflow "github.com/vriesdemichael/bitbucket-server-cli/internal/workflows/update"
+)
+
+type updateCommandReleaseClient struct {
+	release   githubrelease.Release
+	downloads map[string][]byte
+	latestErr error
+}
+
+func (client updateCommandReleaseClient) Latest(context.Context, string, string) (githubrelease.Release, error) {
+	return client.release, client.latestErr
+}
+
+func (client updateCommandReleaseClient) Download(_ context.Context, assetURL string) ([]byte, error) {
+	return client.downloads[assetURL], nil
+}
+
+func TestUpdateCommandJSONDryRun(t *testing.T) {
+	originalFactory := updateRunnerFactory
+	defer func() {
+		updateRunnerFactory = originalFactory
+	}()
+
+	archiveChecksum := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	updateRunnerFactory = func(version string) *updateworkflow.Runner {
+		return updateworkflow.NewRunner(updateworkflow.Dependencies{
+			Releases: updateCommandReleaseClient{
+				release: githubrelease.Release{
+					TagName: "v1.2.0",
+					HTMLURL: "https://example.test/releases/v1.2.0",
+					Assets: []githubrelease.Asset{
+						{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/bb_1.2.0_linux_amd64.tar.gz"},
+						{Name: "sha256sums.txt", BrowserDownloadURL: "https://example.test/sha256sums.txt"},
+					},
+				},
+				downloads: map[string][]byte{
+					"https://example.test/sha256sums.txt": []byte(fmt.Sprintf("%s  %s\n", archiveChecksum, "bb_1.2.0_linux_amd64.tar.gz")),
+				},
+			},
+			RepositoryOwner: "vriesdemichael",
+			RepositoryName:  "bitbucket-server-cli",
+			CurrentVersion:  func() string { return version },
+			ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
+			Platform:        func() (string, string) { return "linux", "amd64" },
+		})
+	}
+
+	command := NewRootCommand()
+	command.Version = "v1.1.0"
+	buffer := &bytes.Buffer{}
+	command.SetOut(buffer)
+	command.SetErr(buffer)
+	command.SetArgs([]string{"--json", "--dry-run", "update"})
+
+	if err := command.Execute(); err != nil {
+		t.Fatalf("Execute returned error: %v", err)
+	}
+
+	var envelope jsonoutput.Envelope
+	if err := json.Unmarshal(buffer.Bytes(), &envelope); err != nil {
+		t.Fatalf("failed to decode json output: %v", err)
+	}
+	if envelope.Meta.Contract != jsonoutput.ContractName {
+		t.Fatalf("expected contract %q, got %q", jsonoutput.ContractName, envelope.Meta.Contract)
+	}
+
+	encodedData, err := json.Marshal(envelope.Data)
+	if err != nil {
+		t.Fatalf("failed to re-encode json data: %v", err)
+	}
+
+	var result updateworkflow.Result
+	if err := json.Unmarshal(encodedData, &result); err != nil {
+		t.Fatalf("failed to decode update result: %v", err)
+	}
+	if !result.DryRun || !result.UpdateAvailable || result.Applied {
+		t.Fatalf("unexpected update result: %+v", result)
+	}
+	if result.AssetName != "bb_1.2.0_linux_amd64.tar.gz" {
+		t.Fatalf("expected asset name in result, got %+v", result)
+	}
+}
+
+func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
+	style.Init(true)
+
+	t.Run("nil options", func(t *testing.T) {
+		command := newUpdateCommand(nil)
+		command.SetOut(&bytes.Buffer{})
+		command.SetErr(&bytes.Buffer{})
+		if err := command.RunE(command, nil); !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal error, got %v", err)
+		}
+	})
+
+	t.Run("human dry run output", func(t *testing.T) {
+		originalFactory := updateRunnerFactory
+		defer func() {
+			updateRunnerFactory = originalFactory
+		}()
+
+		updateRunnerFactory = func(version string) *updateworkflow.Runner {
+			return updateworkflow.NewRunner(updateworkflow.Dependencies{
+				Releases: updateCommandReleaseClient{
+					release: githubrelease.Release{
+						TagName: "v1.2.0",
+						HTMLURL: "https://example.test/releases/v1.2.0",
+						Assets: []githubrelease.Asset{
+							{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/bb_1.2.0_linux_amd64.tar.gz"},
+							{Name: "sha256sums.txt", BrowserDownloadURL: "https://example.test/sha256sums.txt"},
+						},
+					},
+					downloads: map[string][]byte{
+						"https://example.test/sha256sums.txt": []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n"),
+					},
+				},
+				RepositoryOwner: "vriesdemichael",
+				RepositoryName:  "bitbucket-server-cli",
+				CurrentVersion:  func() string { return version },
+				ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
+				Platform:        func() (string, string) { return "linux", "amd64" },
+			})
+		}
+
+		command := NewRootCommand()
+		command.Version = "v1.1.0"
+		buffer := &bytes.Buffer{}
+		command.SetOut(buffer)
+		command.SetErr(buffer)
+		command.SetArgs([]string{"--dry-run", "update"})
+
+		if err := command.Execute(); err != nil {
+			t.Fatalf("Execute returned error: %v", err)
+		}
+
+		output := buffer.String()
+		if !bytes.Contains(buffer.Bytes(), []byte("Dry-run (static, capability=full)")) || !bytes.Contains(buffer.Bytes(), []byte("Update available")) || !bytes.Contains(buffer.Bytes(), []byte("planned_action replace")) {
+			t.Fatalf("unexpected human output: %s", output)
+		}
+	})
+
+	t.Run("up to date human output", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		command := &cobra.Command{}
+		command.SetOut(buffer)
+		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.2.0", UpToDate: true})
+		if !bytes.Contains(buffer.Bytes(), []byte("bb is up to date")) {
+			t.Fatalf("unexpected human output: %s", buffer.String())
+		}
+	})
+
+	t.Run("applied human output", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		command := &cobra.Command{}
+		command.SetOut(buffer)
+		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.1.0", LatestVersion: "v1.2.0", Applied: true, AssetName: "bb.tgz", InstallPath: "/tmp/bb", ChecksumAssetName: "sha256sums.txt", ChecksumVerified: true, ReleaseURL: "https://example.test/releases/v1.2.0"})
+		if !bytes.Contains(buffer.Bytes(), []byte("Updated bb")) || !bytes.Contains(buffer.Bytes(), []byte("checksum sha256sums.txt (verified)")) {
+			t.Fatalf("unexpected human output: %s", buffer.String())
+		}
+	})
+
+	t.Run("default human output", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		command := &cobra.Command{}
+		command.SetOut(buffer)
+		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "dev"})
+		if !bytes.Contains(buffer.Bytes(), []byte("Current version dev")) {
+			t.Fatalf("unexpected human output: %s", buffer.String())
+		}
+	})
+
+	t.Run("update available human output", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		command := &cobra.Command{}
+		command.SetOut(buffer)
+		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.1.0", LatestVersion: "v1.2.0", UpdateAvailable: true, AssetName: "bb.tgz", InstallPath: "/tmp/bb"})
+		if !bytes.Contains(buffer.Bytes(), []byte("Update available v1.1.0 -> v1.2.0")) {
+			t.Fatalf("unexpected human output: %s", buffer.String())
+		}
+	})
+
+	t.Run("runner error is returned", func(t *testing.T) {
+		originalFactory := updateRunnerFactory
+		defer func() {
+			updateRunnerFactory = originalFactory
+		}()
+
+		updateRunnerFactory = func(version string) *updateworkflow.Runner {
+			return updateworkflow.NewRunner(updateworkflow.Dependencies{
+				Releases:        updateCommandReleaseClient{latestErr: apperrors.New(apperrors.KindTransient, "boom", nil)},
+				RepositoryOwner: "vriesdemichael",
+				RepositoryName:  "bitbucket-server-cli",
+				CurrentVersion:  func() string { return version },
+				ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
+			})
+		}
+
+		command := NewRootCommand()
+		command.Version = "v1.1.0"
+		command.SetOut(&bytes.Buffer{})
+		command.SetErr(&bytes.Buffer{})
+		command.SetArgs([]string{"update"})
+
+		if err := command.Execute(); !apperrors.IsKind(err, apperrors.KindTransient) {
+			t.Fatalf("expected transient error, got %v", err)
+		}
+	})
+}
