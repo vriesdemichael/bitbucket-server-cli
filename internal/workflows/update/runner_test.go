@@ -387,12 +387,23 @@ func TestRunnerWindowsAndVersionComparisonPaths(t *testing.T) {
 			t.Fatalf("seed target: %v", err)
 		}
 		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return targetPath, nil }, Platform: func() (string, string) { return "windows", "amd64" }})
-		result, err := runner.Run(context.Background(), Options{})
+		result, err := runner.Run(context.Background(), Options{DryRun: true})
 		if err != nil {
 			t.Fatalf("Run returned error: %v", err)
 		}
-		if !result.Applied {
-			t.Fatalf("expected applied result, got %+v", result)
+		if !result.UpdateAvailable || result.PlannedAction != "download_and_replace_after_exit" {
+			t.Fatalf("expected dry-run windows plan, got %+v", result)
+		}
+	})
+
+	t.Run("windows apply returns manual replacement error", func(t *testing.T) {
+		archive := buildZipArchive(t, "bb.exe", []byte("windows-binary"))
+		checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_windows_amd64.zip")
+		client := &stubReleaseClient{release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{{Name: "bb_1.2.0_windows_amd64.zip", BrowserDownloadURL: "archive"}, {Name: "sha256sums.txt", BrowserDownloadURL: "checksums"}}}, downloads: map[string][]byte{"checksums": []byte(checksum), "archive": archive}}
+		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb.exe", nil }, Platform: func() (string, string) { return "windows", "amd64" }})
+		_, err := runner.Run(context.Background(), Options{})
+		if !apperrors.IsKind(err, apperrors.KindPermanent) {
+			t.Fatalf("expected permanent windows replacement error, got %v", err)
 		}
 	})
 
@@ -441,6 +452,10 @@ func TestUpdateHelpers(t *testing.T) {
 	checksums, err := parseChecksums([]byte("deadbeef  file.tar.gz\n"))
 	if err != nil || checksums["file.tar.gz"] != "deadbeef" {
 		t.Fatalf("unexpected checksums parse result: %+v %v", checksums, err)
+	}
+	checksums, err = parseChecksums([]byte("deadbeef  ./bb_1.2.0_linux_amd64.tar.gz\n"))
+	if err != nil || checksums["bb_1.2.0_linux_amd64.tar.gz"] != "deadbeef" {
+		t.Fatalf("expected normalized checksum file name, got %+v %v", checksums, err)
 	}
 	if _, err := parseChecksums([]byte("broken-line")); !apperrors.IsKind(err, apperrors.KindPermanent) {
 		t.Fatalf("expected malformed checksum error, got %v", err)
@@ -534,6 +549,9 @@ func TestUpdateHelpers(t *testing.T) {
 	}
 	if update, comparison := isUpdateAvailable("v1.0.0", "v1.0.0", "v1.0.1", "v1.0.1"); !update || comparison != "upgrade_available" {
 		t.Fatalf("unexpected isUpdateAvailable result: %v %s", update, comparison)
+	}
+	if plannedAction("windows") != "download_and_replace_after_exit" || plannedAction("linux") != "replace" {
+		t.Fatal("unexpected planned action values")
 	}
 	if files := SortedChecksumFiles(map[string]string{"b": "2", "a": "1"}); len(files) != 2 || files[0] != "a" || files[1] != "b" {
 		t.Fatalf("unexpected sorted files: %+v", files)

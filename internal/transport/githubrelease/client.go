@@ -1,6 +1,7 @@
 package githubrelease
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -148,7 +149,7 @@ func (client *Client) do(ctx context.Context, method, requestURL string, out any
 }
 
 func decodeJSON(body []byte, out any) error {
-	decoder := jsonDecoder(strings.NewReader(string(body)))
+	decoder := jsonDecoder(bytes.NewReader(body))
 	if err := decoder.Decode(out); err != nil {
 		return apperrors.New(apperrors.KindPermanent, "failed to decode release metadata", err)
 	}
