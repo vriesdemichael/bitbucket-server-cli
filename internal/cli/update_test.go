@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/spf13/cobra"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
@@ -30,13 +31,20 @@ func (client updateCommandReleaseClient) Download(_ context.Context, assetURL st
 }
 
 func TestUpdateCommandJSONDryRun(t *testing.T) {
+	t.Setenv("BB_REQUEST_TIMEOUT", "")
+	t.Setenv("BB_CA_FILE", "")
+	t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+
 	originalFactory := updateRunnerFactory
 	defer func() {
 		updateRunnerFactory = originalFactory
 	}()
 
 	archiveChecksum := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
-	updateRunnerFactory = func(version string) *updateworkflow.Runner {
+	updateRunnerFactory = func(version string, httpConfig updateCommandHTTPConfig) *updateworkflow.Runner {
+		if httpConfig.requestTimeout != defaultUpdateRequestTimeout {
+			t.Fatalf("expected default request timeout, got %s", httpConfig.requestTimeout)
+		}
 		return updateworkflow.NewRunner(updateworkflow.Dependencies{
 			Releases: updateCommandReleaseClient{
 				release: githubrelease.Release{
@@ -96,6 +104,10 @@ func TestUpdateCommandJSONDryRun(t *testing.T) {
 }
 
 func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
+	t.Setenv("BB_REQUEST_TIMEOUT", "")
+	t.Setenv("BB_CA_FILE", "")
+	t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+
 	style.Init(true)
 
 	t.Run("nil options", func(t *testing.T) {
@@ -113,7 +125,10 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 			updateRunnerFactory = originalFactory
 		}()
 
-		updateRunnerFactory = func(version string) *updateworkflow.Runner {
+		updateRunnerFactory = func(version string, httpConfig updateCommandHTTPConfig) *updateworkflow.Runner {
+			if httpConfig.requestTimeout != defaultUpdateRequestTimeout {
+				t.Fatalf("expected default request timeout, got %s", httpConfig.requestTimeout)
+			}
 			return updateworkflow.NewRunner(updateworkflow.Dependencies{
 				Releases: updateCommandReleaseClient{
 					release: githubrelease.Release{
@@ -199,7 +214,10 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 			updateRunnerFactory = originalFactory
 		}()
 
-		updateRunnerFactory = func(version string) *updateworkflow.Runner {
+		updateRunnerFactory = func(version string, httpConfig updateCommandHTTPConfig) *updateworkflow.Runner {
+			if httpConfig.requestTimeout != defaultUpdateRequestTimeout {
+				t.Fatalf("expected default request timeout, got %s", httpConfig.requestTimeout)
+			}
 			return updateworkflow.NewRunner(updateworkflow.Dependencies{
 				Releases:        updateCommandReleaseClient{latestErr: apperrors.New(apperrors.KindTransient, "boom", nil)},
 				RepositoryOwner: "vriesdemichael",
@@ -217,6 +235,57 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 
 		if err := command.Execute(); !apperrors.IsKind(err, apperrors.KindTransient) {
 			t.Fatalf("expected transient error, got %v", err)
+		}
+	})
+
+	t.Run("invalid request timeout is rejected", func(t *testing.T) {
+		t.Setenv("BB_REQUEST_TIMEOUT", "bad")
+		command := NewRootCommand()
+		command.Version = "v1.1.0"
+		command.SetOut(&bytes.Buffer{})
+		command.SetErr(&bytes.Buffer{})
+		command.SetArgs([]string{"update"})
+
+		if err := command.Execute(); !apperrors.IsKind(err, apperrors.KindValidation) {
+			t.Fatalf("expected validation error, got %v", err)
+		}
+	})
+
+	t.Run("runtime transport env is forwarded", func(t *testing.T) {
+		originalFactory := updateRunnerFactory
+		defer func() {
+			updateRunnerFactory = originalFactory
+		}()
+
+		caFile := "/tmp/ca.pem"
+		t.Setenv("BB_CA_FILE", caFile)
+		t.Setenv("BB_INSECURE_SKIP_VERIFY", "true")
+		t.Setenv("BB_REQUEST_TIMEOUT", "45s")
+
+		updateRunnerFactory = func(version string, httpConfig updateCommandHTTPConfig) *updateworkflow.Runner {
+			if httpConfig.requestTimeout != 45*time.Second {
+				t.Fatalf("expected forwarded timeout, got %s", httpConfig.requestTimeout)
+			}
+			if httpConfig.tlsOptions.CAFile != caFile || !httpConfig.tlsOptions.InsecureSkipVerify {
+				t.Fatalf("unexpected tls options: %+v", httpConfig.tlsOptions)
+			}
+			return updateworkflow.NewRunner(updateworkflow.Dependencies{
+				Releases: updateCommandReleaseClient{release: githubrelease.Release{TagName: "v1.1.0"}},
+				RepositoryOwner: "vriesdemichael",
+				RepositoryName:  "bitbucket-server-cli",
+				CurrentVersion:  func() string { return version },
+				ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
+			})
+		}
+
+		command := NewRootCommand()
+		command.Version = "v1.1.0"
+		command.SetOut(&bytes.Buffer{})
+		command.SetErr(&bytes.Buffer{})
+		command.SetArgs([]string{"update"})
+
+		if err := command.Execute(); err != nil {
+			t.Fatalf("expected no error, got %v", err)
 		}
 	})
 }

@@ -170,7 +170,7 @@ func (runner *Runner) Run(ctx context.Context, options Options) (Result, error) 
 	result.AssetName = asset.Name
 	result.AssetURL = asset.BrowserDownloadURL
 	result.ChecksumAssetName = checksumAsset.Name
-	result.PlannedAction = "replace"
+	result.PlannedAction = plannedAction(goos)
 
 	checksumsRaw, err := runner.releases.Download(ctx, checksumAsset.BrowserDownloadURL)
 	if err != nil {
@@ -190,6 +190,10 @@ func (runner *Runner) Run(ctx context.Context, options Options) (Result, error) 
 
 	if options.DryRun {
 		return result, nil
+	}
+
+	if strings.EqualFold(strings.TrimSpace(goos), "windows") {
+		return Result{}, apperrors.New(apperrors.KindPermanent, "automatic in-place updates are not supported on Windows; rerun with --dry-run or download the release and replace bb.exe after exit", nil)
 	}
 
 	archiveBytes, err := runner.releases.Download(ctx, asset.BrowserDownloadURL)
@@ -257,7 +261,9 @@ func parseChecksums(raw []byte) (map[string]string, error) {
 			return nil, apperrors.New(apperrors.KindPermanent, "release checksum file is malformed", nil)
 		}
 
-		fileName := strings.TrimPrefix(parts[len(parts)-1], "*")
+		fileName := strings.TrimSpace(strings.TrimPrefix(parts[len(parts)-1], "*"))
+		fileName = strings.TrimPrefix(fileName, "./")
+		fileName = filepath.Base(fileName)
 		checksums[fileName] = strings.ToLower(strings.TrimSpace(parts[0]))
 	}
 
@@ -266,6 +272,13 @@ func parseChecksums(raw []byte) (map[string]string, error) {
 	}
 
 	return checksums, nil
+}
+
+func plannedAction(goos string) string {
+	if strings.EqualFold(strings.TrimSpace(goos), "windows") {
+		return "download_and_replace_after_exit"
+	}
+	return "replace"
 }
 
 func extractBinary(assetName, binaryName string, archiveBytes []byte) ([]byte, fs.FileMode, error) {
