@@ -845,9 +845,9 @@ func TestBuildAuthenticatedCloneURLAllModes(t *testing.T) {
 }
 
 func TestSameCloneHostEdgeCasesAdditional(t *testing.T) {
-	// Missing scheme → URL parses with empty host → false
-	if sameCloneHost("bitbucket.example.com", "https://bitbucket.example.com") {
-		t.Fatal("expected false when left has no scheme (parses with empty host)")
+	// Missing scheme defaults to https and 443.
+	if !sameCloneHost("bitbucket.example.com", "https://bitbucket.example.com") {
+		t.Fatal("expected true when bare host normalizes to default https endpoint")
 	}
 
 	// Path-only → no host → false

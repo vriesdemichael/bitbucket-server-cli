@@ -26,11 +26,31 @@ type fakeUsersClient struct {
 	err      error
 }
 
+type fakeReposClient struct {
+	recent *openapigenerated.GetRepositoriesRecentlyAccessedResponse
+	all    *openapigenerated.GetRepositories1Response
+	err    error
+}
+
 func (client *fakeUsersClient) GetUsers2WithResponse(ctx context.Context, params *openapigenerated.GetUsers2Params, reqEditors ...openapigenerated.RequestEditorFn) (*openapigenerated.GetUsers2Response, error) {
 	if client.err != nil {
 		return nil, client.err
 	}
 	return client.response, nil
+}
+
+func (client *fakeReposClient) GetRepositoriesRecentlyAccessedWithResponse(ctx context.Context, params *openapigenerated.GetRepositoriesRecentlyAccessedParams, reqEditors ...openapigenerated.RequestEditorFn) (*openapigenerated.GetRepositoriesRecentlyAccessedResponse, error) {
+	if client.err != nil {
+		return nil, client.err
+	}
+	return client.recent, nil
+}
+
+func (client *fakeReposClient) GetRepositories1WithResponse(ctx context.Context, params *openapigenerated.GetRepositories1Params, reqEditors ...openapigenerated.RequestEditorFn) (*openapigenerated.GetRepositories1Response, error) {
+	if client.err != nil {
+		return nil, client.err
+	}
+	return client.all, nil
 }
 
 func TestStatusJSONUsesHostOverride(t *testing.T) {
@@ -816,4 +836,175 @@ func TestIdentityHumanSummaryNameAndSlugBranches(t *testing.T) {
 			t.Fatalf("expected slug in summary, got %q", got)
 		}
 	})
+}
+
+func TestAuthAliasCommandsAndDiscovery(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	cloneLinks := map[string]interface{}{
+		"clone": []any{
+			map[string]any{"name": "ssh", "href": "ssh://git@git.company.org:7999/scm/PRJ/repo.git"},
+			map[string]any{"name": "http", "href": "https://bitbucket.company.org/scm/PRJ/repo.git"},
+		},
+	}
+	recentResponse := &openapigenerated.GetRepositoriesRecentlyAccessedResponse{
+		HTTPResponse: &http.Response{StatusCode: 200},
+		ApplicationjsonCharsetUTF8200: &struct {
+			IsLastPage    *bool                              `json:"isLastPage,omitempty"`
+			Limit         *float32                           `json:"limit,omitempty"`
+			NextPageStart *int32                             `json:"nextPageStart,omitempty"`
+			Size          *float32                           `json:"size,omitempty"`
+			Start         *int32                             `json:"start,omitempty"`
+			Values        *[]openapigenerated.RestRepository `json:"values,omitempty"`
+		}{Values: &[]openapigenerated.RestRepository{{Links: &cloneLinks}}},
+	}
+
+	cmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig: func() (config.AppConfig, error) {
+			return config.LoadFromEnv()
+		},
+		WriteJSON: func(writer io.Writer, payload any) error {
+			return jsonoutput.Write(writer, payload)
+		},
+		NewReposClient: func(cfg config.AppConfig) (repositoriesClient, error) {
+			return &fakeReposClient{recent: recentResponse, all: recentResponseToAll(recentResponse)}, nil
+		},
+	})
+
+	loginOut := &bytes.Buffer{}
+	cmd.SetOut(loginOut)
+	cmd.SetErr(loginOut)
+	cmd.SetArgs([]string{"login", "https://bitbucket.company.org", "--token", "tok"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("login with discovery failed: %v", err)
+	}
+	if !strings.Contains(loginOut.String(), "aliases") {
+		t.Fatalf("expected aliases in login json output, got: %s", loginOut.String())
+	}
+
+	listCmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+	})
+	listOut := &bytes.Buffer{}
+	listCmd.SetOut(listOut)
+	listCmd.SetErr(listOut)
+	listCmd.SetArgs([]string{"alias", "list", "--host", "https://bitbucket.company.org"})
+	if err := listCmd.Execute(); err != nil {
+		t.Fatalf("alias list failed: %v", err)
+	}
+	if !strings.Contains(listOut.String(), "git.company.org:7999") {
+		t.Fatalf("expected discovered alias in list output, got: %s", listOut.String())
+	}
+
+	addCmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+	})
+	addOut := &bytes.Buffer{}
+	addCmd.SetOut(addOut)
+	addCmd.SetErr(addOut)
+	addCmd.SetArgs([]string{"alias", "add", "--host", "https://bitbucket.company.org", "git.company.org:22"})
+	if err := addCmd.Execute(); err != nil {
+		t.Fatalf("alias add failed: %v", err)
+	}
+	if !strings.Contains(addOut.String(), "git.company.org:22") {
+		t.Fatalf("expected added alias in output, got: %s", addOut.String())
+	}
+
+	removeCmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+	})
+	removeOut := &bytes.Buffer{}
+	removeCmd.SetOut(removeOut)
+	removeCmd.SetErr(removeOut)
+	removeCmd.SetArgs([]string{"alias", "remove", "--host", "https://bitbucket.company.org", "git.company.org:22"})
+	if err := removeCmd.Execute(); err != nil {
+		t.Fatalf("alias remove failed: %v", err)
+	}
+	if strings.Contains(removeOut.String(), "git.company.org:22") && !strings.Contains(removeOut.String(), "status") {
+		t.Fatalf("unexpected alias remove output: %s", removeOut.String())
+	}
+
+	discoverCmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+		NewReposClient: func(cfg config.AppConfig) (repositoriesClient, error) {
+			return &fakeReposClient{recent: recentResponse, all: recentResponseToAll(recentResponse)}, nil
+		},
+	})
+	discoverOut := &bytes.Buffer{}
+	discoverCmd.SetOut(discoverOut)
+	discoverCmd.SetErr(discoverOut)
+	discoverCmd.SetArgs([]string{"alias", "discover", "--host", "https://bitbucket.company.org"})
+	if err := discoverCmd.Execute(); err != nil {
+		t.Fatalf("alias discover failed: %v", err)
+	}
+	if !strings.Contains(discoverOut.String(), "git.company.org:7999") {
+		t.Fatalf("expected discovered alias output, got: %s", discoverOut.String())
+	}
+}
+
+func TestDiscoverAliasesEdgeCases(t *testing.T) {
+	t.Run("deduplicates duplicate clone aliases", func(t *testing.T) {
+		cloneLinks := map[string]interface{}{
+			"clone": []any{
+				map[string]any{"name": "ssh", "href": "ssh://git@git.company.org:7999/scm/PRJ/repo.git"},
+				map[string]any{"name": "ssh", "href": "git@git.company.org:scm/PRJ/repo.git"},
+				map[string]any{"name": "ssh", "href": "ssh://git@git.company.org:7999/scm/PRJ/repo.git"},
+			},
+		}
+		aliases := extractRepositoryCloneAliases(openapigenerated.RestRepository{Links: &cloneLinks})
+		if len(aliases) != 2 {
+			t.Fatalf("expected two normalized aliases, got %+v", aliases)
+		}
+	})
+
+	t.Run("returns no aliases when clone links missing", func(t *testing.T) {
+		aliases := extractRepositoryCloneAliases(openapigenerated.RestRepository{})
+		if len(aliases) != 0 {
+			t.Fatalf("expected no aliases, got %+v", aliases)
+		}
+	})
+
+	t.Run("discover handles empty repository pages", func(t *testing.T) {
+		recent := &openapigenerated.GetRepositoriesRecentlyAccessedResponse{
+			HTTPResponse: &http.Response{StatusCode: 200},
+			ApplicationjsonCharsetUTF8200: &struct {
+				IsLastPage    *bool                              `json:"isLastPage,omitempty"`
+				Limit         *float32                           `json:"limit,omitempty"`
+				NextPageStart *int32                             `json:"nextPageStart,omitempty"`
+				Size          *float32                           `json:"size,omitempty"`
+				Start         *int32                             `json:"start,omitempty"`
+				Values        *[]openapigenerated.RestRepository `json:"values,omitempty"`
+			}{Values: &[]openapigenerated.RestRepository{}},
+		}
+		aliases, err := discoverAliases(context.Background(), config.AppConfig{BitbucketURL: "https://bitbucket.company.org", BitbucketToken: "tok"}, func(cfg config.AppConfig) (repositoriesClient, error) {
+			return &fakeReposClient{recent: recent, all: recentResponseToAll(recent)}, nil
+		})
+		if err != nil {
+			t.Fatalf("discover aliases failed: %v", err)
+		}
+		if len(aliases) != 0 {
+			t.Fatalf("expected no aliases, got %+v", aliases)
+		}
+	})
+}
+
+func recentResponseToAll(response *openapigenerated.GetRepositoriesRecentlyAccessedResponse) *openapigenerated.GetRepositories1Response {
+	if response == nil {
+		return nil
+	}
+	return &openapigenerated.GetRepositories1Response{
+		HTTPResponse:                  response.HTTPResponse,
+		ApplicationjsonCharsetUTF8200: response.ApplicationjsonCharsetUTF8200,
+	}
 }

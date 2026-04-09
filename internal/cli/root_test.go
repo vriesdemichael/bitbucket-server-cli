@@ -1705,14 +1705,17 @@ func TestInferenceHelperFunctions(t *testing.T) {
 		}
 	})
 
-	t.Run("normalize host name strips scheme and port", func(t *testing.T) {
-		if got := normalizeHostName("https://Bitbucket.Local:7990"); got != "bitbucket.local" {
+	t.Run("normalize host endpoint keeps explicit or default ports", func(t *testing.T) {
+		if got := normalizeHostEndpoint("https://Bitbucket.Local:7990"); got != "bitbucket.local:7990" {
 			t.Fatalf("unexpected normalized host: %q", got)
 		}
-		if got := normalizeHostName("bad host value"); got != "" {
+		if got := normalizeHostEndpoint("git@bitbucket.local:scm/PRJ/repo.git"); got != "bitbucket.local:22" {
+			t.Fatalf("unexpected normalized scp endpoint: %q", got)
+		}
+		if got := normalizeHostEndpoint("bad host value"); got != "" {
 			t.Fatalf("expected invalid host to normalize to empty, got %q", got)
 		}
-		if got := normalizeHostName("http://[::1"); got != "" {
+		if got := normalizeHostEndpoint("http://[::1"); got != "" {
 			t.Fatalf("expected malformed URL to normalize to empty, got %q", got)
 		}
 	})
@@ -1739,10 +1742,10 @@ func TestInferenceHelperFunctions(t *testing.T) {
 			}},
 		)
 
-		if lookup["runtime.local"] == "" {
+		if lookup["runtime.local:7990"] == "" {
 			t.Fatal("expected runtime host in lookup")
 		}
-		if lookup["stored.local"] == "" {
+		if lookup["stored.local:7990"] == "" {
 			t.Fatal("expected stored host in lookup")
 		}
 	})
@@ -1896,7 +1899,7 @@ func TestInferenceHelperFunctions(t *testing.T) {
 				repoRoot: "/tmp/repo",
 				remotes: []git.Remote{
 					{Name: "invalid", URL: "not-a-remote"},
-					{Name: "origin", URL: "https://bitbucket.local/scm/PRJ/repo.git"},
+					{Name: "origin", URL: "https://bitbucket.local:7990/scm/PRJ/repo.git"},
 				},
 			}
 		}
@@ -1915,9 +1918,9 @@ func TestInferenceHelperFunctions(t *testing.T) {
 			return inferenceGitBackendStub{
 				repoRoot: "/tmp/repo",
 				remotes: []git.Remote{
-					{Name: "alpha", URL: "https://bitbucket.local/scm/PRJ/b.git"},
-					{Name: "alpha", URL: "https://bitbucket.local/scm/PRJ/a.git"},
-					{Name: "beta", URL: "https://bitbucket.local/scm/ZZZ/z.git"},
+					{Name: "alpha", URL: "https://bitbucket.local:7990/scm/PRJ/b.git"},
+					{Name: "alpha", URL: "https://bitbucket.local:7990/scm/PRJ/a.git"},
+					{Name: "beta", URL: "https://bitbucket.local:7990/scm/ZZZ/z.git"},
 				},
 			}
 		}

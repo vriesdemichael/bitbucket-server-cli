@@ -53,9 +53,10 @@ type StoredConfig struct {
 }
 
 type StoredProfile struct {
-	URL      string `yaml:"url"`
-	Username string `yaml:"username,omitempty"`
-	AuthMode string `yaml:"auth_mode,omitempty"`
+	URL      string   `yaml:"url"`
+	Aliases  []string `yaml:"aliases,omitempty"`
+	Username string   `yaml:"username,omitempty"`
+	AuthMode string   `yaml:"auth_mode,omitempty"`
 }
 
 type StoredSecret struct {
@@ -65,6 +66,7 @@ type StoredSecret struct {
 
 type LoginInput struct {
 	Host       string
+	Aliases    []string
 	Username   string
 	Password   string
 	Token      string
@@ -73,15 +75,22 @@ type LoginInput struct {
 
 type LoginResult struct {
 	Host                string
+	Aliases             []string
 	AuthMode            string
 	UsedInsecureStorage bool
 }
 
 type ServerContext struct {
 	Host      string
+	Aliases   []string
 	AuthMode  string
 	Username  string
 	IsDefault bool
+}
+
+type AliasMatch struct {
+	Host     string
+	Endpoint string
 }
 
 func LoadFromEnv() (AppConfig, error) {
@@ -254,6 +263,11 @@ func SaveLogin(input LoginInput) (LoginResult, error) {
 		return LoginResult{}, apperrors.New(apperrors.KindValidation, "host is required", nil)
 	}
 
+	aliases, err := normalizeAliases(input.Aliases)
+	if err != nil {
+		return LoginResult{}, err
+	}
+
 	hasToken := strings.TrimSpace(input.Token) != ""
 	hasBasic := strings.TrimSpace(input.Username) != "" || strings.TrimSpace(input.Password) != ""
 	if hasToken == hasBasic {
@@ -271,8 +285,8 @@ func SaveLogin(input LoginInput) (LoginResult, error) {
 		stored.InsecureSecrets = map[string]StoredSecret{}
 	}
 
-	profile := StoredProfile{URL: host}
-	result := LoginResult{Host: host}
+	profile := StoredProfile{URL: host, Aliases: aliases}
+	result := LoginResult{Host: host, Aliases: append([]string(nil), aliases...)}
 
 	if hasToken {
 		profile.AuthMode = "token"
@@ -317,6 +331,162 @@ func SaveLogin(input LoginInput) (LoginResult, error) {
 	return result, nil
 }
 
+func SetHostAliases(host string, aliases []string) ([]string, error) {
+	trimmedHost := strings.TrimSpace(host)
+	if trimmedHost == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "host is required", nil)
+	}
+
+	normalizedAliases, err := normalizeAliases(aliases)
+	if err != nil {
+		return nil, err
+	}
+
+	stored, err := LoadStoredConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	key := hostKey(trimmedHost)
+	profile, ok := stored.Hosts[key]
+	if !ok {
+		return nil, apperrors.New(apperrors.KindNotFound, fmt.Sprintf("no stored server context for %s", normalizeURL(trimmedHost)), nil)
+	}
+
+	if err := ensureAliasOwnership(stored, key, normalizedAliases); err != nil {
+		return nil, err
+	}
+
+	profile.Aliases = normalizedAliases
+	stored.Hosts[key] = profile
+	if err := SaveStoredConfig(stored); err != nil {
+		return nil, err
+	}
+
+	return append([]string(nil), normalizedAliases...), nil
+}
+
+func AddHostAliases(host string, aliases []string) ([]string, error) {
+	trimmedHost := strings.TrimSpace(host)
+	if trimmedHost == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "host is required", nil)
+	}
+
+	normalizedAliases, err := normalizeAliases(aliases)
+	if err != nil {
+		return nil, err
+	}
+
+	stored, err := LoadStoredConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	key := hostKey(trimmedHost)
+	profile, ok := stored.Hosts[key]
+	if !ok {
+		return nil, apperrors.New(apperrors.KindNotFound, fmt.Sprintf("no stored server context for %s", normalizeURL(trimmedHost)), nil)
+	}
+
+	merged := append([]string(nil), normalizeStoredAliases(profile.Aliases)...)
+	seen := map[string]struct{}{}
+	for _, existing := range merged {
+		seen[existing] = struct{}{}
+	}
+	for _, alias := range normalizedAliases {
+		if _, exists := seen[alias]; exists {
+			continue
+		}
+		seen[alias] = struct{}{}
+		merged = append(merged, alias)
+	}
+
+	if err := ensureAliasOwnership(stored, key, merged); err != nil {
+		return nil, err
+	}
+
+	profile.Aliases = merged
+	stored.Hosts[key] = profile
+	if err := SaveStoredConfig(stored); err != nil {
+		return nil, err
+	}
+
+	return append([]string(nil), merged...), nil
+}
+
+func RemoveHostAlias(host string, alias string) ([]string, error) {
+	trimmedHost := strings.TrimSpace(host)
+	if trimmedHost == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "host is required", nil)
+	}
+
+	normalizedAlias, err := normalizeAlias(alias)
+	if err != nil {
+		return nil, err
+	}
+
+	stored, err := LoadStoredConfig()
+	if err != nil {
+		return nil, err
+	}
+
+	key := hostKey(trimmedHost)
+	profile, ok := stored.Hosts[key]
+	if !ok {
+		return nil, apperrors.New(apperrors.KindNotFound, fmt.Sprintf("no stored server context for %s", normalizeURL(trimmedHost)), nil)
+	}
+
+	updated := make([]string, 0, len(profile.Aliases))
+	removed := false
+	for _, existing := range normalizeStoredAliases(profile.Aliases) {
+		if existing == normalizedAlias {
+			removed = true
+			continue
+		}
+		updated = append(updated, existing)
+	}
+	if !removed {
+		return nil, apperrors.New(apperrors.KindNotFound, fmt.Sprintf("alias %s is not configured for %s", normalizedAlias, normalizeURL(trimmedHost)), nil)
+	}
+
+	profile.Aliases = updated
+	stored.Hosts[key] = profile
+	if err := SaveStoredConfig(stored); err != nil {
+		return nil, err
+	}
+
+	return append([]string(nil), updated...), nil
+}
+
+func ListHostAliases(host string) ([]string, string, error) {
+	trimmedHost := strings.TrimSpace(host)
+	if trimmedHost == "" {
+		return nil, "", apperrors.New(apperrors.KindValidation, "host is required", nil)
+	}
+
+	stored, err := LoadStoredConfig()
+	if err != nil {
+		return nil, "", err
+	}
+
+	key := hostKey(trimmedHost)
+	profile, ok := stored.Hosts[key]
+	if !ok {
+		return nil, "", apperrors.New(apperrors.KindNotFound, fmt.Sprintf("no stored server context for %s", normalizeURL(trimmedHost)), nil)
+	}
+
+	return append([]string(nil), normalizeStoredAliases(profile.Aliases)...), normalizeURL(profile.URL), nil
+}
+
+func MatchStoredHost(host string) (AliasMatch, bool, error) {
+	stored, err := LoadStoredConfig()
+	if err != nil {
+		return AliasMatch{}, false, err
+	}
+
+	return resolveStoredHostAlias(stored, host)
+}
+
 func Logout(host string) error {
 	stored, _ := LoadStoredConfig()
 	hostURL := normalizeURL(strings.TrimSpace(host))
@@ -359,6 +529,7 @@ func ListServerContexts() ([]ServerContext, error) {
 
 		contexts = append(contexts, ServerContext{
 			Host:      normalizeURL(profile.URL),
+			Aliases:   append([]string(nil), normalizeStoredAliases(profile.Aliases)...),
 			AuthMode:  mode,
 			Username:  strings.TrimSpace(profile.Username),
 			IsDefault: key == stored.DefaultHost,
@@ -466,6 +637,12 @@ func resolveStoredCredentials(stored StoredConfig, runtimeURL string) (AppConfig
 
 	key := hostKey(runtimeURL)
 	profile, ok := stored.Hosts[key]
+	if !ok {
+		if matched, found, _ := resolveStoredHostAlias(stored, runtimeURL); found {
+			profile, ok = stored.Hosts[hostKey(matched.Host)]
+			key = hostKey(matched.Host)
+		}
+	}
 	if !ok {
 		// Cross-scheme fallback: try alternate scheme (http↔https) for same host.
 		// This lets tokens configured for https://host match http://host and vice versa.
@@ -620,6 +797,113 @@ func normalizeURL(value string) string {
 	}
 
 	return "https://" + trimmed
+}
+
+func normalizeAlias(value string) (string, error) {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return "", apperrors.New(apperrors.KindValidation, "alias is required", nil)
+	}
+
+	if strings.HasPrefix(trimmed, "git@") {
+		at := strings.LastIndex(trimmed, "@")
+		colon := strings.Index(trimmed[at+1:], ":")
+		if at >= 0 && colon >= 0 {
+			host := strings.TrimSpace(trimmed[at+1 : at+1+colon])
+			if host != "" {
+				return strings.ToLower(host + ":22"), nil
+			}
+		}
+	}
+
+	parseTarget := trimmed
+	if !strings.Contains(parseTarget, "://") {
+		parseTarget = "https://" + parseTarget
+	}
+
+	parsed, err := url.Parse(parseTarget)
+	if err != nil || strings.TrimSpace(parsed.Hostname()) == "" {
+		return "", apperrors.New(apperrors.KindValidation, fmt.Sprintf("alias %q is invalid", value), err)
+	}
+
+	host := strings.ToLower(strings.TrimSpace(parsed.Hostname()))
+	port := parsed.Port()
+	if port == "" {
+		switch strings.ToLower(parsed.Scheme) {
+		case "http":
+			port = "80"
+		case "ssh":
+			port = "22"
+		default:
+			port = "443"
+		}
+	}
+
+	return host + ":" + port, nil
+}
+
+func normalizeAliases(values []string) ([]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+
+	result := make([]string, 0, len(values))
+	seen := map[string]struct{}{}
+	for _, value := range values {
+		normalized, err := normalizeAlias(value)
+		if err != nil {
+			return nil, err
+		}
+		if _, exists := seen[normalized]; exists {
+			continue
+		}
+		seen[normalized] = struct{}{}
+		result = append(result, normalized)
+	}
+
+	return result, nil
+}
+
+func normalizeStoredAliases(values []string) []string {
+	normalized, err := normalizeAliases(values)
+	if err != nil {
+		return nil
+	}
+	return normalized
+}
+
+func ensureAliasOwnership(stored StoredConfig, ownerKey string, aliases []string) error {
+	for key, profile := range stored.Hosts {
+		if key == ownerKey {
+			continue
+		}
+		for _, existing := range normalizeStoredAliases(profile.Aliases) {
+			for _, alias := range aliases {
+				if existing == alias {
+					return apperrors.New(apperrors.KindConflict, fmt.Sprintf("alias %s is already configured for %s", alias, normalizeURL(profile.URL)), nil)
+				}
+			}
+		}
+	}
+
+	return nil
+}
+
+func resolveStoredHostAlias(stored StoredConfig, runtimeURL string) (AliasMatch, bool, error) {
+	normalizedRuntime, err := normalizeAlias(runtimeURL)
+	if err != nil {
+		return AliasMatch{}, false, nil
+	}
+
+	for _, profile := range stored.Hosts {
+		for _, alias := range normalizeStoredAliases(profile.Aliases) {
+			if alias == normalizedRuntime {
+				return AliasMatch{Host: normalizeURL(profile.URL), Endpoint: alias}, true, nil
+			}
+		}
+	}
+
+	return AliasMatch{}, false, nil
 }
 
 func hostKey(hostURL string) string {
