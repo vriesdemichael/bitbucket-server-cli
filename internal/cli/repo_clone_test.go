@@ -221,6 +221,63 @@ func TestRepoCloneCommandFallsBackToStoredHTTPToken(t *testing.T) {
 	}
 }
 
+func TestResolveCloneHTTPAuthUsesStoredAliasMatch(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	if _, err := config.SaveLogin(config.LoginInput{Host: "https://bitbucket.example.com", Token: "stored-token", SetDefault: true}); err != nil {
+		t.Fatalf("save login failed: %v", err)
+	}
+	if _, err := config.SetHostAliases("https://bitbucket.example.com", []string{"git.example.com:7999"}); err != nil {
+		t.Fatalf("set aliases failed: %v", err)
+	}
+
+	resolved, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://other.example.com"}, "ssh://git@git.example.com:7999/scm/PRJ/demo.git")
+	if err != nil {
+		t.Fatalf("resolve clone http auth failed: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected stored alias auth to be found")
+	}
+	if resolved.BitbucketURL != "https://bitbucket.example.com" || resolved.BitbucketToken != "stored-token" {
+		t.Fatalf("unexpected resolved auth: %+v", resolved)
+	}
+}
+
+func TestResolveCloneHTTPAuthAliasLookupError(t *testing.T) {
+	t.Setenv("BB_CONFIG_PATH", t.TempDir())
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	if _, _, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://bitbucket.example.com"}, "ssh://git@git.example.com:7999/scm/PRJ/demo.git"); err == nil {
+		t.Fatal("expected config load error when config path is a directory")
+	}
+}
+
+func TestResolveCloneHTTPAuthFallbackBranches(t *testing.T) {
+	t.Run("falls back to matching runtime config when clone host matches", func(t *testing.T) {
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+		resolved, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://bitbucket.example.com", BitbucketToken: "tok"}, "https://bitbucket.example.com/scm/PRJ/demo.git")
+		if err != nil {
+			t.Fatalf("resolve clone auth failed: %v", err)
+		}
+		if !ok || resolved.BitbucketToken != "tok" {
+			t.Fatalf("expected runtime auth fallback, got ok=%v cfg=%+v", ok, resolved)
+		}
+	})
+
+	t.Run("returns no auth when alias and host do not match", func(t *testing.T) {
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+		resolved, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://bitbucket.example.com", BitbucketToken: "tok"}, "https://other.example.com/scm/PRJ/demo.git")
+		if err != nil {
+			t.Fatalf("resolve clone auth failed: %v", err)
+		}
+		if ok || resolved.AuthMode() != "none" {
+			t.Fatalf("expected no auth match, got ok=%v cfg=%+v", ok, resolved)
+		}
+	})
+}
+
 func TestRepoCloneCommandHTTPSFlagSkipsSSHAndUsesTokenUsername(t *testing.T) {
 	originalFactory := gitBackendFactory
 	stub := &cloneBackendStub{}

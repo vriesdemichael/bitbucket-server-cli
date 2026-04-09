@@ -1706,11 +1706,23 @@ func TestInferenceHelperFunctions(t *testing.T) {
 	})
 
 	t.Run("normalize host endpoint keeps explicit or default ports", func(t *testing.T) {
+		if got := normalizeHostEndpoint(""); got != "" {
+			t.Fatalf("expected empty endpoint to normalize to empty, got %q", got)
+		}
 		if got := normalizeHostEndpoint("https://Bitbucket.Local:7990"); got != "bitbucket.local:7990" {
 			t.Fatalf("unexpected normalized host: %q", got)
 		}
+		if got := normalizeHostEndpoint("https://bitbucket.local"); got != "bitbucket.local:443" {
+			t.Fatalf("unexpected normalized https default port: %q", got)
+		}
+		if got := normalizeHostEndpoint("http://bitbucket.local"); got != "bitbucket.local:80" {
+			t.Fatalf("unexpected normalized http default port: %q", got)
+		}
 		if got := normalizeHostEndpoint("git@bitbucket.local:scm/PRJ/repo.git"); got != "bitbucket.local:22" {
 			t.Fatalf("unexpected normalized scp endpoint: %q", got)
+		}
+		if got := normalizeHostEndpoint("ssh://git@bitbucket.local/scm/PRJ/repo.git"); got != "bitbucket.local:22" {
+			t.Fatalf("unexpected normalized ssh endpoint: %q", got)
 		}
 		if got := normalizeHostEndpoint("bad host value"); got != "" {
 			t.Fatalf("expected invalid host to normalize to empty, got %q", got)
@@ -1738,7 +1750,7 @@ func TestInferenceHelperFunctions(t *testing.T) {
 			config.StoredConfig{Hosts: map[string]config.StoredProfile{
 				"blank":                    {URL: ""},
 				"malformed":                {URL: "http://[::1"},
-				"http://stored.local:7990": {URL: "http://stored.local:7990"},
+				"http://stored.local:7990": {URL: "http://stored.local:7990", Aliases: []string{"git.stored.local:7999"}},
 			}},
 		)
 
@@ -1747,6 +1759,51 @@ func TestInferenceHelperFunctions(t *testing.T) {
 		}
 		if lookup["stored.local:7990"] == "" {
 			t.Fatal("expected stored host in lookup")
+		}
+		if lookup["git.stored.local:7999"] == "" {
+			t.Fatal("expected stored alias in lookup")
+		}
+	})
+
+	t.Run("normalize host endpoint loose collapses default web ports", func(t *testing.T) {
+		if got := normalizeHostEndpointLoose("https://bitbucket.local"); got != "bitbucket.local" {
+			t.Fatalf("unexpected https loose endpoint: %q", got)
+		}
+		if got := normalizeHostEndpointLoose("http://bitbucket.local"); got != "bitbucket.local" {
+			t.Fatalf("unexpected http loose endpoint: %q", got)
+		}
+		if got := normalizeHostEndpointLoose("ssh://git@bitbucket.local:7999/scm/PRJ/repo.git"); got != "bitbucket.local:7999" {
+			t.Fatalf("unexpected ssh loose endpoint: %q", got)
+		}
+	})
+
+	t.Run("normalize remote endpoint supports scp and https forms", func(t *testing.T) {
+		if got := normalizeRemoteEndpoint(""); got != "" {
+			t.Fatalf("expected empty remote endpoint to normalize to empty, got %q", got)
+		}
+		if got := normalizeRemoteEndpoint("git@bitbucket.local:scm/PRJ/repo.git"); got != "bitbucket.local:22" {
+			t.Fatalf("unexpected scp remote endpoint: %q", got)
+		}
+		if got := normalizeRemoteEndpoint("https://bitbucket.local/scm/PRJ/repo.git"); got != "bitbucket.local" {
+			t.Fatalf("unexpected https remote endpoint: %q", got)
+		}
+		if got := normalizeRemoteEndpoint("://bad"); got != "" {
+			t.Fatalf("expected invalid remote endpoint to normalize to empty, got %q", got)
+		}
+	})
+
+	t.Run("normalize host endpoint loose handles invalid scp forms", func(t *testing.T) {
+		if got := normalizeHostEndpointLoose(""); got != "" {
+			t.Fatalf("expected empty loose endpoint to normalize to empty, got %q", got)
+		}
+		if got := normalizeHostEndpointLoose("git@bitbucket.local"); got != "" {
+			t.Fatalf("expected invalid scp endpoint to normalize to empty, got %q", got)
+		}
+		if got := normalizeHostEndpointLoose("https://bitbucket.local:7990"); got != "bitbucket.local:7990" {
+			t.Fatalf("unexpected explicit port endpoint: %q", got)
+		}
+		if got := normalizeHostEndpointLoose("://bad"); got != "" {
+			t.Fatalf("expected invalid endpoint to normalize to empty, got %q", got)
 		}
 	})
 
@@ -1931,6 +1988,36 @@ func TestInferenceHelperFunctions(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "ambiguous git remote context") {
 			t.Fatalf("expected ambiguity guidance, got: %v", err)
+		}
+	})
+
+	t.Run("infer context matches stored alias remote to canonical host", func(t *testing.T) {
+		configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+		t.Setenv("BB_CONFIG_PATH", configPath)
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+		if _, err := config.SaveLogin(config.LoginInput{Host: "https://bitbucket.local", Token: "tok", SetDefault: true}); err != nil {
+			t.Fatalf("save login failed: %v", err)
+		}
+		if _, err := config.SetHostAliases("https://bitbucket.local", []string{"git.bitbucket.local:7999"}); err != nil {
+			t.Fatalf("set aliases failed: %v", err)
+		}
+
+		gitBackendFactory = func() git.Backend {
+			return inferenceGitBackendStub{
+				repoRoot: "/tmp/repo",
+				remotes:  []git.Remote{{Name: "origin", URL: "ssh://git@git.bitbucket.local:7999/scm/PRJ/repo.git"}},
+			}
+		}
+
+		inferred, err := inferRepositoryContextFromGit(config.AppConfig{})
+		if err != nil {
+			t.Fatalf("infer context failed: %v", err)
+		}
+		if inferred == nil {
+			t.Fatal("expected inferred context from alias remote")
+		}
+		if inferred.Host != "https://bitbucket.local" || inferred.ProjectKey != "PRJ" || inferred.Slug != "repo" {
+			t.Fatalf("unexpected inferred context: %+v", inferred)
 		}
 	})
 
