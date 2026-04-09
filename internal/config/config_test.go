@@ -991,6 +991,9 @@ func TestAliasConflictValidation(t *testing.T) {
 	if _, err := AddHostAliases("https://two.example", []string{"git.shared.example:22"}); err == nil {
 		t.Fatal("expected alias conflict")
 	}
+	if _, err := SaveLogin(LoginInput{Host: "https://two.example", Token: "tok2", Aliases: []string{"git.shared.example:22"}, SetDefault: false}); err == nil {
+		t.Fatal("expected alias conflict during login save")
+	}
 }
 
 func TestSaveLoginNormalizesAndDeduplicatesAliases(t *testing.T) {
@@ -1053,8 +1056,47 @@ func TestSetAndListHostAliases(t *testing.T) {
 	if err != nil {
 		t.Fatalf("clear aliases failed: %v", err)
 	}
-	if cleared != nil {
-		t.Fatalf("expected cleared aliases to be nil, got %+v", cleared)
+	if len(cleared) != 0 {
+		t.Fatalf("expected cleared aliases to be empty, got %+v", cleared)
+	}
+}
+
+func TestLoginAndServerContextsAlwaysExposeAliasSlices(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	result, err := SaveLogin(LoginInput{Host: "https://bitbucket.example", Token: "tok", SetDefault: true})
+	if err != nil {
+		t.Fatalf("save login failed: %v", err)
+	}
+	if result.Aliases == nil {
+		t.Fatal("expected login result aliases to be a non-nil empty slice")
+	}
+
+	aliases, host, err := ListHostAliases("https://bitbucket.example")
+	if err != nil {
+		t.Fatalf("list aliases failed: %v", err)
+	}
+	if host != "https://bitbucket.example" {
+		t.Fatalf("unexpected host: %q", host)
+	}
+	if aliases == nil {
+		t.Fatal("expected listed aliases to be a non-nil empty slice")
+	}
+
+	contexts, err := ListServerContexts()
+	if err != nil {
+		t.Fatalf("list contexts failed: %v", err)
+	}
+	if len(contexts) != 1 {
+		t.Fatalf("expected one context, got %d", len(contexts))
+	}
+	if contexts[0].Aliases == nil {
+		t.Fatal("expected server context aliases to be a non-nil empty slice")
+	}
+	if got := normalizeStoredAliases([]string(nil)); got == nil {
+		t.Fatal("expected normalized stored aliases to be non-nil for empty input")
 	}
 }
 
@@ -1153,7 +1195,7 @@ func TestAliasOperationsAdditionalBranches(t *testing.T) {
 	if _, err := RemoveHostAlias("https://broken.example", "git.example.org:22"); err == nil {
 		t.Fatal("expected load error for remove alias when config path is directory")
 	}
-	if got := normalizeStoredAliases([]string{"://bad"}); got != nil {
-		t.Fatalf("expected invalid stored aliases to normalize to nil, got %+v", got)
+	if got := normalizeStoredAliases([]string{"://bad"}); got == nil || len(got) != 0 {
+		t.Fatalf("expected invalid stored aliases to normalize to an empty slice, got %+v", got)
 	}
 }

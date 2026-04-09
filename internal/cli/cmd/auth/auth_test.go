@@ -884,6 +884,16 @@ func TestAuthAliasCommandsAndDiscovery(t *testing.T) {
 	if !strings.Contains(loginOut.String(), "aliases") {
 		t.Fatalf("expected aliases in login json output, got: %s", loginOut.String())
 	}
+	var loginPayload struct {
+		Host    string   `json:"host"`
+		Aliases []string `json:"aliases"`
+	}
+	if err := decodeJSONEnvelopeData(loginOut.Bytes(), &loginPayload); err != nil {
+		t.Fatalf("decode login json: %v", err)
+	}
+	if loginPayload.Aliases == nil {
+		t.Fatal("expected login aliases json field to be a non-nil array")
+	}
 
 	listCmd := New(Dependencies{
 		JSONEnabled: func() bool { return true },
@@ -899,6 +909,16 @@ func TestAuthAliasCommandsAndDiscovery(t *testing.T) {
 	}
 	if !strings.Contains(listOut.String(), "git.company.org:7999") {
 		t.Fatalf("expected discovered alias in list output, got: %s", listOut.String())
+	}
+	var listPayload struct {
+		Host    string   `json:"host"`
+		Aliases []string `json:"aliases"`
+	}
+	if err := decodeJSONEnvelopeData(listOut.Bytes(), &listPayload); err != nil {
+		t.Fatalf("decode alias list json: %v", err)
+	}
+	if listPayload.Aliases == nil {
+		t.Fatal("expected alias list json aliases to be a non-nil array")
 	}
 
 	addCmd := New(Dependencies{
@@ -950,6 +970,155 @@ func TestAuthAliasCommandsAndDiscovery(t *testing.T) {
 	}
 	if !strings.Contains(discoverOut.String(), "git.company.org:7999") {
 		t.Fatalf("expected discovered alias output, got: %s", discoverOut.String())
+	}
+}
+
+func TestAuthJSONOutputsUseEmptyAliasArrays(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	cmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+	})
+
+	loginOut := &bytes.Buffer{}
+	cmd.SetOut(loginOut)
+	cmd.SetErr(loginOut)
+	cmd.SetArgs([]string{"login", "https://empty-array.company.org", "--token", "tok", "--discover-aliases=false"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("login failed: %v", err)
+	}
+	var loginPayload struct {
+		Aliases []string `json:"aliases"`
+	}
+	if err := decodeJSONEnvelopeData(loginOut.Bytes(), &loginPayload); err != nil {
+		t.Fatalf("decode login payload: %v", err)
+	}
+	if loginPayload.Aliases == nil || len(loginPayload.Aliases) != 0 {
+		t.Fatalf("expected empty login aliases array, got %+v", loginPayload.Aliases)
+	}
+
+	aliasListCmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+	})
+	aliasListOut := &bytes.Buffer{}
+	aliasListCmd.SetOut(aliasListOut)
+	aliasListCmd.SetErr(aliasListOut)
+	aliasListCmd.SetArgs([]string{"alias", "list", "--host", "https://empty-array.company.org"})
+	if err := aliasListCmd.Execute(); err != nil {
+		t.Fatalf("alias list failed: %v", err)
+	}
+	var aliasListPayload struct {
+		Aliases []string `json:"aliases"`
+	}
+	if err := decodeJSONEnvelopeData(aliasListOut.Bytes(), &aliasListPayload); err != nil {
+		t.Fatalf("decode alias list payload: %v", err)
+	}
+	if aliasListPayload.Aliases == nil || len(aliasListPayload.Aliases) != 0 {
+		t.Fatalf("expected empty alias list array, got %+v", aliasListPayload.Aliases)
+	}
+
+	serverListCmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+	})
+	serverListOut := &bytes.Buffer{}
+	serverListCmd.SetOut(serverListOut)
+	serverListCmd.SetErr(serverListOut)
+	serverListCmd.SetArgs([]string{"server", "list"})
+	if err := serverListCmd.Execute(); err != nil {
+		t.Fatalf("server list failed: %v", err)
+	}
+	var serverListPayload struct {
+		Servers []struct {
+			Aliases []string `json:"aliases"`
+		} `json:"servers"`
+	}
+	if err := decodeJSONEnvelopeData(serverListOut.Bytes(), &serverListPayload); err != nil {
+		t.Fatalf("decode server list payload: %v", err)
+	}
+	if len(serverListPayload.Servers) != 1 {
+		t.Fatalf("expected one server, got %d", len(serverListPayload.Servers))
+	}
+	if serverListPayload.Servers[0].Aliases == nil || len(serverListPayload.Servers[0].Aliases) != 0 {
+		t.Fatalf("expected empty server aliases array, got %+v", serverListPayload.Servers[0].Aliases)
+	}
+
+	removeCmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+	})
+	removeOut := &bytes.Buffer{}
+	removeCmd.SetOut(removeOut)
+	removeCmd.SetErr(removeOut)
+	removeCmd.SetArgs([]string{"alias", "add", "--host", "https://empty-array.company.org", "git.company.org:22"})
+	if err := removeCmd.Execute(); err != nil {
+		t.Fatalf("alias add failed: %v", err)
+	}
+
+	removeCmd = New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+	})
+	removeOut = &bytes.Buffer{}
+	removeCmd.SetOut(removeOut)
+	removeCmd.SetErr(removeOut)
+	removeCmd.SetArgs([]string{"alias", "remove", "--host", "https://empty-array.company.org", "git.company.org:22"})
+	if err := removeCmd.Execute(); err != nil {
+		t.Fatalf("alias remove failed: %v", err)
+	}
+	var removePayload struct {
+		Aliases []string `json:"aliases"`
+	}
+	if err := decodeJSONEnvelopeData(removeOut.Bytes(), &removePayload); err != nil {
+		t.Fatalf("decode alias remove payload: %v", err)
+	}
+	if removePayload.Aliases == nil || len(removePayload.Aliases) != 0 {
+		t.Fatalf("expected empty alias remove array, got %+v", removePayload.Aliases)
+	}
+
+	discoverCmd := New(Dependencies{
+		JSONEnabled: func() bool { return true },
+		LoadConfig:  func() (config.AppConfig, error) { return config.LoadFromEnv() },
+		WriteJSON:   func(writer io.Writer, payload any) error { return jsonoutput.Write(writer, payload) },
+		NewReposClient: func(cfg config.AppConfig) (repositoriesClient, error) {
+			recent := &openapigenerated.GetRepositoriesRecentlyAccessedResponse{
+				HTTPResponse: &http.Response{StatusCode: 200},
+				ApplicationjsonCharsetUTF8200: &struct {
+					IsLastPage    *bool                              `json:"isLastPage,omitempty"`
+					Limit         *float32                           `json:"limit,omitempty"`
+					NextPageStart *int32                             `json:"nextPageStart,omitempty"`
+					Size          *float32                           `json:"size,omitempty"`
+					Start         *int32                             `json:"start,omitempty"`
+					Values        *[]openapigenerated.RestRepository `json:"values,omitempty"`
+				}{Values: &[]openapigenerated.RestRepository{}},
+			}
+			return &fakeReposClient{recent: recent, all: recentResponseToAll(recent)}, nil
+		},
+	})
+	discoverOut := &bytes.Buffer{}
+	discoverCmd.SetOut(discoverOut)
+	discoverCmd.SetErr(discoverOut)
+	discoverCmd.SetArgs([]string{"alias", "discover", "--host", "https://empty-array.company.org"})
+	if err := discoverCmd.Execute(); err != nil {
+		t.Fatalf("alias discover failed: %v", err)
+	}
+	var discoverPayload struct {
+		Aliases []string `json:"aliases"`
+	}
+	if err := decodeJSONEnvelopeData(discoverOut.Bytes(), &discoverPayload); err != nil {
+		t.Fatalf("decode alias discover payload: %v", err)
+	}
+	if discoverPayload.Aliases == nil || len(discoverPayload.Aliases) != 0 {
+		t.Fatalf("expected empty alias discover array, got %+v", discoverPayload.Aliases)
 	}
 }
 

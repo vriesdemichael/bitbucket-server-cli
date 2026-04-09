@@ -233,7 +233,7 @@ func TestResolveCloneHTTPAuthUsesStoredAliasMatch(t *testing.T) {
 		t.Fatalf("set aliases failed: %v", err)
 	}
 
-	resolved, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://other.example.com"}, "ssh://git@git.example.com:7999/scm/PRJ/demo.git")
+	resolved, matchedHost, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://other.example.com"}, "ssh://git@git.example.com:7999/scm/PRJ/demo.git")
 	if err != nil {
 		t.Fatalf("resolve clone http auth failed: %v", err)
 	}
@@ -243,13 +243,16 @@ func TestResolveCloneHTTPAuthUsesStoredAliasMatch(t *testing.T) {
 	if resolved.BitbucketURL != "https://bitbucket.example.com" || resolved.BitbucketToken != "stored-token" {
 		t.Fatalf("unexpected resolved auth: %+v", resolved)
 	}
+	if matchedHost != "https://bitbucket.example.com" {
+		t.Fatalf("expected canonical matched host, got %q", matchedHost)
+	}
 }
 
 func TestResolveCloneHTTPAuthAliasLookupError(t *testing.T) {
 	t.Setenv("BB_CONFIG_PATH", t.TempDir())
 	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
 
-	if _, _, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://bitbucket.example.com"}, "ssh://git@git.example.com:7999/scm/PRJ/demo.git"); err == nil {
+	if _, _, _, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://bitbucket.example.com"}, "ssh://git@git.example.com:7999/scm/PRJ/demo.git"); err == nil {
 		t.Fatal("expected config load error when config path is a directory")
 	}
 }
@@ -257,25 +260,84 @@ func TestResolveCloneHTTPAuthAliasLookupError(t *testing.T) {
 func TestResolveCloneHTTPAuthFallbackBranches(t *testing.T) {
 	t.Run("falls back to matching runtime config when clone host matches", func(t *testing.T) {
 		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
-		resolved, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://bitbucket.example.com", BitbucketToken: "tok"}, "https://bitbucket.example.com/scm/PRJ/demo.git")
+		resolved, matchedHost, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://bitbucket.example.com", BitbucketToken: "tok"}, "https://bitbucket.example.com/scm/PRJ/demo.git")
 		if err != nil {
 			t.Fatalf("resolve clone auth failed: %v", err)
 		}
 		if !ok || resolved.BitbucketToken != "tok" {
 			t.Fatalf("expected runtime auth fallback, got ok=%v cfg=%+v", ok, resolved)
 		}
+		if matchedHost != "https://bitbucket.example.com" {
+			t.Fatalf("expected runtime matched host to stay canonical, got %q", matchedHost)
+		}
 	})
 
 	t.Run("returns no auth when alias and host do not match", func(t *testing.T) {
 		t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
-		resolved, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://bitbucket.example.com", BitbucketToken: "tok"}, "https://other.example.com/scm/PRJ/demo.git")
+		resolved, matchedHost, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://bitbucket.example.com", BitbucketToken: "tok"}, "https://other.example.com/scm/PRJ/demo.git")
 		if err != nil {
 			t.Fatalf("resolve clone auth failed: %v", err)
 		}
 		if ok || resolved.AuthMode() != "none" {
 			t.Fatalf("expected no auth match, got ok=%v cfg=%+v", ok, resolved)
 		}
+		if matchedHost != "" {
+			t.Fatalf("expected no matched host, got %q", matchedHost)
+		}
 	})
+
+	t.Run("uses stored auth directly for matching clone host", func(t *testing.T) {
+		configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+		t.Setenv("BB_CONFIG_PATH", configPath)
+		t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+		if _, err := config.SaveLogin(config.LoginInput{Host: "https://bitbucket.example.com", Token: "stored-token", SetDefault: true}); err != nil {
+			t.Fatalf("save login failed: %v", err)
+		}
+
+		resolved, matchedHost, ok, err := resolveCloneHTTPAuth(config.AppConfig{BitbucketURL: "https://other.example.com"}, "https://bitbucket.example.com/scm/PRJ/demo.git")
+		if err != nil {
+			t.Fatalf("resolve clone auth failed: %v", err)
+		}
+		if !ok || resolved.BitbucketToken != "stored-token" {
+			t.Fatalf("expected stored auth match, got ok=%v cfg=%+v", ok, resolved)
+		}
+		if matchedHost != "https://bitbucket.example.com/scm/PRJ/demo.git" {
+			t.Fatalf("expected direct clone host to be returned, got %q", matchedHost)
+		}
+	})
+}
+
+func TestCloneRepositoryWithAuthFallbackUsesCanonicalHostForAliasHTTPSRetry(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{cloneErrs: []error{errors.New("ssh failed"), nil}}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+	t.Setenv("BITBUCKET_URL", "https://other.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+
+	if _, err := config.SaveLogin(config.LoginInput{Host: "https://bitbucket.example.com/context", Token: "stored-token", SetDefault: true}); err != nil {
+		t.Fatalf("save login failed: %v", err)
+	}
+	if _, err := config.SetHostAliases("https://bitbucket.example.com/context", []string{"git.example.com:7999"}); err != nil {
+		t.Fatalf("set aliases failed: %v", err)
+	}
+
+	_, err := executeTestCLI(t, "repo", "clone", "ssh://git@git.example.com:7999/scm/PRJ/demo.git")
+	if err != nil {
+		t.Fatalf("repo clone failed: %v", err)
+	}
+
+	if len(stub.cloneCalls) != 2 {
+		t.Fatalf("expected two clone attempts, got %d", len(stub.cloneCalls))
+	}
+	if stub.cloneCalls[1].repositoryURL != "https://x-token-auth:stored-token@bitbucket.example.com/context/scm/PRJ/demo.git" {
+		t.Fatalf("expected canonical host https retry, got %s", stub.cloneCalls[1].repositoryURL)
+	}
 }
 
 func TestRepoCloneCommandHTTPSFlagSkipsSSHAndUsesTokenUsername(t *testing.T) {
@@ -915,6 +977,15 @@ func TestSameCloneHostEdgeCasesAdditional(t *testing.T) {
 	// Cross-scheme same host → true (scheme is ignored for credential matching)
 	if !sameCloneHost("http://bitbucket.example.com", "https://bitbucket.example.com") {
 		t.Fatal("expected true when same host with different schemes")
+	}
+}
+
+func TestNormalizeHTTPCloneBaseURL(t *testing.T) {
+	if got := normalizeHTTPCloneBaseURL("ssh://git@bitbucket.example.com/context?x=1#frag"); got != "https://bitbucket.example.com/context" {
+		t.Fatalf("unexpected normalized base url: %s", got)
+	}
+	if got := normalizeHTTPCloneBaseURL("://bad"); got != "://bad" {
+		t.Fatalf("expected invalid url to pass through unchanged, got %s", got)
 	}
 }
 
