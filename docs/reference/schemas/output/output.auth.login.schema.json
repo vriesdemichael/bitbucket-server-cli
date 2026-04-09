@@ -7,6 +7,13 @@
     "data": {
       "additionalProperties": false,
       "properties": {
+        "aliases": {
+          "description": "Discovered or configured host aliases stored for this server context.",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "auth_mode": {
           "description": "Stored authentication mode (token or basic).",
           "type": "string"
@@ -22,6 +29,7 @@
       },
       "required": [
         "host",
+        "aliases",
         "auth_mode",
         "used_insecure_storage"
       ],
