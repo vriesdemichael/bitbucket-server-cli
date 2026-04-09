@@ -4,8 +4,8 @@ Published Architecture and Development Decision Records for this project.
 
 This page and linked ADR pages are generated from `docs/decisions/*.yaml` by `task docs:export-adr-markdown`.
 
-- Total ADRs: `40`
-- Accepted ADRs: `39`
+- Total ADRs: `41`
+- Accepted ADRs: `40`
 
 ## ADR List
 
@@ -49,4 +49,5 @@ This page and linked ADR pages are generated from `docs/decisions/*.yaml` by `ta
 - [ADR 038: bb ai subcommand as AI-first tooling namespace](038-bb-ai-subcommand-as-ai-first-tooling-namespace.md) (`architecture`, `accepted`)
 - [ADR 039: Built-in MCP server with explicit host scoping and token capability restriction](039-built-in-mcp-server-with-host-scoping-and-token-restriction.md) (`architecture`, `accepted`)
 - [ADR 040: Agent skill distribution via static npx packaging and dynamic CLI generation](040-agent-skill-distribution-static-npx-and-dynamic-cli.md) (`development`, `accepted`)
+- [ADR 041: Host aliases and clone URL discovery for server contexts](041-host-aliases-and-clone-url-discovery-for-server-contexts.md) (`architecture`, `accepted`)
 

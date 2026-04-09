@@ -15,6 +15,10 @@ func TestAuthSchemasKeys(t *testing.T) {
 		"output.auth.logout.schema.json",
 		"output.auth.server.list.schema.json",
 		"output.auth.server.use.schema.json",
+		"output.auth.alias.list.schema.json",
+		"output.auth.alias.add.schema.json",
+		"output.auth.alias.remove.schema.json",
+		"output.auth.alias.discover.schema.json",
 	}
 
 	for _, key := range want {

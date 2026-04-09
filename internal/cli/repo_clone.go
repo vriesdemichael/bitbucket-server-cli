@@ -324,6 +324,18 @@ func resolveCloneHTTPAuth(cfg config.AppConfig, cloneHost string) (config.AppCon
 		return config.AppConfig{}, false, nil
 	}
 
+	if matched, ok, err := config.MatchStoredHost(cloneHost); err != nil {
+		return config.AppConfig{}, false, err
+	} else if ok {
+		storedAuth, found, err := config.LoadStoredAuthForHost(matched.Host)
+		if err != nil {
+			return config.AppConfig{}, false, err
+		}
+		if found && storedAuth.AuthMode() != "none" {
+			return storedAuth, true, nil
+		}
+	}
+
 	storedAuth, ok, err := config.LoadStoredAuthForHost(cloneHost)
 	if err != nil {
 		return config.AppConfig{}, false, err
@@ -465,16 +477,9 @@ func isExplicitHTTPCloneURL(rawInput string) bool {
 // regardless of scheme. This allows http↔https variants of the same server to match,
 // consistent with the stored-credential cross-scheme fallback in config.
 func sameCloneHost(left string, right string) bool {
-	leftParsed, leftErr := url.Parse(strings.TrimSpace(left))
-	rightParsed, rightErr := url.Parse(strings.TrimSpace(right))
-	if leftErr != nil || rightErr != nil {
-		return false
-	}
-	if leftParsed.Host == "" || rightParsed.Host == "" {
-		return false
-	}
-
-	return strings.EqualFold(leftParsed.Host, rightParsed.Host)
+	leftNormalized := normalizeHostEndpointLoose(left)
+	rightNormalized := normalizeHostEndpointLoose(right)
+	return leftNormalized != "" && leftNormalized == rightNormalized
 }
 
 func splitCloneDirectoryAndExtraArgs(defaultDirectory string, values []string) (string, []string) {
@@ -499,6 +504,10 @@ func normalizeCloneHost(rawInput, parsedHost string) string {
 	if strings.Contains(trimmed, "://") {
 		parsed, err := url.Parse(trimmed)
 		if err == nil && strings.TrimSpace(parsed.Scheme) != "" && strings.TrimSpace(parsed.Host) != "" {
+			if strings.EqualFold(parsed.Scheme, "ssh") {
+				parsed.User = nil
+				parsed.Scheme = "https"
+			}
 			parsed.Path = ""
 			parsed.RawQuery = ""
 			parsed.Fragment = ""

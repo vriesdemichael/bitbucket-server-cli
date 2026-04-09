@@ -924,3 +924,99 @@ func TestLoadStoredAuthForHost(t *testing.T) {
 		t.Fatal("expected error when config path is a directory")
 	}
 }
+
+func TestHostAliasesCRUDAndLookup(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	if _, err := SaveLogin(LoginInput{Host: "https://bitbucket.example", Token: "tok", SetDefault: true}); err != nil {
+		t.Fatalf("save login failed: %v", err)
+	}
+
+	aliases, err := AddHostAliases("https://bitbucket.example", []string{"git.example.org:7999", "ssh://git.example.org:7999"})
+	if err != nil {
+		t.Fatalf("add aliases failed: %v", err)
+	}
+	if len(aliases) != 1 || aliases[0] != "git.example.org:7999" {
+		t.Fatalf("unexpected aliases: %+v", aliases)
+	}
+
+	match, ok, err := MatchStoredHost("ssh://git.example.org:7999/scm/PRJ/repo.git")
+	if err != nil {
+		t.Fatalf("match stored host failed: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected alias match to be found")
+	}
+	if match.Host != "https://bitbucket.example" {
+		t.Fatalf("expected canonical host, got %q", match.Host)
+	}
+
+	resolved, ok := resolveStoredCredentials(StoredConfig{
+		Hosts: map[string]StoredProfile{
+			"https://bitbucket.example": {URL: "https://bitbucket.example", Aliases: []string{"git.example.org:7999"}, AuthMode: "token"},
+		},
+		InsecureSecrets: map[string]StoredSecret{
+			"https://bitbucket.example": {Token: "tok"},
+		},
+	}, "ssh://git.example.org:7999/scm/PRJ/repo.git")
+	if !ok || resolved.BitbucketURL != "https://bitbucket.example" {
+		t.Fatalf("expected alias-backed stored auth resolution, got ok=%v cfg=%+v", ok, resolved)
+	}
+
+	remaining, err := RemoveHostAlias("https://bitbucket.example", "git.example.org:7999")
+	if err != nil {
+		t.Fatalf("remove alias failed: %v", err)
+	}
+	if len(remaining) != 0 {
+		t.Fatalf("expected no aliases after removal, got %+v", remaining)
+	}
+}
+
+func TestAliasConflictValidation(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	if _, err := SaveLogin(LoginInput{Host: "https://one.example", Token: "tok1", SetDefault: true}); err != nil {
+		t.Fatalf("save login one failed: %v", err)
+	}
+	if _, err := SaveLogin(LoginInput{Host: "https://two.example", Token: "tok2", SetDefault: false}); err != nil {
+		t.Fatalf("save login two failed: %v", err)
+	}
+	if _, err := AddHostAliases("https://one.example", []string{"git.shared.example:22"}); err != nil {
+		t.Fatalf("add alias to first host failed: %v", err)
+	}
+	if _, err := AddHostAliases("https://two.example", []string{"git.shared.example:22"}); err == nil {
+		t.Fatal("expected alias conflict")
+	}
+}
+
+func TestSaveLoginNormalizesAndDeduplicatesAliases(t *testing.T) {
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+
+	result, err := SaveLogin(LoginInput{
+		Host:       "https://bitbucket.example",
+		Aliases:    []string{"git.example.org:7999", "ssh://git.example.org:7999", "git@git.example.org:scm/PRJ/repo.git"},
+		Token:      "tok",
+		SetDefault: true,
+	})
+	if err != nil {
+		t.Fatalf("save login failed: %v", err)
+	}
+	if len(result.Aliases) != 2 {
+		t.Fatalf("expected deduplicated aliases, got %+v", result.Aliases)
+	}
+
+	stored, err := LoadStoredConfig()
+	if err != nil {
+		t.Fatalf("load stored config failed: %v", err)
+	}
+	profile := stored.Hosts[stored.DefaultHost]
+	if len(profile.Aliases) != 2 {
+		t.Fatalf("expected deduplicated stored aliases, got %+v", profile.Aliases)
+	}
+}

@@ -28,8 +28,18 @@ gh attestation verify bb_${VERSION#v}_linux_amd64.tar.gz --repo vriesdemichael/b
 
 ```bash
 bb auth token-url --host https://bitbucket.acme.corp
-bb auth login --host https://bitbucket.acme.corp --token "$BB_TOKEN"
+bb auth login https://bitbucket.acme.corp --token "$BB_TOKEN"
 bb auth status
+```
+
+If your Bitbucket instance uses a different SSH clone host than its web/API URL, `bb auth login`
+will try to discover aliases automatically from the first accessible repository clone links.
+You can inspect or manage aliases explicitly with:
+
+```bash
+bb auth alias list --host https://bitbucket.acme.corp
+bb auth alias discover --host https://bitbucket.acme.corp
+bb auth alias add --host https://bitbucket.acme.corp git.acme.corp:7999
 ```
 
 ## First useful commands
