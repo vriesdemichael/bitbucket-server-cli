@@ -285,8 +285,13 @@ func SaveLogin(input LoginInput) (LoginResult, error) {
 		stored.InsecureSecrets = map[string]StoredSecret{}
 	}
 
+	key := hostKey(host)
+	if err := ensureAliasOwnership(stored, key, aliases); err != nil {
+		return LoginResult{}, err
+	}
+
 	profile := StoredProfile{URL: host, Aliases: aliases}
-	result := LoginResult{Host: host, Aliases: append([]string(nil), aliases...)}
+	result := LoginResult{Host: host, Aliases: append([]string{}, aliases...)}
 
 	if hasToken {
 		profile.AuthMode = "token"
@@ -297,7 +302,6 @@ func SaveLogin(input LoginInput) (LoginResult, error) {
 		result.AuthMode = "basic"
 	}
 
-	key := hostKey(host)
 	insecure := StoredSecret{}
 	if hasToken {
 		if err := keyring.Set(keyringServiceName, key+":token", strings.TrimSpace(input.Token)); err != nil {
@@ -363,7 +367,7 @@ func SetHostAliases(host string, aliases []string) ([]string, error) {
 		return nil, err
 	}
 
-	return append([]string(nil), normalizedAliases...), nil
+	return append([]string{}, normalizedAliases...), nil
 }
 
 func AddHostAliases(host string, aliases []string) ([]string, error) {
@@ -388,7 +392,7 @@ func AddHostAliases(host string, aliases []string) ([]string, error) {
 		return nil, apperrors.New(apperrors.KindNotFound, fmt.Sprintf("no stored server context for %s", normalizeURL(trimmedHost)), nil)
 	}
 
-	merged := append([]string(nil), normalizeStoredAliases(profile.Aliases)...)
+	merged := append([]string{}, normalizeStoredAliases(profile.Aliases)...)
 	seen := map[string]struct{}{}
 	for _, existing := range merged {
 		seen[existing] = struct{}{}
@@ -411,7 +415,7 @@ func AddHostAliases(host string, aliases []string) ([]string, error) {
 		return nil, err
 	}
 
-	return append([]string(nil), merged...), nil
+	return append([]string{}, merged...), nil
 }
 
 func RemoveHostAlias(host string, alias string) ([]string, error) {
@@ -455,7 +459,7 @@ func RemoveHostAlias(host string, alias string) ([]string, error) {
 		return nil, err
 	}
 
-	return append([]string(nil), updated...), nil
+	return append([]string{}, updated...), nil
 }
 
 func ListHostAliases(host string) ([]string, string, error) {
@@ -475,7 +479,7 @@ func ListHostAliases(host string) ([]string, string, error) {
 		return nil, "", apperrors.New(apperrors.KindNotFound, fmt.Sprintf("no stored server context for %s", normalizeURL(trimmedHost)), nil)
 	}
 
-	return append([]string(nil), normalizeStoredAliases(profile.Aliases)...), normalizeURL(profile.URL), nil
+	return append([]string{}, normalizeStoredAliases(profile.Aliases)...), normalizeURL(profile.URL), nil
 }
 
 func MatchStoredHost(host string) (AliasMatch, bool, error) {
@@ -529,7 +533,7 @@ func ListServerContexts() ([]ServerContext, error) {
 
 		contexts = append(contexts, ServerContext{
 			Host:      normalizeURL(profile.URL),
-			Aliases:   append([]string(nil), normalizeStoredAliases(profile.Aliases)...),
+			Aliases:   append([]string{}, normalizeStoredAliases(profile.Aliases)...),
 			AuthMode:  mode,
 			Username:  strings.TrimSpace(profile.Username),
 			IsDefault: key == stored.DefaultHost,
@@ -844,7 +848,7 @@ func normalizeAlias(value string) (string, error) {
 
 func normalizeAliases(values []string) ([]string, error) {
 	if len(values) == 0 {
-		return nil, nil
+		return []string{}, nil
 	}
 
 	result := make([]string, 0, len(values))
@@ -867,7 +871,7 @@ func normalizeAliases(values []string) ([]string, error) {
 func normalizeStoredAliases(values []string) []string {
 	normalized, err := normalizeAliases(values)
 	if err != nil {
-		return nil
+		return []string{}
 	}
 	return normalized
 }
