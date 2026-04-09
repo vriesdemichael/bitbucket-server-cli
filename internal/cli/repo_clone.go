@@ -278,7 +278,7 @@ func cloneRepositoryWithAuthFallback(
 	if err != nil {
 		return "", err
 	}
-	if hasStoredHTTPAuth && !sameCloneHost(httpCloneURL, resolvedHTTPCloneHost) {
+	if hasStoredHTTPAuth && normalizeHTTPCloneBaseURL(httpCloneURL) != normalizeHTTPCloneBaseURL(resolvedHTTPCloneHost) {
 		httpCloneURL, err = buildBitbucketCloneURL(normalizeHTTPCloneBaseURL(resolvedHTTPCloneHost), repo.ProjectKey, repo.Slug)
 		if err != nil {
 			return "", err
@@ -351,7 +351,7 @@ func resolveCloneHTTPAuth(cfg config.AppConfig, cloneHost string) (config.AppCon
 		return config.AppConfig{}, "", false, nil
 	}
 
-	return storedAuth, cloneHost, true, nil
+	return storedAuth, storedAuth.BitbucketURL, true, nil
 }
 
 func promptForCloneLogin(cmd *cobra.Command, cfg config.AppConfig, cloneHost string, attemptedSSH bool) (config.AppConfig, bool, error) {
