@@ -302,8 +302,8 @@ func TestResolveCloneHTTPAuthFallbackBranches(t *testing.T) {
 		if !ok || resolved.BitbucketToken != "stored-token" {
 			t.Fatalf("expected stored auth match, got ok=%v cfg=%+v", ok, resolved)
 		}
-		if matchedHost != "https://bitbucket.example.com/scm/PRJ/demo.git" {
-			t.Fatalf("expected direct clone host to be returned, got %q", matchedHost)
+		if matchedHost != "https://bitbucket.example.com" {
+			t.Fatalf("expected canonical stored host to be returned, got %q", matchedHost)
 		}
 	})
 }
@@ -337,6 +337,46 @@ func TestCloneRepositoryWithAuthFallbackUsesCanonicalHostForAliasHTTPSRetry(t *t
 	}
 	if stub.cloneCalls[1].repositoryURL != "https://x-token-auth:stored-token@bitbucket.example.com/context/scm/PRJ/demo.git" {
 		t.Fatalf("expected canonical host https retry, got %s", stub.cloneCalls[1].repositoryURL)
+	}
+}
+
+func TestCloneRepositoryWithAuthFallbackRebuildsHTTPSRetryWhenContextPathDiffers(t *testing.T) {
+	originalFactory := gitBackendFactory
+	stub := &cloneBackendStub{}
+	gitBackendFactory = func() git.Backend { return stub }
+	t.Cleanup(func() { gitBackendFactory = originalFactory })
+
+	configPath := filepath.Join(t.TempDir(), "bb", "config.yaml")
+	t.Setenv("BB_CONFIG_PATH", configPath)
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "")
+	t.Setenv("BITBUCKET_URL", "https://other.example.com")
+	t.Setenv("BITBUCKET_PROJECT_KEY", "PRJ")
+
+	if _, err := config.SaveLogin(config.LoginInput{Host: "https://bitbucket.example.com/context", Token: "stored-token", SetDefault: true}); err != nil {
+		t.Fatalf("save login failed: %v", err)
+	}
+
+	_, err := cloneRepositoryWithAuthFallback(
+		NewRootCommand(),
+		config.AppConfig{BitbucketURL: "https://other.example.com"},
+		"https://bitbucket.example.com/scm/PRJ/demo.git",
+		true,
+		"https://bitbucket.example.com",
+		repositorySelector{ProjectKey: "PRJ", Slug: "demo"},
+		cloneTransportHTTPS,
+		git.CloneOptions{Directory: "demo"},
+		stub,
+		false,
+	)
+	if err != nil {
+		t.Fatalf("clone with auth fallback failed: %v", err)
+	}
+
+	if len(stub.cloneCalls) != 1 {
+		t.Fatalf("expected one https clone attempt, got %d", len(stub.cloneCalls))
+	}
+	if stub.cloneCalls[0].repositoryURL != "https://x-token-auth:stored-token@bitbucket.example.com/context/scm/PRJ/demo.git" {
+		t.Fatalf("expected rebuilt canonical context-path clone url, got %s", stub.cloneCalls[0].repositoryURL)
 	}
 }
 
