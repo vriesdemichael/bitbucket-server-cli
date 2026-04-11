@@ -15,7 +15,7 @@ Discovery runs only when a command has a `--repo` flag and you did not set it.
 - `ssh://git@bitbucket.acme.corp:7999/scm/PLAT/payments-api.git`
 - `git@bitbucket.acme.corp:scm/PLAT/payments-api.git`
 
-If a remote host matches an authenticated/stored server context, `bb` infers:
+If a remote endpoint matches an authenticated/stored server context or one of its aliases, `bb` infers:
 
 - `BITBUCKET_URL`
 - `BITBUCKET_PROJECT_KEY`
@@ -52,6 +52,42 @@ Host and auth source precedence remains:
 - If you are outside a git repository, discovery is skipped.
 - If remotes do not match authenticated server hosts, discovery is skipped.
 
+## Host aliases
+
+Many Bitbucket instances use different endpoints for browser/API access and git clone traffic.
+For example:
+
+- canonical Bitbucket URL: `https://bitbucket.acme.corp`
+- SSH clone host: `git.acme.corp:7999`
+
+`bb` stores one canonical server context and can attach one or more aliases to it. Alias matching is
+endpoint-aware and normalizes values as `host:port`.
+
+Examples:
+
+- `https://bitbucket.acme.corp` -> `bitbucket.acme.corp:443`
+- `http://bitbucket.acme.corp` -> `bitbucket.acme.corp:80`
+- `ssh://git@git.acme.corp:7999/scm/PLAT/payments-api.git` -> `git.acme.corp:7999`
+- `git@git.acme.corp:scm/PLAT/payments-api.git` -> `git.acme.corp:22`
+
+Manual alias management:
+
+```bash
+bb auth alias list --host https://bitbucket.acme.corp
+bb auth alias add --host https://bitbucket.acme.corp git.acme.corp:7999
+bb auth alias remove --host https://bitbucket.acme.corp git.acme.corp:7999
+```
+
+Automatic alias discovery:
+
+```bash
+bb auth login https://bitbucket.acme.corp --token "$BB_TOKEN"
+bb auth alias discover --host https://bitbucket.acme.corp
+```
+
+Discovery is best-effort. It requests only a small repository page and stops at the first accessible
+repository that exposes clone links. Login still succeeds when discovery finds no aliases.
+
 ## Server switching workflow
 
 Use server contexts to control which host is active by default:
@@ -87,5 +123,7 @@ Expected JSON output (example):
 ## Recommended team pattern
 
 - Keep one stored context per server (`bb auth login --host ...`).
+- Let `bb auth login` auto-discover clone-host aliases when possible.
+- Add explicit aliases for non-default SSH endpoints when discovery does not surface them.
 - Switch active context with `bb auth server use --host ...` before running automation.
 - Still pass `--repo` in CI for maximal explicitness.

@@ -274,9 +274,15 @@ func cloneRepositoryWithAuthFallback(
 		return "", sshErr
 	}
 
-	cloneAuth, hasStoredHTTPAuth, err := resolveCloneHTTPAuth(cfg, cloneHost)
+	cloneAuth, resolvedHTTPCloneHost, hasStoredHTTPAuth, err := resolveCloneHTTPAuth(cfg, cloneHost)
 	if err != nil {
 		return "", err
+	}
+	if hasStoredHTTPAuth && normalizeHTTPCloneBaseURL(httpCloneURL) != normalizeHTTPCloneBaseURL(resolvedHTTPCloneHost) {
+		httpCloneURL, err = buildBitbucketCloneURL(normalizeHTTPCloneBaseURL(resolvedHTTPCloneHost), repo.ProjectKey, repo.Slug)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	if hasStoredHTTPAuth {
@@ -314,25 +320,38 @@ func cloneRepositoryWithAuthFallback(
 	return httpCloneURL, nil
 }
 
-func resolveCloneHTTPAuth(cfg config.AppConfig, cloneHost string) (config.AppConfig, bool, error) {
-	// Match on host (ignoring scheme) so http↔https variants of the same server both hit.
+func resolveCloneHTTPAuth(cfg config.AppConfig, cloneHost string) (config.AppConfig, string, bool, error) {
+	// Match on the normalized network endpoint so explicit ports and http↔https variants
+	// of the same server can reuse the same stored credentials.
 	if sameCloneHost(cfg.BitbucketURL, cloneHost) && cfg.AuthMode() != "none" {
-		return cfg, true, nil
+		return cfg, cfg.BitbucketURL, true, nil
 	}
 
 	if os.Getenv("BB_DISABLE_STORED_CONFIG") == "1" {
-		return config.AppConfig{}, false, nil
+		return config.AppConfig{}, "", false, nil
+	}
+
+	if matched, ok, err := config.MatchStoredHost(cloneHost); err != nil {
+		return config.AppConfig{}, "", false, err
+	} else if ok {
+		storedAuth, found, err := config.LoadStoredAuthForHost(matched.Host)
+		if err != nil {
+			return config.AppConfig{}, "", false, err
+		}
+		if found && storedAuth.AuthMode() != "none" {
+			return storedAuth, matched.Host, true, nil
+		}
 	}
 
 	storedAuth, ok, err := config.LoadStoredAuthForHost(cloneHost)
 	if err != nil {
-		return config.AppConfig{}, false, err
+		return config.AppConfig{}, "", false, err
 	}
 	if !ok || storedAuth.AuthMode() == "none" {
-		return config.AppConfig{}, false, nil
+		return config.AppConfig{}, "", false, nil
 	}
 
-	return storedAuth, true, nil
+	return storedAuth, storedAuth.BitbucketURL, true, nil
 }
 
 func promptForCloneLogin(cmd *cobra.Command, cfg config.AppConfig, cloneHost string, attemptedSSH bool) (config.AppConfig, bool, error) {
@@ -461,20 +480,12 @@ func isExplicitHTTPCloneURL(rawInput string) bool {
 	return strings.HasPrefix(trimmed, "http://") || strings.HasPrefix(trimmed, "https://")
 }
 
-// sameCloneHost returns true when left and right resolve to the same host:port,
-// regardless of scheme. This allows http↔https variants of the same server to match,
-// consistent with the stored-credential cross-scheme fallback in config.
+// sameCloneHost returns true when left and right normalize to the same network
+// endpoint. Schemes are ignored, so http and https variants of the same host match.
 func sameCloneHost(left string, right string) bool {
-	leftParsed, leftErr := url.Parse(strings.TrimSpace(left))
-	rightParsed, rightErr := url.Parse(strings.TrimSpace(right))
-	if leftErr != nil || rightErr != nil {
-		return false
-	}
-	if leftParsed.Host == "" || rightParsed.Host == "" {
-		return false
-	}
-
-	return strings.EqualFold(leftParsed.Host, rightParsed.Host)
+	leftNormalized := normalizeHostEndpointLoose(left)
+	rightNormalized := normalizeHostEndpointLoose(right)
+	return leftNormalized != "" && leftNormalized == rightNormalized
 }
 
 func splitCloneDirectoryAndExtraArgs(defaultDirectory string, values []string) (string, []string) {
@@ -499,6 +510,10 @@ func normalizeCloneHost(rawInput, parsedHost string) string {
 	if strings.Contains(trimmed, "://") {
 		parsed, err := url.Parse(trimmed)
 		if err == nil && strings.TrimSpace(parsed.Scheme) != "" && strings.TrimSpace(parsed.Host) != "" {
+			if strings.EqualFold(parsed.Scheme, "ssh") {
+				parsed.User = nil
+				parsed.Scheme = "https"
+			}
 			parsed.Path = ""
 			parsed.RawQuery = ""
 			parsed.Fragment = ""
@@ -525,6 +540,22 @@ func normalizeHTTPCloneHost(cloneHost string) string {
 		parsed.Scheme = "https"
 	}
 	parsed.Path = ""
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+
+	return strings.TrimSuffix(parsed.String(), "/")
+}
+
+func normalizeHTTPCloneBaseURL(baseURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || strings.TrimSpace(parsed.Host) == "" {
+		return baseURL
+	}
+
+	parsed.User = nil
+	if !strings.EqualFold(parsed.Scheme, "http") && !strings.EqualFold(parsed.Scheme, "https") {
+		parsed.Scheme = "https"
+	}
 	parsed.RawQuery = ""
 	parsed.Fragment = ""
 

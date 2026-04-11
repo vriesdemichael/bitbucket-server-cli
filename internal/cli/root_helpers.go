@@ -181,12 +181,12 @@ func inferRepositoryContextFromGit(cfg config.AppConfig) (*inferredRepositoryCon
 
 	candidates := make([]inferredRepositoryContext, 0)
 	for _, remote := range remotes {
-		host, projectKey, slug, ok := parseBitbucketRemote(remote.URL)
+		_, projectKey, slug, ok := parseBitbucketRemote(remote.URL)
 		if !ok {
 			continue
 		}
 
-		resolvedHost, ok := authenticatedHosts[normalizeHostName(host)]
+		resolvedHost, ok := authenticatedHosts[normalizeRemoteEndpoint(remote.URL)]
 		if !ok {
 			continue
 		}
@@ -269,7 +269,9 @@ func inferRepositoryContextFromGit(cfg config.AppConfig) (*inferredRepositoryCon
 func authenticatedHostLookup(cfg config.AppConfig, stored config.StoredConfig) map[string]string {
 	lookup := map[string]string{}
 	if strings.TrimSpace(cfg.BitbucketURL) != "" {
-		lookup[normalizeHostName(cfg.BitbucketURL)] = cfg.BitbucketURL
+		if normalized := normalizeHostEndpointLoose(cfg.BitbucketURL); normalized != "" {
+			lookup[normalized] = cfg.BitbucketURL
+		}
 	}
 
 	for _, profile := range stored.Hosts {
@@ -277,26 +279,44 @@ func authenticatedHostLookup(cfg config.AppConfig, stored config.StoredConfig) m
 		if host == "" {
 			continue
 		}
-		normalized := normalizeHostName(host)
-		if normalized == "" {
-			continue
+		if normalized := normalizeHostEndpointLoose(host); normalized != "" {
+			if _, exists := lookup[normalized]; !exists {
+				lookup[normalized] = host
+			}
 		}
-		if _, exists := lookup[normalized]; !exists {
-			lookup[normalized] = host
+		for _, alias := range profile.Aliases {
+			if normalized := normalizeHostEndpointLoose(alias); normalized != "" {
+				if _, exists := lookup[normalized]; !exists {
+					lookup[normalized] = host
+				}
+			}
 		}
 	}
 
 	return lookup
 }
 
-func normalizeHostName(raw string) string {
+func normalizeHostEndpoint(raw string) string {
 	trimmed := strings.TrimSpace(raw)
 	if trimmed == "" {
 		return ""
 	}
 
+	if strings.HasPrefix(trimmed, "git@") {
+		at := strings.LastIndex(trimmed, "@")
+		colon := strings.Index(trimmed[at+1:], ":")
+		if at >= 0 && colon >= 0 {
+			host := strings.TrimSpace(trimmed[at+1 : at+1+colon])
+			if host == "" {
+				return ""
+			}
+			return strings.ToLower(host + ":22")
+		}
+		return ""
+	}
+
 	if !strings.Contains(trimmed, "://") {
-		trimmed = "http://" + trimmed
+		trimmed = "https://" + trimmed
 	}
 
 	parsed, err := url.Parse(trimmed)
@@ -305,7 +325,80 @@ func normalizeHostName(raw string) string {
 	}
 
 	hostname := strings.TrimSpace(parsed.Hostname())
-	return strings.ToLower(hostname)
+	if hostname == "" {
+		return ""
+	}
+	port := parsed.Port()
+	if port == "" {
+		switch strings.ToLower(parsed.Scheme) {
+		case "http":
+			port = "80"
+		case "ssh":
+			port = "22"
+		default:
+			port = "443"
+		}
+	}
+	return strings.ToLower(hostname + ":" + port)
+}
+
+func normalizeHostEndpointLoose(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+
+	if strings.HasPrefix(trimmed, "git@") {
+		at := strings.LastIndex(trimmed, "@")
+		colon := strings.Index(trimmed[at+1:], ":")
+		if at >= 0 && colon >= 0 {
+			host := strings.TrimSpace(trimmed[at+1 : at+1+colon])
+			if host == "" {
+				return ""
+			}
+			return strings.ToLower(host + ":22")
+		}
+		return ""
+	}
+
+	if !strings.Contains(trimmed, "://") {
+		trimmed = "https://" + trimmed
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return ""
+	}
+	hostname := strings.TrimSpace(parsed.Hostname())
+	if hostname == "" {
+		return ""
+	}
+	port := parsed.Port()
+	if port == "" {
+		switch strings.ToLower(parsed.Scheme) {
+		case "http":
+			port = "80"
+		case "ssh":
+			port = "22"
+		default:
+			port = "443"
+		}
+	}
+	if (strings.EqualFold(parsed.Scheme, "https") && port == "443") || (strings.EqualFold(parsed.Scheme, "http") && port == "80") {
+		return strings.ToLower(hostname)
+	}
+	return strings.ToLower(hostname + ":" + port)
+}
+
+func normalizeRemoteEndpoint(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	if strings.HasPrefix(trimmed, "git@") {
+		return normalizeHostEndpointLoose(trimmed)
+	}
+	return normalizeHostEndpointLoose(trimmed)
 }
 
 func parseBitbucketRemote(rawRemoteURL string) (host string, projectKey string, slug string, ok bool) {

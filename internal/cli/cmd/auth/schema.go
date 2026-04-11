@@ -26,10 +26,11 @@ func authLoginDataSchema() map[string]any {
 		"additionalProperties": false,
 		"properties": map[string]any{
 			"host":                  map[string]any{"type": "string", "description": "The Bitbucket Server host that credentials were stored for."},
+			"aliases":               map[string]any{"type": "array", "items": map[string]any{"type": "string"}, "description": "Discovered or configured host aliases stored for this server context."},
 			"auth_mode":             map[string]any{"type": "string", "description": "Stored authentication mode (token or basic)."},
 			"used_insecure_storage": map[string]any{"type": "boolean", "description": "True when the system keyring was unavailable and the config fallback was used."},
 		},
-		"required": []any{"host", "auth_mode", "used_insecure_storage"},
+		"required": []any{"host", "aliases", "auth_mode", "used_insecure_storage"},
 	}
 }
 
@@ -95,11 +96,24 @@ func authServerContextSchema() map[string]any {
 		"additionalProperties": true,
 		"properties": map[string]any{
 			"Host":      map[string]any{"type": "string"},
+			"Aliases":   map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
 			"AuthMode":  map[string]any{"type": "string"},
 			"Username":  map[string]any{"type": "string"},
 			"IsDefault": map[string]any{"type": "boolean"},
 		},
-		"required": []any{"Host", "AuthMode", "IsDefault"},
+		"required": []any{"Host", "Aliases", "AuthMode", "IsDefault"},
+	}
+}
+
+func authAliasDataSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"host":    map[string]any{"type": "string"},
+			"aliases": map[string]any{"type": "array", "items": map[string]any{"type": "string"}},
+			"status":  map[string]any{"type": "string"},
+		},
 	}
 }
 
@@ -176,6 +190,30 @@ func Schemas() map[string]map[string]any {
 			"bb auth server use output",
 			"JSON output schema for `bb auth server use --json`. Data confirms the new default server.",
 			authServerUseDataSchema(),
+		),
+		"output.auth.alias.list.schema.json": jsonoutput.EnvelopeSchemaFor(
+			"output.auth.alias.list.schema.json",
+			"bb auth alias list output",
+			"JSON output schema for `bb auth alias list --json`. Data lists aliases for a stored server context.",
+			authAliasDataSchema(),
+		),
+		"output.auth.alias.add.schema.json": jsonoutput.EnvelopeSchemaFor(
+			"output.auth.alias.add.schema.json",
+			"bb auth alias add output",
+			"JSON output schema for `bb auth alias add --json`. Data confirms the updated alias set.",
+			authAliasDataSchema(),
+		),
+		"output.auth.alias.remove.schema.json": jsonoutput.EnvelopeSchemaFor(
+			"output.auth.alias.remove.schema.json",
+			"bb auth alias remove output",
+			"JSON output schema for `bb auth alias remove --json`. Data confirms the updated alias set.",
+			authAliasDataSchema(),
+		),
+		"output.auth.alias.discover.schema.json": jsonoutput.EnvelopeSchemaFor(
+			"output.auth.alias.discover.schema.json",
+			"bb auth alias discover output",
+			"JSON output schema for `bb auth alias discover --json`. Data contains the discovered alias set.",
+			authAliasDataSchema(),
 		),
 	}
 }
