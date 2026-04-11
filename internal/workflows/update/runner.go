@@ -64,7 +64,7 @@ type Result struct {
 	ChecksumAvailable        bool   `json:"checksum_available"`
 	ChecksumVerified         bool   `json:"checksum_verified"`
 	SignatureAssetName       string `json:"signature_asset_name,omitempty"`
-	SignatureVerified         bool   `json:"signature_verified"`
+	SignatureVerified        bool   `json:"signature_verified"`
 	CurrentVersionComparable bool   `json:"current_version_comparable"`
 	LatestVersionComparable  bool   `json:"latest_version_comparable"`
 	TargetPlatform           string `json:"target_platform,omitempty"`
