@@ -197,6 +197,28 @@ jobs:
             exit 1
           fi
 
+      - name: Embed Windows PE metadata
+        if: matrix.goos == 'windows'
+        env:
+          VERSION: ${{ needs.determine-version.outputs.version }}
+        run: |
+          set -euo pipefail
+          go install github.com/tc-hib/go-winres@v0.3.3
+          VERSION_NO_V="${VERSION#v}"
+          # PE version must be X.Y.Z.W (four numeric components)
+          PE_VERSION="${VERSION_NO_V}.0"
+          YEAR="$(date -u +%Y)"
+          go-winres simply \
+            --arch amd64,arm64 \
+            --out cmd/bb/rsrc \
+            --manifest cli \
+            --file-description "Bitbucket Server CLI" \
+            --product-name "Bitbucket Server CLI" \
+            --file-version "${PE_VERSION}" \
+            --product-version "${PE_VERSION}" \
+            --copyright "Copyright ${YEAR} Michael de Vries" \
+            --original-filename "bb.exe"
+
       - name: Build and package artifact
         env:
           VERSION: ${{ needs.determine-version.outputs.version }}
@@ -212,7 +234,7 @@ jobs:
           BINARY_NAME="bb${BINARY_EXT}"
           ARCHIVE_BASENAME="bb_${VERSION_NO_V}_${GOOS}_${GOARCH}"
 
-          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -ldflags "-X main.Version=${VERSION}" -o "$BINARY_NAME" ./cmd/bb
+          CGO_ENABLED=0 GOOS="$GOOS" GOARCH="$GOARCH" go build -trimpath -ldflags "-s -w -buildid= -X main.Version=${VERSION}" -o "$BINARY_NAME" ./cmd/bb
 
           if [[ "$ARCHIVE" == "zip" ]]; then
             ARCHIVE_NAME="${ARCHIVE_BASENAME}.zip"

@@ -14,3 +14,5 @@ __pycache__/
 /docs/.venv/
 /.tmp/*
 !/.tmp/.gitkeep
+# Generated Windows PE resource files (created by go-winres during CI builds)
+cmd/bb/rsrc_windows_*.syso
