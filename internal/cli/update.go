@@ -142,6 +142,13 @@ func writeUpdateHuman(cmd *cobra.Command, result updateworkflow.Result) {
 		}
 		fmt.Fprintf(writer, "%s %s (%s)\n", style.Secondary.Render("checksum"), result.ChecksumAssetName, status)
 	}
+	if result.SignatureAssetName != "" {
+		status := "available"
+		if result.SignatureVerified {
+			status = "verified"
+		}
+		fmt.Fprintf(writer, "%s %s (%s)\n", style.Secondary.Render("signature"), result.SignatureAssetName, status)
+	}
 	if result.ReleaseURL != "" {
 		fmt.Fprintf(writer, "%s %s\n", style.Secondary.Render("release"), result.ReleaseURL)
 	}
