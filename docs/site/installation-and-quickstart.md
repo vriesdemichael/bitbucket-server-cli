@@ -16,8 +16,8 @@ scoop install vriesdemichael/bb
 ## Install from release artifacts
 
 1. Select a release version (example: `v0.1.0`).
-2. Download the platform archive and `sha256sums.txt` from GitHub Releases.
-3. Verify checksums and run `bb --help`.
+2. Download the platform archive, `sha256sums.txt`, and `sha256sums.txt.sigstore.json` from GitHub Releases.
+3. Verify the signed checksum manifest with Cosign, then verify checksums and run `bb --help`.
 
 Linux amd64 example:
 
@@ -25,17 +25,30 @@ Linux amd64 example:
 VERSION=v0.1.0
 curl -LO "https://github.com/vriesdemichael/bitbucket-server-cli/releases/download/${VERSION}/bb_${VERSION#v}_linux_amd64.tar.gz"
 curl -LO "https://github.com/vriesdemichael/bitbucket-server-cli/releases/download/${VERSION}/sha256sums.txt"
+curl -LO "https://github.com/vriesdemichael/bitbucket-server-cli/releases/download/${VERSION}/sha256sums.txt.sigstore.json"
+cosign verify-blob \
+	--bundle sha256sums.txt.sigstore.json \
+	--certificate-identity "https://github.com/vriesdemichael/bitbucket-server-cli/.github/workflows/release.yml@refs/heads/main" \
+	--certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+	sha256sums.txt
 sha256sum -c sha256sums.txt --ignore-missing
 tar -xzf "bb_${VERSION#v}_linux_amd64.tar.gz"
 install -m 0755 bb /usr/local/bin/bb
 bb --help
 ```
 
-Optional provenance verification:
+Archive-level provenance verification remains available when you want to inspect a specific artifact directly:
 
 ```bash
+cosign verify-blob \
+	--bundle "bb_${VERSION#v}_linux_amd64.tar.gz.sigstore.json" \
+	--certificate-identity "https://github.com/vriesdemichael/bitbucket-server-cli/.github/workflows/release.yml@refs/heads/main" \
+	--certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+	"bb_${VERSION#v}_linux_amd64.tar.gz"
 gh attestation verify bb_${VERSION#v}_linux_amd64.tar.gz --repo vriesdemichael/bitbucket-server-cli
 ```
+
+`bb update` now requires the signed checksum bundle. If Sigstore verification is unavailable or fails, self-update stops and you should use WinGet, Scoop, or manual release installation instead.
 
 ## Authenticate to Bitbucket
 

@@ -32,6 +32,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Validate release source ref
+        run: |
+          set -euo pipefail
+          if [[ "${GITHUB_REF}" != "refs/heads/main" ]]; then
+            echo "Release workflow must run from refs/heads/main so the signing identity stays stable."
+            exit 1
+          fi
+
       - name: Compute release version from Conventional Commits
         id: compute
         env:
@@ -471,6 +479,26 @@ jobs:
             cd dist
             find . -maxdepth 1 -type f ! -name 'sha256sums.txt' -print0 | sort -z | xargs -0 sha256sum > sha256sums.txt
           )
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3.8.1
+
+      - name: Sign release artifacts with Sigstore bundles
+        env:
+          COSIGN_YES: "true"
+        run: |
+          set -euo pipefail
+          for file in dist/*.tar.gz dist/*.zip dist/sha256sums.txt; do
+            if [[ ! -f "$file" ]]; then
+              continue
+            fi
+            cosign sign-blob \
+              --yes \
+              --bundle "${file}.sigstore.json" \
+              --output-signature "${file}.sig" \
+              --output-certificate "${file}.pem" \
+              "$file" >/dev/null
+          done
 
       - name: Generate GitHub provenance attestations
         uses: actions/attest-build-provenance@v2

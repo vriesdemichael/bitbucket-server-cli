@@ -20,6 +20,7 @@ import (
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	githubrelease "github.com/vriesdemichael/bitbucket-server-cli/internal/transport/githubrelease"
+	updatesigstore "github.com/vriesdemichael/bitbucket-server-cli/internal/transport/sigstore"
 )
 
 type ReleaseClient interface {
@@ -29,6 +30,10 @@ type ReleaseClient interface {
 
 type Options struct {
 	DryRun bool
+}
+
+type SignatureVerifier interface {
+	VerifyBlob(ctx context.Context, artifact, bundleJSON []byte) (updatesigstore.Verification, error)
 }
 
 type Result struct {
@@ -43,8 +48,13 @@ type Result struct {
 	AssetName                string `json:"asset_name,omitempty"`
 	AssetURL                 string `json:"asset_url,omitempty"`
 	ChecksumAssetName        string `json:"checksum_asset_name,omitempty"`
+	SignatureBundleAssetName string `json:"signature_bundle_asset_name,omitempty"`
 	ChecksumAvailable        bool   `json:"checksum_available"`
 	ChecksumVerified         bool   `json:"checksum_verified"`
+	SignatureVerified        bool   `json:"signature_verified"`
+	SignatureIdentity        string `json:"signature_identity,omitempty"`
+	SignatureIssuer          string `json:"signature_issuer,omitempty"`
+	TransparencyLogVerified  bool   `json:"transparency_log_verified"`
 	CurrentVersionComparable bool   `json:"current_version_comparable"`
 	LatestVersionComparable  bool   `json:"latest_version_comparable"`
 	TargetPlatform           string `json:"target_platform,omitempty"`
@@ -60,6 +70,7 @@ type Runner struct {
 	executablePath func() (string, error)
 	platform       func() (string, string)
 	writeBinary    func(string, []byte, fs.FileMode) error
+	verifier       SignatureVerifier
 }
 
 type Dependencies struct {
@@ -70,6 +81,7 @@ type Dependencies struct {
 	ExecutablePath  func() (string, error)
 	Platform        func() (string, string)
 	WriteBinary     func(string, []byte, fs.FileMode) error
+	Verifier        SignatureVerifier
 }
 
 func NewRunner(deps Dependencies) *Runner {
@@ -93,6 +105,11 @@ func NewRunner(deps Dependencies) *Runner {
 		writeBinary = replaceBinary
 	}
 
+	verifier := deps.Verifier
+	if verifier == nil {
+		verifier = updatesigstore.NewGitHubReleaseVerifier(deps.RepositoryOwner, deps.RepositoryName)
+	}
+
 	return &Runner{
 		releases:       deps.Releases,
 		owner:          strings.TrimSpace(deps.RepositoryOwner),
@@ -101,6 +118,7 @@ func NewRunner(deps Dependencies) *Runner {
 		executablePath: executablePath,
 		platform:       platform,
 		writeBinary:    writeBinary,
+		verifier:       verifier,
 	}
 }
 
@@ -110,6 +128,9 @@ func (runner *Runner) Run(ctx context.Context, options Options) (Result, error) 
 	}
 	if runner.owner == "" || runner.repo == "" {
 		return Result{}, apperrors.New(apperrors.KindInternal, "update repository is not configured", nil)
+	}
+	if runner.verifier == nil {
+		return Result{}, apperrors.New(apperrors.KindInternal, "update signature verifier is not configured", nil)
 	}
 
 	currentVersion := strings.TrimSpace(runner.currentVersion())
@@ -167,15 +188,39 @@ func (runner *Runner) Run(ctx context.Context, options Options) (Result, error) 
 		return Result{}, apperrors.New(apperrors.KindNotFound, "release checksum file sha256sums.txt was not found", nil)
 	}
 
+	signatureBundleAsset, ok := findAsset(release.Assets, checksumAsset.Name+".sigstore.json")
+	if !ok {
+		return Result{}, apperrors.New(apperrors.KindNotFound, "release signature bundle sha256sums.txt.sigstore.json was not found; use winget, scoop, or manual install", nil)
+	}
+
 	result.AssetName = asset.Name
 	result.AssetURL = asset.BrowserDownloadURL
 	result.ChecksumAssetName = checksumAsset.Name
+	result.SignatureBundleAssetName = signatureBundleAsset.Name
 	result.PlannedAction = plannedAction(goos)
 
 	checksumsRaw, err := runner.releases.Download(ctx, checksumAsset.BrowserDownloadURL)
 	if err != nil {
 		return Result{}, err
 	}
+	bundleRaw, err := runner.releases.Download(ctx, signatureBundleAsset.BrowserDownloadURL)
+	if err != nil {
+		return Result{}, err
+	}
+
+	signatureVerification, err := runner.verifier.VerifyBlob(ctx, checksumsRaw, bundleRaw)
+	if err != nil {
+		kind := apperrors.KindOf(err)
+		message := "failed to verify the signed release manifest; use winget, scoop, or manual install"
+		if kind == apperrors.KindTransient {
+			message = "failed to verify the signed release manifest right now; retry or use winget, scoop, or manual install"
+		}
+		return Result{}, apperrors.New(kind, message, err)
+	}
+	result.SignatureVerified = true
+	result.SignatureIdentity = signatureVerification.CertificateIdentity
+	result.SignatureIssuer = signatureVerification.CertificateOIDCIssuer
+	result.TransparencyLogVerified = signatureVerification.TransparencyLogEntriesVerified > 0
 
 	checksums, err := parseChecksums(checksumsRaw)
 	if err != nil {
