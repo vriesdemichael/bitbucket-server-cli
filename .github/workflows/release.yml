@@ -524,6 +524,8 @@ jobs:
         uses: vedantmgoyal9/winget-releaser@v2
         with:
           identifier: vriesdemichael.bb
+          release-tag: ${{ needs.determine-version.outputs.version }}
+          installers-regex: '^bb_.*_windows_(amd64|arm64)\.zip$'
           token: ${{ secrets.WINGET_TOKEN }}
 
   scoop-release:
