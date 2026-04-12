@@ -3,14 +3,21 @@ package cli
 import (
 	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"testing"
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	githubrelease "github.com/vriesdemichael/bitbucket-server-cli/internal/transport/githubrelease"
 	updateworkflow "github.com/vriesdemichael/bitbucket-server-cli/internal/workflows/update"
@@ -30,17 +37,54 @@ func (client updateCommandReleaseClient) Download(_ context.Context, assetURL st
 	return client.downloads[assetURL], nil
 }
 
+// cliTestKeyPair is an ECDSA P-256 key pair used in CLI-layer update tests to
+// produce valid cosign-compatible signatures without depending on the update
+// workflow's internal test helpers.
+type cliTestKeyPair struct {
+	publicKeyPEM []byte
+	privateKey   *ecdsa.PrivateKey
+}
+
+func newCliTestKeyPair(t *testing.T) cliTestKeyPair {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("newCliTestKeyPair: %v", err)
+	}
+	pubBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatalf("newCliTestKeyPair: marshal: %v", err)
+	}
+	return cliTestKeyPair{
+		publicKeyPEM: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}),
+		privateKey:   key,
+	}
+}
+
+func (kp cliTestKeyPair) sign(t *testing.T, content []byte) []byte {
+	t.Helper()
+	digest := sha256.Sum256(content)
+	sig, err := ecdsa.SignASN1(rand.Reader, kp.privateKey, digest[:])
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	return []byte(base64.StdEncoding.EncodeToString(sig))
+}
+
 func TestUpdateCommandJSONDryRun(t *testing.T) {
 	t.Setenv("BB_REQUEST_TIMEOUT", "")
 	t.Setenv("BB_CA_FILE", "")
 	t.Setenv("BB_INSECURE_SKIP_VERIFY", "")
+
+	kp := newCliTestKeyPair(t)
+	archiveChecksum := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	checksumContent := []byte(fmt.Sprintf("%s  %s\n", archiveChecksum, "bb_1.2.0_linux_amd64.tar.gz"))
 
 	originalFactory := updateRunnerFactory
 	defer func() {
 		updateRunnerFactory = originalFactory
 	}()
 
-	archiveChecksum := "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 	updateRunnerFactory = func(version string, httpConfig updateCommandHTTPConfig) *updateworkflow.Runner {
 		if httpConfig.requestTimeout != defaultUpdateRequestTimeout {
 			t.Fatalf("expected default request timeout, got %s", httpConfig.requestTimeout)
@@ -53,17 +97,20 @@ func TestUpdateCommandJSONDryRun(t *testing.T) {
 					Assets: []githubrelease.Asset{
 						{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/bb_1.2.0_linux_amd64.tar.gz"},
 						{Name: "sha256sums.txt", BrowserDownloadURL: "https://example.test/sha256sums.txt"},
+						{Name: "sha256sums.txt.sig", BrowserDownloadURL: "https://example.test/sha256sums.txt.sig"},
 					},
 				},
 				downloads: map[string][]byte{
-					"https://example.test/sha256sums.txt": []byte(fmt.Sprintf("%s  %s\n", archiveChecksum, "bb_1.2.0_linux_amd64.tar.gz")),
+					"https://example.test/sha256sums.txt":     checksumContent,
+					"https://example.test/sha256sums.txt.sig": kp.sign(t, checksumContent),
 				},
 			},
-			RepositoryOwner: "vriesdemichael",
-			RepositoryName:  "bitbucket-server-cli",
-			CurrentVersion:  func() string { return version },
-			ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
-			Platform:        func() (string, string) { return "linux", "amd64" },
+			RepositoryOwner:      "vriesdemichael",
+			RepositoryName:       "bitbucket-server-cli",
+			CurrentVersion:       func() string { return version },
+			ExecutablePath:       func() (string, error) { return "/tmp/bb", nil },
+			Platform:             func() (string, string) { return "linux", "amd64" },
+			ChecksumPublicKeyPEM: kp.publicKeyPEM,
 		})
 	}
 
@@ -101,6 +148,9 @@ func TestUpdateCommandJSONDryRun(t *testing.T) {
 	if result.AssetName != "bb_1.2.0_linux_amd64.tar.gz" {
 		t.Fatalf("expected asset name in result, got %+v", result)
 	}
+	if !result.SignatureVerified {
+		t.Fatalf("expected signature_verified in result, got %+v", result)
+	}
 }
 
 func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
@@ -120,6 +170,9 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 	})
 
 	t.Run("human dry run output", func(t *testing.T) {
+		kp := newCliTestKeyPair(t)
+		checksumContent := []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n")
+
 		originalFactory := updateRunnerFactory
 		defer func() {
 			updateRunnerFactory = originalFactory
@@ -137,17 +190,20 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 						Assets: []githubrelease.Asset{
 							{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/bb_1.2.0_linux_amd64.tar.gz"},
 							{Name: "sha256sums.txt", BrowserDownloadURL: "https://example.test/sha256sums.txt"},
+							{Name: "sha256sums.txt.sig", BrowserDownloadURL: "https://example.test/sha256sums.txt.sig"},
 						},
 					},
 					downloads: map[string][]byte{
-						"https://example.test/sha256sums.txt": []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n"),
+						"https://example.test/sha256sums.txt":     checksumContent,
+						"https://example.test/sha256sums.txt.sig": kp.sign(t, checksumContent),
 					},
 				},
-				RepositoryOwner: "vriesdemichael",
-				RepositoryName:  "bitbucket-server-cli",
-				CurrentVersion:  func() string { return version },
-				ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
-				Platform:        func() (string, string) { return "linux", "amd64" },
+				RepositoryOwner:      "vriesdemichael",
+				RepositoryName:       "bitbucket-server-cli",
+				CurrentVersion:       func() string { return version },
+				ExecutablePath:       func() (string, error) { return "/tmp/bb", nil },
+				Platform:             func() (string, string) { return "linux", "amd64" },
+				ChecksumPublicKeyPEM: kp.publicKeyPEM,
 			})
 		}
 
@@ -166,6 +222,9 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 		if !bytes.Contains(buffer.Bytes(), []byte("Dry-run (static, capability=full)")) || !bytes.Contains(buffer.Bytes(), []byte("Update available")) || !bytes.Contains(buffer.Bytes(), []byte("planned_action replace")) {
 			t.Fatalf("unexpected human output: %s", output)
 		}
+		if !bytes.Contains(buffer.Bytes(), []byte("signature sha256sums.txt.sig (verified)")) {
+			t.Fatalf("expected signature verified in output: %s", output)
+		}
 	})
 
 	t.Run("up to date human output", func(t *testing.T) {
@@ -182,8 +241,8 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 		buffer := &bytes.Buffer{}
 		command := &cobra.Command{}
 		command.SetOut(buffer)
-		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.1.0", LatestVersion: "v1.2.0", Applied: true, AssetName: "bb.tgz", InstallPath: "/tmp/bb", ChecksumAssetName: "sha256sums.txt", ChecksumVerified: true, ReleaseURL: "https://example.test/releases/v1.2.0"})
-		if !bytes.Contains(buffer.Bytes(), []byte("Updated bb")) || !bytes.Contains(buffer.Bytes(), []byte("checksum sha256sums.txt (verified)")) {
+		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.1.0", LatestVersion: "v1.2.0", Applied: true, AssetName: "bb.tgz", InstallPath: "/tmp/bb", ChecksumAssetName: "sha256sums.txt", ChecksumVerified: true, SignatureAssetName: "sha256sums.txt.sig", SignatureVerified: true, ReleaseURL: "https://example.test/releases/v1.2.0"})
+		if !bytes.Contains(buffer.Bytes(), []byte("Updated bb")) || !bytes.Contains(buffer.Bytes(), []byte("checksum sha256sums.txt (verified)")) || !bytes.Contains(buffer.Bytes(), []byte("signature sha256sums.txt.sig (verified)")) {
 			t.Fatalf("unexpected human output: %s", buffer.String())
 		}
 	})

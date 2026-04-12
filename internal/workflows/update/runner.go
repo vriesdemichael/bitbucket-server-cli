@@ -6,8 +6,12 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/ecdsa"
 	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/hex"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"io/fs"
@@ -21,6 +25,20 @@ import (
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	githubrelease "github.com/vriesdemichael/bitbucket-server-cli/internal/transport/githubrelease"
 )
+
+// embeddedCosignPublicKeyPEM is the ECDSA P-256 public key used to verify
+// the cosign signature on sha256sums.txt for each release. The corresponding
+// private key is stored as the COSIGN_PRIVATE_KEY GitHub Actions secret and
+// is never committed to the repository.
+//
+// To rotate the key: generate a new key pair, replace this constant with the
+// new public key, store the new private key as the COSIGN_PRIVATE_KEY secret,
+// and cut a new release.
+const embeddedCosignPublicKeyPEM = `-----BEGIN PUBLIC KEY-----
+MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEJIPtQPuffLo6RupWgwj1Mr7SKRD3
+wdS61XrtOXvMVxBDKAp2JS2vxKv02rMwc38bGyt30D4NlywI3nQiiXR5hg==
+-----END PUBLIC KEY-----
+`
 
 type ReleaseClient interface {
 	Latest(ctx context.Context, owner, repo string) (githubrelease.Release, error)
@@ -45,6 +63,8 @@ type Result struct {
 	ChecksumAssetName        string `json:"checksum_asset_name,omitempty"`
 	ChecksumAvailable        bool   `json:"checksum_available"`
 	ChecksumVerified         bool   `json:"checksum_verified"`
+	SignatureAssetName       string `json:"signature_asset_name,omitempty"`
+	SignatureVerified        bool   `json:"signature_verified"`
 	CurrentVersionComparable bool   `json:"current_version_comparable"`
 	LatestVersionComparable  bool   `json:"latest_version_comparable"`
 	TargetPlatform           string `json:"target_platform,omitempty"`
@@ -53,23 +73,27 @@ type Result struct {
 }
 
 type Runner struct {
-	releases       ReleaseClient
-	owner          string
-	repo           string
-	currentVersion func() string
-	executablePath func() (string, error)
-	platform       func() (string, string)
-	writeBinary    func(string, []byte, fs.FileMode) error
+	releases          ReleaseClient
+	owner             string
+	repo              string
+	currentVersion    func() string
+	executablePath    func() (string, error)
+	platform          func() (string, string)
+	writeBinary       func(string, []byte, fs.FileMode) error
+	checksumPublicKey []byte
 }
 
 type Dependencies struct {
-	Releases        ReleaseClient
-	RepositoryOwner string
-	RepositoryName  string
-	CurrentVersion  func() string
-	ExecutablePath  func() (string, error)
-	Platform        func() (string, string)
-	WriteBinary     func(string, []byte, fs.FileMode) error
+	Releases             ReleaseClient
+	RepositoryOwner      string
+	RepositoryName       string
+	CurrentVersion       func() string
+	ExecutablePath       func() (string, error)
+	Platform             func() (string, string)
+	WriteBinary          func(string, []byte, fs.FileMode) error
+	// ChecksumPublicKeyPEM overrides the embedded cosign public key. It is
+	// intended for testing only; leave nil in production to use the compiled-in key.
+	ChecksumPublicKeyPEM []byte
 }
 
 func NewRunner(deps Dependencies) *Runner {
@@ -93,14 +117,20 @@ func NewRunner(deps Dependencies) *Runner {
 		writeBinary = replaceBinary
 	}
 
+	checksumPublicKey := deps.ChecksumPublicKeyPEM
+	if len(checksumPublicKey) == 0 {
+		checksumPublicKey = []byte(embeddedCosignPublicKeyPEM)
+	}
+
 	return &Runner{
-		releases:       deps.Releases,
-		owner:          strings.TrimSpace(deps.RepositoryOwner),
-		repo:           strings.TrimSpace(deps.RepositoryName),
-		currentVersion: currentVersion,
-		executablePath: executablePath,
-		platform:       platform,
-		writeBinary:    writeBinary,
+		releases:          deps.Releases,
+		owner:             strings.TrimSpace(deps.RepositoryOwner),
+		repo:              strings.TrimSpace(deps.RepositoryName),
+		currentVersion:    currentVersion,
+		executablePath:    executablePath,
+		platform:          platform,
+		writeBinary:       writeBinary,
+		checksumPublicKey: checksumPublicKey,
 	}
 }
 
@@ -167,15 +197,31 @@ func (runner *Runner) Run(ctx context.Context, options Options) (Result, error) 
 		return Result{}, apperrors.New(apperrors.KindNotFound, "release checksum file sha256sums.txt was not found", nil)
 	}
 
+	sigAsset, ok := findAsset(release.Assets, "sha256sums.txt.sig")
+	if !ok {
+		return Result{}, apperrors.New(apperrors.KindNotFound, "release checksum signature sha256sums.txt.sig was not found; the release may predate signed checksums or the signature was not uploaded", nil)
+	}
+
 	result.AssetName = asset.Name
 	result.AssetURL = asset.BrowserDownloadURL
 	result.ChecksumAssetName = checksumAsset.Name
+	result.SignatureAssetName = sigAsset.Name
 	result.PlannedAction = plannedAction(goos)
 
 	checksumsRaw, err := runner.releases.Download(ctx, checksumAsset.BrowserDownloadURL)
 	if err != nil {
 		return Result{}, err
 	}
+
+	sigRaw, err := runner.releases.Download(ctx, sigAsset.BrowserDownloadURL)
+	if err != nil {
+		return Result{}, err
+	}
+
+	if err := verifyChecksumSignature(runner.checksumPublicKey, checksumsRaw, sigRaw); err != nil {
+		return Result{}, apperrors.New(apperrors.KindPermanent, "checksum signature verification failed: the sha256sums.txt signature is invalid", err)
+	}
+	result.SignatureVerified = true
 
 	checksums, err := parseChecksums(checksumsRaw)
 	if err != nil {
@@ -424,6 +470,39 @@ func replaceBinary(targetPath string, binary []byte, mode fs.FileMode) error {
 
 	cleanupTemp = false
 	_ = os.Remove(backupPath)
+	return nil
+}
+
+// verifyChecksumSignature verifies that signatureData is a valid cosign
+// (ECDSA P-256) signature over checksumContent using the embedded public key.
+// signatureData must be the base64-encoded DER ECDSA signature as produced by
+// "cosign sign-blob --output-signature".
+func verifyChecksumSignature(publicKeyPEM, checksumContent, signatureData []byte) error {
+	block, _ := pem.Decode(publicKeyPEM)
+	if block == nil {
+		return apperrors.New(apperrors.KindInternal, "failed to decode embedded public key PEM", nil)
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		return apperrors.New(apperrors.KindInternal, "failed to parse embedded public key", err)
+	}
+
+	ecKey, ok := pub.(*ecdsa.PublicKey)
+	if !ok {
+		return apperrors.New(apperrors.KindInternal, "embedded public key is not an ECDSA key", nil)
+	}
+
+	sig, err := base64.StdEncoding.DecodeString(strings.TrimSpace(string(signatureData)))
+	if err != nil {
+		return apperrors.New(apperrors.KindPermanent, "failed to decode checksum signature (expected base64)", err)
+	}
+
+	digest := sha256.Sum256(checksumContent)
+	if !ecdsa.VerifyASN1(ecKey, digest[:], sig) {
+		return apperrors.New(apperrors.KindPermanent, "ECDSA signature does not match", nil)
+	}
+
 	return nil
 }
 

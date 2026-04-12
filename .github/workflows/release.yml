@@ -472,6 +472,22 @@ jobs:
             find . -maxdepth 1 -type f ! -name 'sha256sums.txt' -print0 | sort -z | xargs -0 sha256sum > sha256sums.txt
           )
 
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign checksum manifest
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$COSIGN_PRIVATE_KEY" > /tmp/cosign.key
+          cosign sign-blob \
+            --key /tmp/cosign.key \
+            --output-signature dist/sha256sums.txt.sig \
+            dist/sha256sums.txt
+          rm -f /tmp/cosign.key
+
       - name: Generate GitHub provenance attestations
         uses: actions/attest-build-provenance@v2
         with:

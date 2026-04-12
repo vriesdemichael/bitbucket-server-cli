@@ -6,6 +6,13 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
+	"encoding/pem"
 	"fmt"
 	"io/fs"
 	"os"
@@ -15,6 +22,42 @@ import (
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	githubrelease "github.com/vriesdemichael/bitbucket-server-cli/internal/transport/githubrelease"
 )
+
+// testKeyPair holds a generated ECDSA P-256 key pair used in tests to produce
+// valid (or deliberately invalid) cosign-compatible signatures.
+type testKeyPair struct {
+	publicKeyPEM []byte
+	privateKey   *ecdsa.PrivateKey
+}
+
+// newTestKeyPair generates a fresh ECDSA P-256 key pair for a test.
+func newTestKeyPair(t *testing.T) testKeyPair {
+	t.Helper()
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatalf("newTestKeyPair: generate: %v", err)
+	}
+	pubBytes, err := x509.MarshalPKIXPublicKey(&key.PublicKey)
+	if err != nil {
+		t.Fatalf("newTestKeyPair: marshal public key: %v", err)
+	}
+	return testKeyPair{
+		publicKeyPEM: pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: pubBytes}),
+		privateKey:   key,
+	}
+}
+
+// sign produces a base64-encoded ECDSA P-256 signature over the SHA-256 hash
+// of content, matching the format written by "cosign sign-blob --output-signature".
+func (kp testKeyPair) sign(t *testing.T, content []byte) []byte {
+	t.Helper()
+	digest := sha256.Sum256(content)
+	sig, err := ecdsa.SignASN1(rand.Reader, kp.privateKey, digest[:])
+	if err != nil {
+		t.Fatalf("sign: %v", err)
+	}
+	return []byte(base64.StdEncoding.EncodeToString(sig))
+}
 
 type stubReleaseClient struct {
 	release       githubrelease.Release
@@ -39,6 +82,7 @@ func (stub *stubReleaseClient) Download(_ context.Context, assetURL string) ([]b
 }
 
 func TestRunnerDryRunPlansUpdateWithoutWritingBinary(t *testing.T) {
+	kp := newTestKeyPair(t)
 	archive := buildTarGzArchive(t, "bb", []byte("new-binary"))
 	checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_linux_amd64.tar.gz")
 
@@ -49,21 +93,24 @@ func TestRunnerDryRunPlansUpdateWithoutWritingBinary(t *testing.T) {
 			Assets: []githubrelease.Asset{
 				{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/bb_1.2.0_linux_amd64.tar.gz"},
 				{Name: "sha256sums.txt", BrowserDownloadURL: "https://example.test/sha256sums.txt"},
+				{Name: "sha256sums.txt.sig", BrowserDownloadURL: "https://example.test/sha256sums.txt.sig"},
 			},
 		},
 		downloads: map[string][]byte{
-			"https://example.test/sha256sums.txt": []byte(checksum),
+			"https://example.test/sha256sums.txt":     []byte(checksum),
+			"https://example.test/sha256sums.txt.sig": kp.sign(t, []byte(checksum)),
 		},
 	}
 
 	written := false
 	runner := NewRunner(Dependencies{
-		Releases:        client,
-		RepositoryOwner: "vriesdemichael",
-		RepositoryName:  "bitbucket-server-cli",
-		CurrentVersion:  func() string { return "v1.1.0" },
-		ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
-		Platform:        func() (string, string) { return "linux", "amd64" },
+		Releases:             client,
+		RepositoryOwner:      "vriesdemichael",
+		RepositoryName:       "bitbucket-server-cli",
+		CurrentVersion:       func() string { return "v1.1.0" },
+		ExecutablePath:       func() (string, error) { return "/tmp/bb", nil },
+		Platform:             func() (string, string) { return "linux", "amd64" },
+		ChecksumPublicKeyPEM: kp.publicKeyPEM,
 		WriteBinary: func(string, []byte, fs.FileMode) error {
 			written = true
 			return nil
@@ -83,12 +130,16 @@ func TestRunnerDryRunPlansUpdateWithoutWritingBinary(t *testing.T) {
 	if !result.ChecksumAvailable || result.ChecksumVerified {
 		t.Fatalf("expected checksum to be available but not verified, got %+v", result)
 	}
-	if len(client.downloadCalls) != 1 || client.downloadCalls[0] != "https://example.test/sha256sums.txt" {
+	if result.SignatureAssetName != "sha256sums.txt.sig" || !result.SignatureVerified {
+		t.Fatalf("expected signature to be verified, got %+v", result)
+	}
+	if len(client.downloadCalls) != 2 {
 		t.Fatalf("unexpected dry-run downloads: %+v", client.downloadCalls)
 	}
 }
 
 func TestRunnerAppliesReleaseUpdate(t *testing.T) {
+	kp := newTestKeyPair(t)
 	targetDir := t.TempDir()
 	targetPath := filepath.Join(targetDir, "bb")
 	if err := os.WriteFile(targetPath, []byte("old-binary"), 0o755); err != nil {
@@ -105,29 +156,32 @@ func TestRunnerAppliesReleaseUpdate(t *testing.T) {
 			Assets: []githubrelease.Asset{
 				{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/bb_1.2.0_linux_amd64.tar.gz"},
 				{Name: "sha256sums.txt", BrowserDownloadURL: "https://example.test/sha256sums.txt"},
+				{Name: "sha256sums.txt.sig", BrowserDownloadURL: "https://example.test/sha256sums.txt.sig"},
 			},
 		},
 		downloads: map[string][]byte{
 			"https://example.test/sha256sums.txt":              []byte(checksum),
+			"https://example.test/sha256sums.txt.sig":          kp.sign(t, []byte(checksum)),
 			"https://example.test/bb_1.2.0_linux_amd64.tar.gz": archive,
 		},
 	}
 
 	runner := NewRunner(Dependencies{
-		Releases:        client,
-		RepositoryOwner: "vriesdemichael",
-		RepositoryName:  "bitbucket-server-cli",
-		CurrentVersion:  func() string { return "v1.1.0" },
-		ExecutablePath:  func() (string, error) { return targetPath, nil },
-		Platform:        func() (string, string) { return "linux", "amd64" },
+		Releases:             client,
+		RepositoryOwner:      "vriesdemichael",
+		RepositoryName:       "bitbucket-server-cli",
+		CurrentVersion:       func() string { return "v1.1.0" },
+		ExecutablePath:       func() (string, error) { return targetPath, nil },
+		Platform:             func() (string, string) { return "linux", "amd64" },
+		ChecksumPublicKeyPEM: kp.publicKeyPEM,
 	})
 
 	result, err := runner.Run(context.Background(), Options{})
 	if err != nil {
 		t.Fatalf("Run returned error: %v", err)
 	}
-	if !result.Applied || !result.ChecksumVerified {
-		t.Fatalf("expected applied verified result, got %+v", result)
+	if !result.Applied || !result.ChecksumVerified || !result.SignatureVerified {
+		t.Fatalf("expected applied, checksum-verified, and signature-verified result, got %+v", result)
 	}
 	updated, err := os.ReadFile(targetPath)
 	if err != nil {
@@ -136,8 +190,8 @@ func TestRunnerAppliesReleaseUpdate(t *testing.T) {
 	if string(updated) != "new-binary" {
 		t.Fatalf("expected updated binary contents, got %q", string(updated))
 	}
-	if len(client.downloadCalls) != 2 {
-		t.Fatalf("expected two downloads, got %+v", client.downloadCalls)
+	if len(client.downloadCalls) != 3 {
+		t.Fatalf("expected three downloads, got %+v", client.downloadCalls)
 	}
 }
 
@@ -292,15 +346,32 @@ func TestRunnerValidationAndErrorPaths(t *testing.T) {
 }
 
 func TestRunnerUpdateErrorCases(t *testing.T) {
+	kp := newTestKeyPair(t)
+
 	baseRelease := githubrelease.Release{
 		TagName: "v1.2.0",
-		Assets: []githubrelease.Asset{{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "archive"}, {Name: "sha256sums.txt", BrowserDownloadURL: "checksums"}},
+		Assets: []githubrelease.Asset{
+			{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "archive"},
+			{Name: "sha256sums.txt", BrowserDownloadURL: "checksums"},
+			{Name: "sha256sums.txt.sig", BrowserDownloadURL: "sig"},
+		},
+	}
+
+	newRunner := func(client *stubReleaseClient) *Runner {
+		return NewRunner(Dependencies{
+			Releases:             client,
+			RepositoryOwner:      "vriesdemichael",
+			RepositoryName:       "bitbucket-server-cli",
+			CurrentVersion:       func() string { return "v1.1.0" },
+			ExecutablePath:       func() (string, error) { return "/tmp/bb", nil },
+			Platform:             func() (string, string) { return "linux", "amd64" },
+			ChecksumPublicKeyPEM: kp.publicKeyPEM,
+		})
 	}
 
 	t.Run("missing archive asset", func(t *testing.T) {
 		client := &stubReleaseClient{release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{{Name: "sha256sums.txt", BrowserDownloadURL: "checksums"}}}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }})
-		_, err := runner.Run(context.Background(), Options{})
+		_, err := newRunner(client).Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindNotFound) {
 			t.Fatalf("expected not found error, got %v", err)
 		}
@@ -308,17 +379,30 @@ func TestRunnerUpdateErrorCases(t *testing.T) {
 
 	t.Run("missing checksum asset", func(t *testing.T) {
 		client := &stubReleaseClient{release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "archive"}}}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }})
-		_, err := runner.Run(context.Background(), Options{})
+		_, err := newRunner(client).Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindNotFound) {
 			t.Fatalf("expected not found error, got %v", err)
 		}
 	})
 
+	t.Run("missing signature asset", func(t *testing.T) {
+		client := &stubReleaseClient{release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{
+			{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "archive"},
+			{Name: "sha256sums.txt", BrowserDownloadURL: "checksums"},
+		}}}
+		_, err := newRunner(client).Run(context.Background(), Options{})
+		if !apperrors.IsKind(err, apperrors.KindNotFound) {
+			t.Fatalf("expected not found error for missing signature, got %v", err)
+		}
+	})
+
 	t.Run("missing checksum entry", func(t *testing.T) {
-		client := &stubReleaseClient{release: baseRelease, downloads: map[string][]byte{"checksums": []byte("deadbeef  other.tar.gz\n")}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }})
-		_, err := runner.Run(context.Background(), Options{})
+		checksumContent := []byte("deadbeef  other.tar.gz\n")
+		client := &stubReleaseClient{release: baseRelease, downloads: map[string][]byte{
+			"checksums": checksumContent,
+			"sig":       kp.sign(t, checksumContent),
+		}}
+		_, err := newRunner(client).Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindPermanent) {
 			t.Fatalf("expected permanent error, got %v", err)
 		}
@@ -326,18 +410,68 @@ func TestRunnerUpdateErrorCases(t *testing.T) {
 
 	t.Run("checksum download failure", func(t *testing.T) {
 		client := &stubReleaseClient{release: baseRelease, downloadErrs: map[string]error{"checksums": apperrors.New(apperrors.KindTransient, "download failed", nil)}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }})
-		_, err := runner.Run(context.Background(), Options{})
+		_, err := newRunner(client).Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindTransient) {
 			t.Fatalf("expected transient error, got %v", err)
 		}
 	})
 
+	t.Run("signature download failure", func(t *testing.T) {
+		checksumContent := []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n")
+		client := &stubReleaseClient{
+			release: baseRelease,
+			downloads: map[string][]byte{
+				"checksums": checksumContent,
+			},
+			downloadErrs: map[string]error{"sig": apperrors.New(apperrors.KindTransient, "download failed", nil)},
+		}
+		_, err := newRunner(client).Run(context.Background(), Options{})
+		if !apperrors.IsKind(err, apperrors.KindTransient) {
+			t.Fatalf("expected transient error for signature download failure, got %v", err)
+		}
+	})
+
+	t.Run("invalid signature", func(t *testing.T) {
+		otherKP := newTestKeyPair(t)
+		checksumContent := []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n")
+		// Sign with a different key than the runner expects.
+		client := &stubReleaseClient{
+			release: baseRelease,
+			downloads: map[string][]byte{
+				"checksums": checksumContent,
+				"sig":       otherKP.sign(t, checksumContent),
+			},
+		}
+		_, err := newRunner(client).Run(context.Background(), Options{})
+		if !apperrors.IsKind(err, apperrors.KindPermanent) {
+			t.Fatalf("expected permanent error for invalid signature, got %v", err)
+		}
+	})
+
+	t.Run("malformed signature", func(t *testing.T) {
+		checksumContent := []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n")
+		client := &stubReleaseClient{
+			release: baseRelease,
+			downloads: map[string][]byte{
+				"checksums": checksumContent,
+				"sig":       []byte("not-valid-base64!!!"),
+			},
+		}
+		_, err := newRunner(client).Run(context.Background(), Options{})
+		if !apperrors.IsKind(err, apperrors.KindPermanent) {
+			t.Fatalf("expected permanent error for malformed signature, got %v", err)
+		}
+	})
+
 	t.Run("checksum mismatch", func(t *testing.T) {
+		checksumContent := []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n")
 		archive := buildTarGzArchive(t, "bb", []byte("new-binary"))
-		client := &stubReleaseClient{release: baseRelease, downloads: map[string][]byte{"checksums": []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n"), "archive": archive}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }})
-		_, err := runner.Run(context.Background(), Options{})
+		client := &stubReleaseClient{release: baseRelease, downloads: map[string][]byte{
+			"checksums": checksumContent,
+			"sig":       kp.sign(t, checksumContent),
+			"archive":   archive,
+		}}
+		_, err := newRunner(client).Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindPermanent) {
 			t.Fatalf("expected permanent error, got %v", err)
 		}
@@ -345,10 +479,13 @@ func TestRunnerUpdateErrorCases(t *testing.T) {
 
 	t.Run("archive download failure", func(t *testing.T) {
 		archive := buildTarGzArchive(t, "bb", []byte("new-binary"))
-		checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_linux_amd64.tar.gz")
-		client := &stubReleaseClient{release: baseRelease, downloads: map[string][]byte{"checksums": []byte(checksum)}, downloadErrs: map[string]error{"archive": apperrors.New(apperrors.KindTransient, "download failed", nil)}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }})
-		_, err := runner.Run(context.Background(), Options{})
+		checksumContent := []byte(fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_linux_amd64.tar.gz"))
+		client := &stubReleaseClient{
+			release:      baseRelease,
+			downloads:    map[string][]byte{"checksums": checksumContent, "sig": kp.sign(t, checksumContent)},
+			downloadErrs: map[string]error{"archive": apperrors.New(apperrors.KindTransient, "download failed", nil)},
+		}
+		_, err := newRunner(client).Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindTransient) {
 			t.Fatalf("expected transient error, got %v", err)
 		}
@@ -356,10 +493,13 @@ func TestRunnerUpdateErrorCases(t *testing.T) {
 
 	t.Run("archive extraction failure", func(t *testing.T) {
 		archive := []byte("not-an-archive")
-		checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_linux_amd64.tar.gz")
-		client := &stubReleaseClient{release: baseRelease, downloads: map[string][]byte{"checksums": []byte(checksum), "archive": archive}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }})
-		_, err := runner.Run(context.Background(), Options{})
+		checksumContent := []byte(fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_linux_amd64.tar.gz"))
+		client := &stubReleaseClient{release: baseRelease, downloads: map[string][]byte{
+			"checksums": checksumContent,
+			"sig":       kp.sign(t, checksumContent),
+			"archive":   archive,
+		}}
+		_, err := newRunner(client).Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindPermanent) {
 			t.Fatalf("expected permanent error, got %v", err)
 		}
@@ -367,9 +507,22 @@ func TestRunnerUpdateErrorCases(t *testing.T) {
 
 	t.Run("write binary error", func(t *testing.T) {
 		archive := buildTarGzArchive(t, "bb", []byte("new-binary"))
-		checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_linux_amd64.tar.gz")
-		client := &stubReleaseClient{release: baseRelease, downloads: map[string][]byte{"checksums": []byte(checksum), "archive": archive}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }, WriteBinary: func(string, []byte, fs.FileMode) error { return apperrors.New(apperrors.KindInternal, "write failed", nil) }})
+		checksumContent := []byte(fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_linux_amd64.tar.gz"))
+		client := &stubReleaseClient{release: baseRelease, downloads: map[string][]byte{
+			"checksums": checksumContent,
+			"sig":       kp.sign(t, checksumContent),
+			"archive":   archive,
+		}}
+		runner := NewRunner(Dependencies{
+			Releases:             client,
+			RepositoryOwner:      "vriesdemichael",
+			RepositoryName:       "bitbucket-server-cli",
+			CurrentVersion:       func() string { return "v1.1.0" },
+			ExecutablePath:       func() (string, error) { return "/tmp/bb", nil },
+			Platform:             func() (string, string) { return "linux", "amd64" },
+			ChecksumPublicKeyPEM: kp.publicKeyPEM,
+			WriteBinary:          func(string, []byte, fs.FileMode) error { return apperrors.New(apperrors.KindInternal, "write failed", nil) },
+		})
 		_, err := runner.Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindInternal) {
 			t.Fatalf("expected internal error, got %v", err)
@@ -378,15 +531,32 @@ func TestRunnerUpdateErrorCases(t *testing.T) {
 }
 
 func TestRunnerWindowsAndVersionComparisonPaths(t *testing.T) {
+	kp := newTestKeyPair(t)
+
 	t.Run("windows zip update", func(t *testing.T) {
 		archive := buildZipArchive(t, "bb.exe", []byte("windows-binary"))
-		checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_windows_amd64.zip")
-		client := &stubReleaseClient{release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{{Name: "bb_1.2.0_windows_amd64.zip", BrowserDownloadURL: "archive"}, {Name: "sha256sums.txt", BrowserDownloadURL: "checksums"}}}, downloads: map[string][]byte{"checksums": []byte(checksum), "archive": archive}}
+		checksumContent := []byte(fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_windows_amd64.zip"))
+		client := &stubReleaseClient{
+			release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{
+				{Name: "bb_1.2.0_windows_amd64.zip", BrowserDownloadURL: "archive"},
+				{Name: "sha256sums.txt", BrowserDownloadURL: "checksums"},
+				{Name: "sha256sums.txt.sig", BrowserDownloadURL: "sig"},
+			}},
+			downloads: map[string][]byte{"checksums": checksumContent, "sig": kp.sign(t, checksumContent), "archive": archive},
+		}
 		targetPath := filepath.Join(t.TempDir(), "bb.exe")
 		if err := os.WriteFile(targetPath, []byte("old"), 0o755); err != nil {
 			t.Fatalf("seed target: %v", err)
 		}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return targetPath, nil }, Platform: func() (string, string) { return "windows", "amd64" }})
+		runner := NewRunner(Dependencies{
+			Releases:             client,
+			RepositoryOwner:      "vriesdemichael",
+			RepositoryName:       "bitbucket-server-cli",
+			CurrentVersion:       func() string { return "v1.1.0" },
+			ExecutablePath:       func() (string, error) { return targetPath, nil },
+			Platform:             func() (string, string) { return "windows", "amd64" },
+			ChecksumPublicKeyPEM: kp.publicKeyPEM,
+		})
 		result, err := runner.Run(context.Background(), Options{DryRun: true})
 		if err != nil {
 			t.Fatalf("Run returned error: %v", err)
@@ -398,9 +568,24 @@ func TestRunnerWindowsAndVersionComparisonPaths(t *testing.T) {
 
 	t.Run("windows apply returns manual replacement error", func(t *testing.T) {
 		archive := buildZipArchive(t, "bb.exe", []byte("windows-binary"))
-		checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_windows_amd64.zip")
-		client := &stubReleaseClient{release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{{Name: "bb_1.2.0_windows_amd64.zip", BrowserDownloadURL: "archive"}, {Name: "sha256sums.txt", BrowserDownloadURL: "checksums"}}}, downloads: map[string][]byte{"checksums": []byte(checksum), "archive": archive}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb.exe", nil }, Platform: func() (string, string) { return "windows", "amd64" }})
+		checksumContent := []byte(fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_windows_amd64.zip"))
+		client := &stubReleaseClient{
+			release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{
+				{Name: "bb_1.2.0_windows_amd64.zip", BrowserDownloadURL: "archive"},
+				{Name: "sha256sums.txt", BrowserDownloadURL: "checksums"},
+				{Name: "sha256sums.txt.sig", BrowserDownloadURL: "sig"},
+			}},
+			downloads: map[string][]byte{"checksums": checksumContent, "sig": kp.sign(t, checksumContent), "archive": archive},
+		}
+		runner := NewRunner(Dependencies{
+			Releases:             client,
+			RepositoryOwner:      "vriesdemichael",
+			RepositoryName:       "bitbucket-server-cli",
+			CurrentVersion:       func() string { return "v1.1.0" },
+			ExecutablePath:       func() (string, error) { return "/tmp/bb.exe", nil },
+			Platform:             func() (string, string) { return "windows", "amd64" },
+			ChecksumPublicKeyPEM: kp.publicKeyPEM,
+		})
 		_, err := runner.Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindPermanent) {
 			t.Fatalf("expected permanent windows replacement error, got %v", err)
@@ -420,8 +605,24 @@ func TestRunnerWindowsAndVersionComparisonPaths(t *testing.T) {
 	})
 
 	t.Run("unknown current version", func(t *testing.T) {
-		client := &stubReleaseClient{release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "archive"}, {Name: "sha256sums.txt", BrowserDownloadURL: "checksums"}}}, downloads: map[string][]byte{"checksums": []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n")}}
-		runner := NewRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "dev" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }})
+		checksumContent := []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n")
+		client := &stubReleaseClient{
+			release: githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{
+				{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "archive"},
+				{Name: "sha256sums.txt", BrowserDownloadURL: "checksums"},
+				{Name: "sha256sums.txt.sig", BrowserDownloadURL: "sig"},
+			}},
+			downloads: map[string][]byte{"checksums": checksumContent, "sig": kp.sign(t, checksumContent)},
+		}
+		runner := NewRunner(Dependencies{
+			Releases:             client,
+			RepositoryOwner:      "vriesdemichael",
+			RepositoryName:       "bitbucket-server-cli",
+			CurrentVersion:       func() string { return "dev" },
+			ExecutablePath:       func() (string, error) { return "/tmp/bb", nil },
+			Platform:             func() (string, string) { return "linux", "amd64" },
+			ChecksumPublicKeyPEM: kp.publicKeyPEM,
+		})
 		result, err := runner.Run(context.Background(), Options{DryRun: true})
 		if err != nil {
 			t.Fatalf("Run returned error: %v", err)
@@ -556,6 +757,51 @@ func TestUpdateHelpers(t *testing.T) {
 	if files := SortedChecksumFiles(map[string]string{"b": "2", "a": "1"}); len(files) != 2 || files[0] != "a" || files[1] != "b" {
 		t.Fatalf("unexpected sorted files: %+v", files)
 	}
+}
+
+func TestVerifyChecksumSignature(t *testing.T) {
+	kp := newTestKeyPair(t)
+	content := []byte("abc123  file.tar.gz\n")
+	sig := kp.sign(t, content)
+
+	t.Run("valid signature", func(t *testing.T) {
+		if err := verifyChecksumSignature(kp.publicKeyPEM, content, sig); err != nil {
+			t.Fatalf("expected valid signature to pass, got %v", err)
+		}
+	})
+
+	t.Run("wrong key", func(t *testing.T) {
+		other := newTestKeyPair(t)
+		if err := verifyChecksumSignature(other.publicKeyPEM, content, sig); !apperrors.IsKind(err, apperrors.KindPermanent) {
+			t.Fatalf("expected permanent error for wrong key, got %v", err)
+		}
+	})
+
+	t.Run("tampered content", func(t *testing.T) {
+		if err := verifyChecksumSignature(kp.publicKeyPEM, []byte("tampered"), sig); !apperrors.IsKind(err, apperrors.KindPermanent) {
+			t.Fatalf("expected permanent error for tampered content, got %v", err)
+		}
+	})
+
+	t.Run("malformed base64", func(t *testing.T) {
+		if err := verifyChecksumSignature(kp.publicKeyPEM, content, []byte("!!!not-base64")); !apperrors.IsKind(err, apperrors.KindPermanent) {
+			t.Fatalf("expected permanent error for malformed base64, got %v", err)
+		}
+	})
+
+	t.Run("invalid public key PEM", func(t *testing.T) {
+		if err := verifyChecksumSignature([]byte("not-a-pem"), content, sig); !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal error for invalid PEM, got %v", err)
+		}
+	})
+
+	t.Run("non-ecdsa public key PEM", func(t *testing.T) {
+		// Construct a PEM block with invalid DER to force x509 parse failure.
+		badPEM := pem.EncodeToMemory(&pem.Block{Type: "PUBLIC KEY", Bytes: []byte("not-der")})
+		if err := verifyChecksumSignature(badPEM, content, sig); !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal error for unparseable key, got %v", err)
+		}
+	})
 }
 
 func TestReplaceBinary(t *testing.T) {
