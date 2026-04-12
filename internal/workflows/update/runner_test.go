@@ -10,6 +10,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
@@ -187,7 +188,81 @@ func TestRunnerAppliesReleaseUpdate(t *testing.T) {
 		t.Fatalf("expected updated binary contents, got %q", string(updated))
 	}
 	if len(client.downloadCalls) != 3 {
-		t.Fatalf("expected two downloads, got %+v", client.downloadCalls)
+		t.Fatalf("expected three downloads, got %+v", client.downloadCalls)
+	}
+}
+
+func TestNewRunnerDefaultsAndSignatureMetadata(t *testing.T) {
+	runner := NewRunner(Dependencies{
+		Releases:        &stubReleaseClient{},
+		RepositoryOwner: " vriesdemichael ",
+		RepositoryName:  " bitbucket-server-cli ",
+	})
+
+	if runner == nil {
+		t.Fatal("expected runner")
+	}
+	if runner.owner != "vriesdemichael" || runner.repo != "bitbucket-server-cli" {
+		t.Fatalf("expected trimmed repository metadata, got owner=%q repo=%q", runner.owner, runner.repo)
+	}
+	if runner.currentVersion() != "dev" {
+		t.Fatalf("expected default version to be dev, got %q", runner.currentVersion())
+	}
+	if runner.verifier == nil {
+		t.Fatal("expected default signature verifier")
+	}
+
+	if _, ok := runner.verifier.(*updatesigstore.Verifier); !ok {
+		t.Fatalf("expected GitHub release verifier, got %T", runner.verifier)
+	}
+}
+
+func TestRunnerDryRunCapturesSignatureMetadata(t *testing.T) {
+	archive := buildTarGzArchive(t, "bb", []byte("new-binary"))
+	checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_linux_amd64.tar.gz")
+	verifier := &stubSignatureVerifier{verification: updatesigstore.Verification{
+		CertificateIdentity:            "https://github.com/vriesdemichael/bitbucket-server-cli/.github/workflows/release.yml@refs/heads/main",
+		CertificateOIDCIssuer:          updatesigstore.GitHubActionsIssuer,
+		TransparencyLogEntriesVerified: 1,
+		VerifiedTimestampCount:         2,
+	}}
+
+	client := &stubReleaseClient{
+		release: releaseWithSignatureBundle(githubrelease.Release{
+			TagName: "v1.2.0",
+			HTMLURL: "https://example.test/releases/v1.2.0",
+			Assets: []githubrelease.Asset{
+				{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/bb_1.2.0_linux_amd64.tar.gz"},
+				{Name: "sha256sums.txt", BrowserDownloadURL: "https://example.test/sha256sums.txt"},
+			},
+		}),
+		downloads: downloadsWithSignatureBundle(map[string][]byte{
+			"https://example.test/sha256sums.txt": []byte(checksum),
+		}),
+	}
+
+	runner := newTestRunner(Dependencies{
+		Releases:        client,
+		RepositoryOwner: "vriesdemichael",
+		RepositoryName:  "bitbucket-server-cli",
+		CurrentVersion:  func() string { return "v1.1.0" },
+		ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
+		Platform:        func() (string, string) { return "linux", "amd64" },
+		Verifier:        verifier,
+	})
+
+	result, err := runner.Run(context.Background(), Options{DryRun: true})
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !result.SignatureVerified || !result.TransparencyLogVerified {
+		t.Fatalf("expected verified transparency metadata, got %+v", result)
+	}
+	if result.SignatureIdentity != verifier.verification.CertificateIdentity {
+		t.Fatalf("expected signature identity %q, got %+v", verifier.verification.CertificateIdentity, result)
+	}
+	if result.SignatureIssuer != verifier.verification.CertificateOIDCIssuer {
+		t.Fatalf("expected signature issuer %q, got %+v", verifier.verification.CertificateOIDCIssuer, result)
 	}
 }
 
@@ -339,6 +414,21 @@ func TestRunnerValidationAndErrorPaths(t *testing.T) {
 			t.Fatalf("expected internal error, got %v", err)
 		}
 	})
+
+	t.Run("signature verifier not configured", func(t *testing.T) {
+		runner := newTestRunner(Dependencies{
+			Releases:        &stubReleaseClient{release: githubrelease.Release{TagName: "v1.2.0"}},
+			RepositoryOwner: "vriesdemichael",
+			RepositoryName:  "bitbucket-server-cli",
+			CurrentVersion:  func() string { return "v1.1.0" },
+			ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
+		})
+		runner.verifier = nil
+		_, err := runner.Run(context.Background(), Options{})
+		if !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal error, got %v", err)
+		}
+	})
 }
 
 func TestRunnerUpdateErrorCases(t *testing.T) {
@@ -408,6 +498,18 @@ func TestRunnerUpdateErrorCases(t *testing.T) {
 		_, err := runner.Run(context.Background(), Options{})
 		if !apperrors.IsKind(err, apperrors.KindPermanent) {
 			t.Fatalf("expected permanent error, got %v", err)
+		}
+	})
+
+	t.Run("transient signature verification failure", func(t *testing.T) {
+		client := &stubReleaseClient{release: baseRelease, downloads: downloadsWithSignatureBundle(map[string][]byte{"checksums": []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n")})}
+		runner := newTestRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb", nil }, Platform: func() (string, string) { return "linux", "amd64" }, Verifier: &stubSignatureVerifier{err: apperrors.New(apperrors.KindTransient, "try later", nil)}})
+		_, err := runner.Run(context.Background(), Options{})
+		if !apperrors.IsKind(err, apperrors.KindTransient) {
+			t.Fatalf("expected transient error, got %v", err)
+		}
+		if err == nil || !strings.Contains(err.Error(), "retry or use winget, scoop, or manual install") {
+			t.Fatalf("expected retry guidance in error, got %v", err)
 		}
 	})
 

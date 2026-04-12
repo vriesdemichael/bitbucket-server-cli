@@ -203,7 +203,17 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 		command := &cobra.Command{}
 		command.SetOut(buffer)
 		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.1.0", LatestVersion: "v1.2.0", Applied: true, AssetName: "bb.tgz", InstallPath: "/tmp/bb", ChecksumAssetName: "sha256sums.txt", ChecksumVerified: true, SignatureBundleAssetName: "sha256sums.txt.sigstore.json", SignatureVerified: true, SignatureIdentity: "https://github.com/vriesdemichael/bitbucket-server-cli/.github/workflows/release.yml@refs/heads/main", ReleaseURL: "https://example.test/releases/v1.2.0"})
-		if !bytes.Contains(buffer.Bytes(), []byte("Updated bb")) || !bytes.Contains(buffer.Bytes(), []byte("checksum sha256sums.txt (verified)")) || !bytes.Contains(buffer.Bytes(), []byte("provenance sha256sums.txt.sigstore.json (verified via sigstore keyless + rekor)")) {
+		if !bytes.Contains(buffer.Bytes(), []byte("Updated bb")) || !bytes.Contains(buffer.Bytes(), []byte("checksum sha256sums.txt (verified)")) || !bytes.Contains(buffer.Bytes(), []byte("provenance sha256sums.txt.sigstore.json (verified via sigstore keyless + rekor)")) || !bytes.Contains(buffer.Bytes(), []byte("signed_by https://github.com/vriesdemichael/bitbucket-server-cli/.github/workflows/release.yml@refs/heads/main")) {
+			t.Fatalf("unexpected human output: %s", buffer.String())
+		}
+	})
+
+	t.Run("provenance available without verification output", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		command := &cobra.Command{}
+		command.SetOut(buffer)
+		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.1.0", LatestVersion: "v1.2.0", Applied: true, AssetName: "bb.tgz", InstallPath: "/tmp/bb", SignatureBundleAssetName: "sha256sums.txt.sigstore.json"})
+		if !bytes.Contains(buffer.Bytes(), []byte("provenance sha256sums.txt.sigstore.json (available)")) {
 			t.Fatalf("unexpected human output: %s", buffer.String())
 		}
 	})

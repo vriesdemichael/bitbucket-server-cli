@@ -52,6 +52,71 @@ func TestVerifierVerifyEntity(t *testing.T) {
 	}
 }
 
+func TestNewVerifierDefaults(t *testing.T) {
+	verifier := NewVerifier(Options{ExpectedIssuer: " https://issuer.example ", ExpectedSAN: " https://san.example "})
+	if verifier == nil {
+		t.Fatal("expected verifier")
+	}
+	if verifier.expectedIssuer != "https://issuer.example" {
+		t.Fatalf("expected trimmed issuer, got %q", verifier.expectedIssuer)
+	}
+	if verifier.expectedSAN != "https://san.example" {
+		t.Fatalf("expected trimmed san, got %q", verifier.expectedSAN)
+	}
+	if verifier.trustedMaterialProvider == nil {
+		t.Fatal("expected trusted material provider")
+	}
+	if len(verifier.verifierOptions) != 3 {
+		t.Fatalf("expected default verifier options, got %d", len(verifier.verifierOptions))
+	}
+}
+
+func TestNewVerifierUsesExplicitProviderAndOptions(t *testing.T) {
+	providerCalls := 0
+	provider := func(context.Context) (sigroot.TrustedMaterial, error) {
+		providerCalls++
+		return nil, nil
+	}
+	options := []sigverify.VerifierOption{sigverify.WithTransparencyLog(1)}
+
+	verifier := NewVerifier(Options{
+		ExpectedIssuer:          GitHubActionsIssuer,
+		ExpectedSAN:             "https://github.com/example/repo/.github/workflows/release.yml@refs/heads/main",
+		TrustedMaterialProvider: provider,
+		VerifierOptions:         options,
+	})
+
+	if verifier.trustedMaterialProvider == nil {
+		t.Fatal("expected trusted material provider")
+	}
+	if got := len(verifier.verifierOptions); got != len(options) {
+		t.Fatalf("expected %d verifier options, got %d", len(options), got)
+	}
+	if verifier.expectedIssuer != GitHubActionsIssuer {
+		t.Fatalf("unexpected issuer: %q", verifier.expectedIssuer)
+	}
+	if _, err := verifier.trustedMaterialProvider(context.Background()); err != nil {
+		t.Fatalf("trustedMaterialProvider returned error: %v", err)
+	}
+	if providerCalls != 1 {
+		t.Fatalf("expected provider to be invoked once, got %d", providerCalls)
+	}
+}
+
+func TestNewGitHubReleaseVerifier(t *testing.T) {
+	verifier := NewGitHubReleaseVerifier(" vriesdemichael ", " bitbucket-server-cli ")
+	if verifier == nil {
+		t.Fatal("expected verifier")
+	}
+	if verifier.expectedIssuer != GitHubActionsIssuer {
+		t.Fatalf("expected GitHub issuer, got %q", verifier.expectedIssuer)
+	}
+	expectedSAN := "https://github.com/vriesdemichael/bitbucket-server-cli/.github/workflows/release.yml@refs/heads/main"
+	if verifier.expectedSAN != expectedSAN {
+		t.Fatalf("expected SAN %q, got %q", expectedSAN, verifier.expectedSAN)
+	}
+}
+
 func TestVerifierVerifyBlobErrors(t *testing.T) {
 	t.Run("nil verifier", func(t *testing.T) {
 		var verifier *Verifier
@@ -66,6 +131,30 @@ func TestVerifierVerifyBlobErrors(t *testing.T) {
 		_, err := verifier.VerifyBlob(context.Background(), []byte("artifact"), []byte("not-json"))
 		if !apperrors.IsKind(err, apperrors.KindPermanent) {
 			t.Fatalf("expected permanent error, got %v", err)
+		}
+	})
+
+	t.Run("missing artifact content", func(t *testing.T) {
+		verifier := NewVerifier(Options{ExpectedIssuer: GitHubActionsIssuer, ExpectedSAN: "san"})
+		_, err := verifier.VerifyBlob(context.Background(), nil, []byte("bundle"))
+		if !apperrors.IsKind(err, apperrors.KindValidation) {
+			t.Fatalf("expected validation error, got %v", err)
+		}
+	})
+
+	t.Run("missing bundle content", func(t *testing.T) {
+		verifier := NewVerifier(Options{ExpectedIssuer: GitHubActionsIssuer, ExpectedSAN: "san"})
+		_, err := verifier.VerifyBlob(context.Background(), []byte("artifact"), nil)
+		if !apperrors.IsKind(err, apperrors.KindValidation) {
+			t.Fatalf("expected validation error, got %v", err)
+		}
+	})
+
+	t.Run("missing expected identity configuration", func(t *testing.T) {
+		verifier := NewVerifier(Options{})
+		_, err := verifier.VerifyBlob(context.Background(), []byte("artifact"), []byte("bundle"))
+		if !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal error, got %v", err)
 		}
 	})
 
@@ -120,4 +209,37 @@ func TestVerifierVerifyBlobErrors(t *testing.T) {
 			t.Fatalf("expected permanent error, got %v", err)
 		}
 	})
+
+	t.Run("nil signed entity", func(t *testing.T) {
+		verifier := NewVerifier(Options{ExpectedIssuer: GitHubActionsIssuer, ExpectedSAN: "san", TrustedMaterialProvider: func(context.Context) (sigroot.TrustedMaterial, error) {
+			virtualSigstore, err := ca.NewVirtualSigstore()
+			if err != nil {
+				t.Fatalf("NewVirtualSigstore returned error: %v", err)
+			}
+			return virtualSigstore, nil
+		}})
+		_, err := verifier.verifyEntity(context.Background(), nil, sigverify.WithArtifact(bytes.NewReader([]byte("artifact"))))
+		if !apperrors.IsKind(err, apperrors.KindValidation) {
+			t.Fatalf("expected validation error, got %v", err)
+		}
+	})
+
+	t.Run("missing trusted material provider", func(t *testing.T) {
+		verifier := &Verifier{expectedIssuer: GitHubActionsIssuer, expectedSAN: "san"}
+		_, err := verifier.verifyEntity(context.Background(), nil, sigverify.WithArtifact(bytes.NewReader([]byte("artifact"))))
+		if !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal error, got %v", err)
+		}
+	})
+
+	t.Run("missing expected identity configuration in verifyEntity", func(t *testing.T) {
+		verifier := &Verifier{
+			trustedMaterialProvider: func(context.Context) (sigroot.TrustedMaterial, error) { return nil, nil },
+		}
+		_, err := verifier.verifyEntity(context.Background(), nil, sigverify.WithArtifact(bytes.NewReader([]byte("artifact"))))
+		if !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal error, got %v", err)
+		}
+	})
+
 }
