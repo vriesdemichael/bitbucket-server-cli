@@ -13,6 +13,7 @@ import (
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/jsonoutput"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	githubrelease "github.com/vriesdemichael/bitbucket-server-cli/internal/transport/githubrelease"
+	updatesigstore "github.com/vriesdemichael/bitbucket-server-cli/internal/transport/sigstore"
 	updateworkflow "github.com/vriesdemichael/bitbucket-server-cli/internal/workflows/update"
 )
 
@@ -28,6 +29,21 @@ func (client updateCommandReleaseClient) Latest(context.Context, string, string)
 
 func (client updateCommandReleaseClient) Download(_ context.Context, assetURL string) ([]byte, error) {
 	return client.downloads[assetURL], nil
+}
+
+type updateCommandSignatureVerifier struct{}
+
+func (updateCommandSignatureVerifier) VerifyBlob(context.Context, []byte, []byte) (updatesigstore.Verification, error) {
+	return updatesigstore.Verification{
+		CertificateIdentity:            "https://github.com/vriesdemichael/bitbucket-server-cli/.github/workflows/release.yml@refs/heads/main",
+		CertificateOIDCIssuer:          updatesigstore.GitHubActionsIssuer,
+		TransparencyLogEntriesVerified: 1,
+		VerifiedTimestampCount:         1,
+	}, nil
+}
+
+func releaseAssetsWithBundle(assets []githubrelease.Asset) []githubrelease.Asset {
+	return append(assets, githubrelease.Asset{Name: "sha256sums.txt.sigstore.json", BrowserDownloadURL: "https://example.test/sha256sums.txt.sigstore.json"})
 }
 
 func TestUpdateCommandJSONDryRun(t *testing.T) {
@@ -50,13 +66,14 @@ func TestUpdateCommandJSONDryRun(t *testing.T) {
 				release: githubrelease.Release{
 					TagName: "v1.2.0",
 					HTMLURL: "https://example.test/releases/v1.2.0",
-					Assets: []githubrelease.Asset{
+					Assets: releaseAssetsWithBundle([]githubrelease.Asset{
 						{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/bb_1.2.0_linux_amd64.tar.gz"},
 						{Name: "sha256sums.txt", BrowserDownloadURL: "https://example.test/sha256sums.txt"},
-					},
+					}),
 				},
 				downloads: map[string][]byte{
 					"https://example.test/sha256sums.txt": []byte(fmt.Sprintf("%s  %s\n", archiveChecksum, "bb_1.2.0_linux_amd64.tar.gz")),
+					"https://example.test/sha256sums.txt.sigstore.json": []byte("bundle"),
 				},
 			},
 			RepositoryOwner: "vriesdemichael",
@@ -64,6 +81,7 @@ func TestUpdateCommandJSONDryRun(t *testing.T) {
 			CurrentVersion:  func() string { return version },
 			ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
 			Platform:        func() (string, string) { return "linux", "amd64" },
+			Verifier:        updateCommandSignatureVerifier{},
 		})
 	}
 
@@ -134,13 +152,14 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 					release: githubrelease.Release{
 						TagName: "v1.2.0",
 						HTMLURL: "https://example.test/releases/v1.2.0",
-						Assets: []githubrelease.Asset{
+						Assets: releaseAssetsWithBundle([]githubrelease.Asset{
 							{Name: "bb_1.2.0_linux_amd64.tar.gz", BrowserDownloadURL: "https://example.test/bb_1.2.0_linux_amd64.tar.gz"},
 							{Name: "sha256sums.txt", BrowserDownloadURL: "https://example.test/sha256sums.txt"},
-						},
+						}),
 					},
 					downloads: map[string][]byte{
 						"https://example.test/sha256sums.txt": []byte("deadbeef  bb_1.2.0_linux_amd64.tar.gz\n"),
+						"https://example.test/sha256sums.txt.sigstore.json": []byte("bundle"),
 					},
 				},
 				RepositoryOwner: "vriesdemichael",
@@ -148,6 +167,7 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 				CurrentVersion:  func() string { return version },
 				ExecutablePath:  func() (string, error) { return "/tmp/bb", nil },
 				Platform:        func() (string, string) { return "linux", "amd64" },
+				Verifier:        updateCommandSignatureVerifier{},
 			})
 		}
 
@@ -182,8 +202,8 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 		buffer := &bytes.Buffer{}
 		command := &cobra.Command{}
 		command.SetOut(buffer)
-		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.1.0", LatestVersion: "v1.2.0", Applied: true, AssetName: "bb.tgz", InstallPath: "/tmp/bb", ChecksumAssetName: "sha256sums.txt", ChecksumVerified: true, ReleaseURL: "https://example.test/releases/v1.2.0"})
-		if !bytes.Contains(buffer.Bytes(), []byte("Updated bb")) || !bytes.Contains(buffer.Bytes(), []byte("checksum sha256sums.txt (verified)")) {
+		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.1.0", LatestVersion: "v1.2.0", Applied: true, AssetName: "bb.tgz", InstallPath: "/tmp/bb", ChecksumAssetName: "sha256sums.txt", ChecksumVerified: true, SignatureBundleAssetName: "sha256sums.txt.sigstore.json", SignatureVerified: true, SignatureIdentity: "https://github.com/vriesdemichael/bitbucket-server-cli/.github/workflows/release.yml@refs/heads/main", ReleaseURL: "https://example.test/releases/v1.2.0"})
+		if !bytes.Contains(buffer.Bytes(), []byte("Updated bb")) || !bytes.Contains(buffer.Bytes(), []byte("checksum sha256sums.txt (verified)")) || !bytes.Contains(buffer.Bytes(), []byte("provenance sha256sums.txt.sigstore.json (verified via sigstore keyless + rekor)")) {
 			t.Fatalf("unexpected human output: %s", buffer.String())
 		}
 	})
