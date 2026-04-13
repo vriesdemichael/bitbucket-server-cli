@@ -550,7 +550,7 @@ jobs:
     steps:
       - name: Sync WinGet fork with upstream
         env:
-          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
           set -euo pipefail
           gh api \
@@ -561,14 +561,14 @@ jobs:
 
       - name: Verify WinGet fork is current
         env:
-          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
         run: |
           set -euo pipefail
           upstream_sha=$(gh api /repos/microsoft/winget-pkgs/branches/master --jq '.commit.sha')
           fork_sha=$(gh api /repos/vriesdemichael/winget-pkgs/branches/master --jq '.commit.sha')
 
           if [[ "$fork_sha" != "$upstream_sha" ]]; then
-            echo "WinGet fork is still behind upstream after merge-upstream."
+            echo "WinGet fork master does not exactly match upstream master after merge-upstream."
             echo "upstream master: $upstream_sha"
             echo "fork master:     $fork_sha"
             exit 1
