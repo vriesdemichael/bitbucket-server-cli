@@ -548,6 +548,32 @@ jobs:
     permissions:
       contents: read
     steps:
+      - name: Sync WinGet fork with upstream
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -euo pipefail
+          gh api \
+            --method POST \
+            -H "Accept: application/vnd.github+json" \
+            /repos/vriesdemichael/winget-pkgs/merge-upstream \
+            -f branch=master
+
+      - name: Verify WinGet fork is current
+        env:
+          GH_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          set -euo pipefail
+          upstream_sha=$(gh api /repos/microsoft/winget-pkgs/branches/master --jq '.commit.sha')
+          fork_sha=$(gh api /repos/vriesdemichael/winget-pkgs/branches/master --jq '.commit.sha')
+
+          if [[ "$fork_sha" != "$upstream_sha" ]]; then
+            echo "WinGet fork is still behind upstream after merge-upstream."
+            echo "upstream master: $upstream_sha"
+            echo "fork master:     $fork_sha"
+            exit 1
+          fi
+
       - name: Publish to WinGet
         uses: vedantmgoyal9/winget-releaser@v2
         with:
