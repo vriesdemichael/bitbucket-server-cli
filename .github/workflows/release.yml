@@ -494,6 +494,7 @@ jobs:
             fi
             cosign sign-blob \
               --yes \
+              --new-bundle-format \
               --bundle "${file}.sigstore.json" \
               --output-signature "${file}.sig" \
               --output-certificate "${file}.pem" \
