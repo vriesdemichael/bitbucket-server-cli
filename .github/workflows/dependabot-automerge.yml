@@ -1,0 +1,122 @@
+name: "Dependabot Auto Merge"
+
+"on":
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  approve-and-enable-automerge:
+    name: Approve and enable auto-merge
+    if: >
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve pull request metadata
+        id: pr
+        uses: actions/github-script@v7
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const run = context.payload.workflow_run;
+            const prs = run.pull_requests || [];
+
+            if (prs.length === 0) {
+              core.notice('No pull request is associated with this workflow run.');
+              core.setOutput('should_merge', 'false');
+              return;
+            }
+
+            const prNumber = prs[0].number;
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: prNumber,
+            });
+
+            const isDependabot = pr.user?.login === 'dependabot[bot]';
+            const isCurrentHead = pr.head?.sha === run.head_sha;
+            const isOpen = pr.state === 'open';
+            const isDraft = Boolean(pr.draft);
+            const shouldMerge = isDependabot && isCurrentHead && isOpen && !isDraft;
+
+            core.setOutput('should_merge', shouldMerge ? 'true' : 'false');
+            core.setOutput('number', String(pr.number));
+            core.setOutput('node_id', pr.node_id);
+            core.setOutput('url', pr.html_url);
+            core.setOutput('auto_merge_enabled', pr.auto_merge ? 'true' : 'false');
+
+            if (!isDependabot) {
+              core.notice(`PR #${pr.number} is authored by ${pr.user?.login || 'unknown'}, not Dependabot.`);
+              return;
+            }
+
+            if (!isCurrentHead) {
+              core.notice(`PR #${pr.number} has moved past workflow run head ${run.head_sha}; skipping stale run.`);
+              return;
+            }
+
+            if (!isOpen || isDraft) {
+              core.notice(`PR #${pr.number} is not mergeable by automation in its current state.`);
+            }
+
+      - name: Approve Dependabot pull request
+        if: steps.pr.outputs.should_merge == 'true'
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            try {
+              await github.rest.pulls.createReview({
+                ...context.repo,
+                pull_number: Number(process.env.PR_NUMBER),
+                event: 'APPROVE',
+              });
+              core.notice(`Approved PR #${process.env.PR_NUMBER}.`);
+            } catch (error) {
+              if (error.status === 422) {
+                core.notice(`Approval skipped for PR #${process.env.PR_NUMBER}: ${error.message}`);
+                return;
+              }
+
+              throw error;
+            }
+
+      - name: Enable rebase auto-merge
+        if: steps.pr.outputs.should_merge == 'true' && steps.pr.outputs.auto_merge_enabled != 'true'
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.number }}
+          PR_NODE_ID: ${{ steps.pr.outputs.node_id }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            await github.graphql(
+              `mutation EnableAutoMerge($pullRequestId: ID!) {
+                enablePullRequestAutoMerge(input: {
+                  pullRequestId: $pullRequestId,
+                  mergeMethod: REBASE
+                }) {
+                  pullRequest {
+                    number
+                  }
+                }
+              }`,
+              {
+                pullRequestId: process.env.PR_NODE_ID,
+              }
+            );
+
+            core.notice(`Enabled rebase auto-merge for PR #${process.env.PR_NUMBER}.`);
+
+      - name: Report existing auto-merge state
+        if: steps.pr.outputs.should_merge == 'true' && steps.pr.outputs.auto_merge_enabled == 'true'
+        run: echo "Auto-merge was already enabled for PR #${{ steps.pr.outputs.number }}."
