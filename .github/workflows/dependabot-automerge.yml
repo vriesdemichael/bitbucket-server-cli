@@ -48,9 +48,6 @@ jobs:
 
             core.setOutput('should_merge', shouldMerge ? 'true' : 'false');
             core.setOutput('number', String(pr.number));
-            core.setOutput('node_id', pr.node_id);
-            core.setOutput('url', pr.html_url);
-            core.setOutput('auto_merge_enabled', pr.auto_merge ? 'true' : 'false');
 
             if (!isDependabot) {
               core.notice(`PR #${pr.number} is authored by ${pr.user?.login || 'unknown'}, not Dependabot.`);
@@ -74,16 +71,33 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            const expectedHeadSha = context.payload.workflow_run.head_sha;
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: prNumber,
+            });
+
+            if (pr.state !== 'open') {
+              core.notice(`Approval skipped for PR #${prNumber}: PR is no longer open.`);
+              return;
+            }
+
+            if (pr.head?.sha !== expectedHeadSha) {
+              core.notice(`Approval skipped for PR #${prNumber}: PR head ${pr.head?.sha || 'unknown'} no longer matches workflow run head ${expectedHeadSha}.`);
+              return;
+            }
+
             try {
               await github.rest.pulls.createReview({
                 ...context.repo,
-                pull_number: Number(process.env.PR_NUMBER),
+                pull_number: prNumber,
                 event: 'APPROVE',
               });
-              core.notice(`Approved PR #${process.env.PR_NUMBER}.`);
+              core.notice(`Approved PR #${prNumber}.`);
             } catch (error) {
               if (error.status === 422) {
-                core.notice(`Approval skipped for PR #${process.env.PR_NUMBER}: ${error.message}`);
+                core.notice(`Approval skipped for PR #${prNumber}: ${error.message}`);
                 return;
               }
 
@@ -91,14 +105,35 @@ jobs:
             }
 
       - name: Enable rebase auto-merge
-        if: steps.pr.outputs.should_merge == 'true' && steps.pr.outputs.auto_merge_enabled != 'true'
+        if: steps.pr.outputs.should_merge == 'true'
         uses: actions/github-script@v7
         env:
           PR_NUMBER: ${{ steps.pr.outputs.number }}
-          PR_NODE_ID: ${{ steps.pr.outputs.node_id }}
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
+            const prNumber = Number(process.env.PR_NUMBER);
+            const expectedHeadSha = context.payload.workflow_run.head_sha;
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo,
+              pull_number: prNumber,
+            });
+
+            if (pr.state !== 'open') {
+              core.notice(`Auto-merge skipped for PR #${prNumber}: PR is no longer open.`);
+              return;
+            }
+
+            if (pr.head?.sha !== expectedHeadSha) {
+              core.notice(`Auto-merge skipped for PR #${prNumber}: PR head ${pr.head?.sha || 'unknown'} no longer matches workflow run head ${expectedHeadSha}.`);
+              return;
+            }
+
+            if (pr.auto_merge) {
+              core.notice(`Auto-merge was already enabled for PR #${prNumber}.`);
+              return;
+            }
+
             await github.graphql(
               `mutation EnableAutoMerge($pullRequestId: ID!) {
                 enablePullRequestAutoMerge(input: {
@@ -111,12 +146,8 @@ jobs:
                 }
               }`,
               {
-                pullRequestId: process.env.PR_NODE_ID,
+                pullRequestId: pr.node_id,
               }
             );
 
-            core.notice(`Enabled rebase auto-merge for PR #${process.env.PR_NUMBER}.`);
-
-      - name: Report existing auto-merge state
-        if: steps.pr.outputs.should_merge == 'true' && steps.pr.outputs.auto_merge_enabled == 'true'
-        run: echo "Auto-merge was already enabled for PR #${{ steps.pr.outputs.number }}."
+            core.notice(`Enabled rebase auto-merge for PR #${prNumber}.`);
