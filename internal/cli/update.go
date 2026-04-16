@@ -121,6 +121,10 @@ func writeUpdateHuman(cmd *cobra.Command, result updateworkflow.Result) {
 	switch {
 	case result.UpToDate:
 		fmt.Fprintf(writer, "%s %s\n", style.Success.Render("bb is up to date"), style.Resource.Render(result.CurrentVersion))
+	case result.Scheduled:
+		fmt.Fprintf(writer, "%s %s %s %s\n", style.Updated.Render("Scheduled bb update"), style.Secondary.Render(result.CurrentVersion), style.Secondary.Render("->"), style.Resource.Render(result.LatestVersion))
+	case result.Staged:
+		fmt.Fprintf(writer, "%s %s %s %s\n", style.Updated.Render("Staged bb update"), style.Secondary.Render(result.CurrentVersion), style.Secondary.Render("->"), style.Resource.Render(result.LatestVersion))
 	case result.Applied:
 		fmt.Fprintf(writer, "%s %s %s %s\n", style.Updated.Render("Updated bb"), style.Secondary.Render(result.CurrentVersion), style.Secondary.Render("->"), style.Resource.Render(result.LatestVersion))
 	case result.UpdateAvailable:
@@ -134,6 +138,12 @@ func writeUpdateHuman(cmd *cobra.Command, result updateworkflow.Result) {
 	}
 	if result.InstallPath != "" {
 		fmt.Fprintf(writer, "%s %s\n", style.Secondary.Render("install_path"), result.InstallPath)
+	}
+	if result.StagedPath != "" {
+		fmt.Fprintf(writer, "%s %s\n", style.Secondary.Render("staged_path"), result.StagedPath)
+	}
+	if result.SwapResultPath != "" {
+		fmt.Fprintf(writer, "%s %s\n", style.Secondary.Render("swap_result_path"), result.SwapResultPath)
 	}
 	if result.ChecksumAssetName != "" {
 		status := "available"
@@ -155,7 +165,7 @@ func writeUpdateHuman(cmd *cobra.Command, result updateworkflow.Result) {
 	if result.ReleaseURL != "" {
 		fmt.Fprintf(writer, "%s %s\n", style.Secondary.Render("release"), result.ReleaseURL)
 	}
-	if result.DryRun && result.PlannedAction != "" {
+	if result.PlannedAction != "" && (result.DryRun || result.Staged || result.Scheduled) {
 		fmt.Fprintf(writer, "%s %s\n", style.Secondary.Render("planned_action"), result.PlannedAction)
 	}
 }
