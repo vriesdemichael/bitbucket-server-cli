@@ -16,7 +16,7 @@ services:
   bitbucket:
     build:
       context: ./custom-bitbucket
-    image: atlassian/bitbucket:9.4.16-faketime
+    image: atlassian/bitbucket:10.2.1-faketime
     container_name: bb-bitbucket
     depends_on:
       - postgres
