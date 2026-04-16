@@ -12,8 +12,8 @@ permissions:
   pull-requests: write
 
 jobs:
-  approve-and-enable-automerge:
-    name: Approve and enable auto-merge
+  approve-and-merge:
+    name: Approve and merge Dependabot PRs
     if: >
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'pull_request'
@@ -104,7 +104,7 @@ jobs:
               throw error;
             }
 
-      - name: Enable rebase auto-merge
+      - name: Merge or enable rebase auto-merge
         if: steps.pr.outputs.should_merge == 'true'
         uses: actions/github-script@v7
         env:
@@ -120,18 +120,39 @@ jobs:
             });
 
             if (pr.state !== 'open') {
-              core.notice(`Auto-merge skipped for PR #${prNumber}: PR is no longer open.`);
+              core.notice(`Merge automation skipped for PR #${prNumber}: PR is no longer open.`);
               return;
             }
 
             if (pr.head?.sha !== expectedHeadSha) {
-              core.notice(`Auto-merge skipped for PR #${prNumber}: PR head ${pr.head?.sha || 'unknown'} no longer matches workflow run head ${expectedHeadSha}.`);
+              core.notice(`Merge automation skipped for PR #${prNumber}: PR head ${pr.head?.sha || 'unknown'} no longer matches workflow run head ${expectedHeadSha}.`);
               return;
             }
 
             if (pr.auto_merge) {
               core.notice(`Auto-merge was already enabled for PR #${prNumber}.`);
               return;
+            }
+
+            const mergeableState = String(pr.mergeable_state || '').toLowerCase();
+
+            if (mergeableState === 'clean') {
+              try {
+                await github.rest.pulls.merge({
+                  ...context.repo,
+                  pull_number: prNumber,
+                  merge_method: 'rebase',
+                  sha: expectedHeadSha,
+                });
+                core.notice(`Merged PR #${prNumber} directly with rebase.`);
+                return;
+              } catch (error) {
+                if (![405, 409, 422].includes(error.status)) {
+                  throw error;
+                }
+
+                core.notice(`Direct merge was unavailable for PR #${prNumber}; falling back to enabling auto-merge: ${error.message}`);
+              }
             }
 
             await github.graphql(
