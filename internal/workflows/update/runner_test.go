@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	githubrelease "github.com/vriesdemichael/bitbucket-server-cli/internal/transport/githubrelease"
@@ -571,19 +572,59 @@ func TestRunnerWindowsAndVersionComparisonPaths(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Run returned error: %v", err)
 		}
-		if !result.UpdateAvailable || result.PlannedAction != "download_and_replace_after_exit" {
+		if !result.UpdateAvailable || result.PlannedAction != "schedule_background_replace_after_exit" {
 			t.Fatalf("expected dry-run windows plan, got %+v", result)
 		}
 	})
 
-	t.Run("windows apply returns manual replacement error", func(t *testing.T) {
+	t.Run("windows apply schedules background replacement", func(t *testing.T) {
 		archive := buildZipArchive(t, "bb.exe", []byte("windows-binary"))
 		checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_windows_amd64.zip")
 		client := &stubReleaseClient{release: releaseWithSignatureBundle(githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{{Name: "bb_1.2.0_windows_amd64.zip", BrowserDownloadURL: "archive"}, {Name: "sha256sums.txt", BrowserDownloadURL: "checksums"}}}), downloads: downloadsWithSignatureBundle(map[string][]byte{"checksums": []byte(checksum), "archive": archive})}
-		runner := newTestRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return "/tmp/bb.exe", nil }, Platform: func() (string, string) { return "windows", "amd64" }})
+		targetPath := filepath.Join(t.TempDir(), "bb.exe")
+		if err := os.WriteFile(targetPath, []byte("old"), 0o755); err != nil {
+			t.Fatalf("seed target: %v", err)
+		}
+		launched := windowsSwapLaunchOptions{}
+		runner := newTestRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return targetPath, nil }, Platform: func() (string, string) { return "windows", "amd64" }, ProcessID: func() int { return 4242 }, LaunchWindows: func(_ context.Context, options windowsSwapLaunchOptions) error { launched = options; return nil }})
+		result, err := runner.Run(context.Background(), Options{})
+		if err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+		if !result.Scheduled || !result.Staged || result.Applied || result.StagedPath == "" || result.SwapResultPath == "" {
+			t.Fatalf("expected scheduled windows result, got %+v", result)
+		}
+		if launched.ParentPID != 4242 || launched.TargetPath != targetPath || launched.StagedPath != result.StagedPath || launched.ResultPath != result.SwapResultPath {
+			t.Fatalf("unexpected launched options: %+v result=%+v", launched, result)
+		}
+		stagedPayload, err := os.ReadFile(result.StagedPath)
+		if err != nil {
+			t.Fatalf("read staged payload: %v", err)
+		}
+		if string(stagedPayload) != "windows-binary" {
+			t.Fatalf("expected staged windows payload, got %q", string(stagedPayload))
+		}
+		payload, err := os.ReadFile(targetPath)
+		if err != nil {
+			t.Fatalf("read original payload: %v", err)
+		}
+		if string(payload) != "old" {
+			t.Fatalf("expected original binary unchanged before worker runs, got %q", string(payload))
+		}
+	})
+
+	t.Run("windows launch failure returns actionable error", func(t *testing.T) {
+		archive := buildZipArchive(t, "bb.exe", []byte("windows-binary"))
+		checksum := fmt.Sprintf("%s  %s\n", sha256Hex(archive), "bb_1.2.0_windows_amd64.zip")
+		client := &stubReleaseClient{release: releaseWithSignatureBundle(githubrelease.Release{TagName: "v1.2.0", Assets: []githubrelease.Asset{{Name: "bb_1.2.0_windows_amd64.zip", BrowserDownloadURL: "archive"}, {Name: "sha256sums.txt", BrowserDownloadURL: "checksums"}}}), downloads: downloadsWithSignatureBundle(map[string][]byte{"checksums": []byte(checksum), "archive": archive})}
+		targetPath := filepath.Join(t.TempDir(), "bb.exe")
+		if err := os.WriteFile(targetPath, []byte("old"), 0o755); err != nil {
+			t.Fatalf("seed target: %v", err)
+		}
+		runner := newTestRunner(Dependencies{Releases: client, RepositoryOwner: "vriesdemichael", RepositoryName: "bitbucket-server-cli", CurrentVersion: func() string { return "v1.1.0" }, ExecutablePath: func() (string, error) { return targetPath, nil }, Platform: func() (string, string) { return "windows", "amd64" }, LaunchWindows: func(context.Context, windowsSwapLaunchOptions) error { return apperrors.New(apperrors.KindInternal, "launch failed", nil) }})
 		_, err := runner.Run(context.Background(), Options{})
-		if !apperrors.IsKind(err, apperrors.KindPermanent) {
-			t.Fatalf("expected permanent windows replacement error, got %v", err)
+		if !apperrors.IsKind(err, apperrors.KindInternal) || err == nil || !strings.Contains(err.Error(), ".new") {
+			t.Fatalf("expected actionable launch error, got %v", err)
 		}
 	})
 
@@ -730,7 +771,7 @@ func TestUpdateHelpers(t *testing.T) {
 	if update, comparison := isUpdateAvailable("v1.0.0", "v1.0.0", "v1.0.1", "v1.0.1"); !update || comparison != "upgrade_available" {
 		t.Fatalf("unexpected isUpdateAvailable result: %v %s", update, comparison)
 	}
-	if plannedAction("windows") != "download_and_replace_after_exit" || plannedAction("linux") != "replace" {
+	if plannedAction("windows") != "schedule_background_replace_after_exit" || plannedAction("linux") != "replace" {
 		t.Fatal("unexpected planned action values")
 	}
 	if files := SortedChecksumFiles(map[string]string{"b": "2", "a": "1"}); len(files) != 2 || files[0] != "a" || files[1] != "b" {
@@ -790,4 +831,295 @@ func TestReplaceBinary(t *testing.T) {
 			t.Fatalf("expected provided mode, got %o", info.Mode().Perm())
 		}
 	})
+}
+
+func TestStageWindowsBinary(t *testing.T) {
+	t.Run("validation", func(t *testing.T) {
+		if _, err := stageWindowsBinary("", []byte("payload"), 0o755); !apperrors.IsKind(err, apperrors.KindValidation) {
+			t.Fatalf("expected validation error, got %v", err)
+		}
+	})
+
+	t.Run("create temp failure", func(t *testing.T) {
+		targetPath := filepath.Join(t.TempDir(), "missing", "bb.exe")
+		if _, err := stageWindowsBinary(targetPath, []byte("payload"), 0o755); !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal error, got %v", err)
+		}
+	})
+
+	t.Run("stage update payload", func(t *testing.T) {
+		targetDir := t.TempDir()
+		targetPath := filepath.Join(targetDir, "bb.exe")
+		if err := os.WriteFile(targetPath, []byte("old"), 0o700); err != nil {
+			t.Fatalf("seed target: %v", err)
+		}
+
+		stagedPath, err := stageWindowsBinary(targetPath, []byte("new"), 0o755)
+		if err != nil {
+			t.Fatalf("stageWindowsBinary: %v", err)
+		}
+		if stagedPath != targetPath+".new" {
+			t.Fatalf("expected staged path %q, got %q", targetPath+".new", stagedPath)
+		}
+
+		payload, err := os.ReadFile(stagedPath)
+		if err != nil {
+			t.Fatalf("read staged payload: %v", err)
+		}
+		if string(payload) != "new" {
+			t.Fatalf("expected staged payload, got %q", string(payload))
+		}
+
+		info, err := os.Stat(stagedPath)
+		if err != nil {
+			t.Fatalf("stat staged path: %v", err)
+		}
+		if info.Mode().Perm() != 0o700 {
+			t.Fatalf("expected existing mode preserved, got %o", info.Mode().Perm())
+		}
+	})
+}
+
+func TestWindowsSwapHelpers(t *testing.T) {
+	t.Run("build worker script", func(t *testing.T) {
+		script, err := buildWindowsSwapScript(windowsSwapLaunchOptions{ParentPID: 123, TargetPath: `C:\Tools\bb.exe`, StagedPath: `C:\Tools\bb.exe.new`, ResultPath: `C:\Tools\bb.exe.update-result.json`, WaitTimeout: 45 * time.Second, RetryInterval: 1500 * time.Millisecond, RetryTimeout: 90 * time.Second})
+		if err != nil {
+			t.Fatalf("buildWindowsSwapScript: %v", err)
+		}
+		checks := []string{"Wait-Process -Id $parentPid", "$parentPid = 123", "$targetPath = 'C:\\Tools\\bb.exe'", "$stagedPath = 'C:\\Tools\\bb.exe.new'", "$resultPath = 'C:\\Tools\\bb.exe.update-result.json'", "$retryIntervalMilliseconds = 1500", "$retrySeconds = 90"}
+		for _, check := range checks {
+			if !strings.Contains(script, check) {
+				t.Fatalf("expected script to contain %q\nscript=%s", check, script)
+			}
+		}
+	})
+
+	t.Run("swap succeeds after simulated 10 second lock", func(t *testing.T) {
+		targetDir := t.TempDir()
+		targetPath := filepath.Join(targetDir, "bb.exe")
+		stagedPath := targetPath + ".new"
+		if err := os.WriteFile(targetPath, []byte("old"), 0o755); err != nil {
+			t.Fatalf("seed target: %v", err)
+		}
+		if err := os.WriteFile(stagedPath, []byte("new"), 0o755); err != nil {
+			t.Fatalf("seed staged: %v", err)
+		}
+
+		currentTime := time.Unix(0, 0)
+		lockFailures := 0
+		outcome, err := executeWindowsSwap(windowsSwapLaunchOptions{TargetPath: targetPath, StagedPath: stagedPath, RetryInterval: time.Second, RetryTimeout: 15 * time.Second}, windowsSwapRuntime{
+			rename: func(oldPath, newPath string) error {
+				if oldPath == targetPath && newPath == windowsSwapBackupPath(targetPath) && lockFailures < 10 {
+					lockFailures++
+					return fmt.Errorf("simulated AV scan lock %d", lockFailures)
+				}
+				return os.Rename(oldPath, newPath)
+			},
+			remove: os.Remove,
+			pathExists: func(path string) bool {
+				_, err := os.Stat(path)
+				return err == nil
+			},
+			sleep: func(duration time.Duration) {
+				currentTime = currentTime.Add(duration)
+			},
+			now: func() time.Time {
+				return currentTime
+			},
+		})
+		if err != nil {
+			t.Fatalf("executeWindowsSwap: %v", err)
+		}
+		if !outcome.Applied || outcome.Attempts != 11 || lockFailures != 10 {
+			t.Fatalf("unexpected outcome: %+v lockFailures=%d", outcome, lockFailures)
+		}
+		if currentTime.Sub(time.Unix(0, 0)) != 10*time.Second {
+			t.Fatalf("expected 10 second simulated delay, got %s", currentTime.Sub(time.Unix(0, 0)))
+		}
+		payload, err := os.ReadFile(targetPath)
+		if err != nil {
+			t.Fatalf("read target: %v", err)
+		}
+		if string(payload) != "new" {
+			t.Fatalf("expected swapped payload, got %q", string(payload))
+		}
+		if _, err := os.Stat(stagedPath); !os.IsNotExist(err) {
+			t.Fatalf("expected staged file removed, got err=%v", err)
+		}
+	})
+
+	t.Run("swap restores backup when staged move fails", func(t *testing.T) {
+		targetDir := t.TempDir()
+		targetPath := filepath.Join(targetDir, "bb.exe")
+		stagedPath := targetPath + ".new"
+		if err := os.WriteFile(targetPath, []byte("old"), 0o755); err != nil {
+			t.Fatalf("seed target: %v", err)
+		}
+		if err := os.WriteFile(stagedPath, []byte("new"), 0o755); err != nil {
+			t.Fatalf("seed staged: %v", err)
+		}
+
+		currentTime := time.Unix(0, 0)
+		_, err := executeWindowsSwap(windowsSwapLaunchOptions{TargetPath: targetPath, StagedPath: stagedPath, RetryInterval: time.Second, RetryTimeout: 2 * time.Second}, windowsSwapRuntime{
+			rename: func(oldPath, newPath string) error {
+				if oldPath == stagedPath && newPath == targetPath {
+					return fmt.Errorf("staged rename failed")
+				}
+				return os.Rename(oldPath, newPath)
+			},
+			remove: os.Remove,
+			pathExists: func(path string) bool {
+				_, err := os.Stat(path)
+				return err == nil
+			},
+			sleep: func(duration time.Duration) {
+				currentTime = currentTime.Add(duration)
+			},
+			now: func() time.Time {
+				return currentTime
+			},
+		})
+		if !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal swap error, got %v", err)
+		}
+		payload, readErr := os.ReadFile(targetPath)
+		if readErr != nil {
+			t.Fatalf("read target: %v", readErr)
+		}
+		if string(payload) != "old" {
+			t.Fatalf("expected original payload restored, got %q", string(payload))
+		}
+	})
+}
+
+func TestWindowsDetachedSwapSmokeFromWSL(t *testing.T) {
+	if os.Getenv("BB_WINDOWS_SMOKE") == "" {
+		t.Skip("set BB_WINDOWS_SMOKE=1 to run the WSL-backed Windows swap smoke test")
+	}
+
+	powershellPath := findWindowsPowerShellPath(t)
+	baseWSLDir := findWSLWindowsSmokeDir(t)
+	baseWindowsDir, err := wslPathToWindowsPath(baseWSLDir)
+	if err != nil {
+		t.Fatalf("convert smoke dir to windows path: %v", err)
+	}
+
+	t.Setenv("PATH", filepath.Dir(powershellPath)+string(os.PathListSeparator)+os.Getenv("PATH"))
+
+	targetWSLPath := filepath.Join(baseWSLDir, "bb.exe")
+	stagedWSLPath := targetWSLPath + ".new"
+	resultWSLPath := targetWSLPath + ".update-result.json"
+	targetWindowsPath, err := wslPathToWindowsPath(targetWSLPath)
+	if err != nil {
+		t.Fatalf("convert target path to windows path: %v", err)
+	}
+	stagedWindowsPath, err := wslPathToWindowsPath(stagedWSLPath)
+	if err != nil {
+		t.Fatalf("convert staged path to windows path: %v", err)
+	}
+	resultWindowsPath, err := wslPathToWindowsPath(resultWSLPath)
+	if err != nil {
+		t.Fatalf("convert result path to windows path: %v", err)
+	}
+
+	if err := os.WriteFile(targetWSLPath, []byte("old-smoke"), 0o755); err != nil {
+		t.Fatalf("seed target: %v", err)
+	}
+	if err := os.WriteFile(stagedWSLPath, []byte("new-smoke"), 0o755); err != nil {
+		t.Fatalf("seed staged: %v", err)
+	}
+
+	options := windowsSwapLaunchOptions{
+		ParentPID:     0,
+		TargetPath:    targetWindowsPath,
+		StagedPath:    stagedWindowsPath,
+		ResultPath:    resultWindowsPath,
+		WaitTimeout:   5 * time.Second,
+		RetryInterval: 1 * time.Second,
+		RetryTimeout:  30 * time.Second,
+	}
+	if err := launchDetachedWindowsSwap(context.Background(), options); err != nil {
+		t.Fatalf("launchDetachedWindowsSwap: %v", err)
+	}
+
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		if time.Now().After(deadline) {
+			payload, _ := os.ReadFile(resultWSLPath)
+			t.Fatalf("timed out waiting for smoke result file in %s; current payload=%s baseWindowsDir=%s", resultWSLPath, string(payload), baseWindowsDir)
+		}
+		if _, err := os.Stat(resultWSLPath); err == nil {
+			break
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+
+	resultPayload, err := os.ReadFile(resultWSLPath)
+	if err != nil {
+		t.Fatalf("read result payload: %v", err)
+	}
+	if !strings.Contains(string(resultPayload), `"status":"applied"`) {
+		t.Fatalf("expected applied result, got %s", string(resultPayload))
+	}
+
+	targetPayload, err := os.ReadFile(targetWSLPath)
+	if err != nil {
+		t.Fatalf("read target payload: %v", err)
+	}
+	if string(targetPayload) != "new-smoke" {
+		t.Fatalf("expected updated target payload, got %q", string(targetPayload))
+	}
+	if _, err := os.Stat(stagedWSLPath); !os.IsNotExist(err) {
+		t.Fatalf("expected staged payload to be consumed, got err=%v", err)
+	}
+}
+
+func findWindowsPowerShellPath(t *testing.T) string {
+	t.Helper()
+	candidates := []string{
+		"/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+		"/mnt/c/Program Files/PowerShell/7/pwsh.exe",
+		"/mnt/c/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell.exe",
+	}
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err == nil && !info.IsDir() {
+			return candidate
+		}
+	}
+	t.Fatal("no Windows PowerShell executable found under /mnt/c")
+	return ""
+}
+
+func findWSLWindowsSmokeDir(t *testing.T) string {
+	t.Helper()
+	candidates := []string{
+		"/mnt/c/Users/vries/AppData/Local/Temp",
+		"/mnt/c/Users/Public",
+	}
+	for _, candidate := range candidates {
+		info, err := os.Stat(candidate)
+		if err != nil || !info.IsDir() {
+			continue
+		}
+		path, err := os.MkdirTemp(candidate, "bb-windows-swap-smoke-")
+		if err == nil {
+			t.Cleanup(func() {
+				_ = os.RemoveAll(path)
+			})
+			return path
+		}
+	}
+	t.Fatal("no writable Windows-backed smoke directory found under /mnt/c")
+	return ""
+}
+
+func wslPathToWindowsPath(path string) (string, error) {
+	cleaned := filepath.Clean(path)
+	prefix := "/mnt/c/"
+	if !strings.HasPrefix(cleaned, prefix) {
+		return "", fmt.Errorf("path %q is not under /mnt/c", path)
+	}
+	remainder := strings.TrimPrefix(cleaned, prefix)
+	return `C:\` + strings.ReplaceAll(remainder, "/", `\`), nil
 }

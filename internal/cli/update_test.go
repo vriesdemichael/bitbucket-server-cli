@@ -208,6 +208,16 @@ func TestUpdateCommandHumanOutputAndValidation(t *testing.T) {
 		}
 	})
 
+	t.Run("scheduled human output", func(t *testing.T) {
+		buffer := &bytes.Buffer{}
+		command := &cobra.Command{}
+		command.SetOut(buffer)
+		writeUpdateHuman(command, updateworkflow.Result{CurrentVersion: "v1.1.0", LatestVersion: "v1.2.0", Scheduled: true, Staged: true, InstallPath: "C:/tools/bb.exe", StagedPath: "C:/tools/bb.exe.new", SwapResultPath: "C:/tools/bb.exe.update-result.json", PlannedAction: "schedule_background_replace_after_exit"})
+		if !bytes.Contains(buffer.Bytes(), []byte("Scheduled bb update")) || !bytes.Contains(buffer.Bytes(), []byte("staged_path C:/tools/bb.exe.new")) || !bytes.Contains(buffer.Bytes(), []byte("swap_result_path C:/tools/bb.exe.update-result.json")) || !bytes.Contains(buffer.Bytes(), []byte("planned_action schedule_background_replace_after_exit")) {
+			t.Fatalf("unexpected human output: %s", buffer.String())
+		}
+	})
+
 	t.Run("provenance available without verification output", func(t *testing.T) {
 		buffer := &bytes.Buffer{}
 		command := &cobra.Command{}
