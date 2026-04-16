@@ -6,10 +6,24 @@
 FROM ubuntu:24.04 AS faketime-builder
 
 COPY libfaketime-0.9.12.tar.gz /tmp/libfaketime.tar.gz
-RUN apt-get update && apt-get install -y --no-install-recommends build-essential \
-    && tar -xzf /tmp/libfaketime.tar.gz -C /tmp \
-    && cd /tmp/libfaketime-0.9.12/src \
-    && FAKETIME_COMPILE_CFLAGS="-DFAKE_CLOCK_GETTIME_SYSCALL" make
+RUN set -eu; \
+    attempt=1; \
+    while true; do \
+        rm -rf /var/lib/apt/lists/*; \
+        if apt-get update -o Acquire::Retries=3 \
+            && apt-get install -y --no-install-recommends build-essential; then \
+            break; \
+        fi; \
+        if [ "$attempt" -ge 5 ]; then \
+            exit 1; \
+        fi; \
+        echo "apt-get failed on attempt $attempt; retrying after clearing package lists" >&2; \
+        attempt=$((attempt + 1)); \
+    done; \
+    tar -xzf /tmp/libfaketime.tar.gz -C /tmp; \
+    cd /tmp/libfaketime-0.9.12/src; \
+    FAKETIME_COMPILE_CFLAGS="-DFAKE_CLOCK_GETTIME_SYSCALL" make; \
+    rm -rf /var/lib/apt/lists/*
 
 # Stage 2: final image — only the compiled .so is added, no build tooling.
 FROM atlassian/bitbucket:10.2.1
