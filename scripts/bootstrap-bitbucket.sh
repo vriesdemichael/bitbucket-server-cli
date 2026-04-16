@@ -167,6 +167,46 @@ apply_license_via_rest() {
   exit 1
 }
 
+authenticate_admin_session() {
+  local http_code
+
+  log "Authenticating admin session via TSV login API..."
+  http_code=$(
+    curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+      -o "$RESPONSE_BODY" -w "%{http_code}" \
+      -X POST "${BASE_URL}/rest/tsv/latest/authenticate" \
+      -H 'Accept: application/json' \
+      -H 'Content-Type: application/json' \
+      -d "{\"username\":\"${ADMIN_USERNAME}\",\"password\":\"${ADMIN_PASSWORD}\",\"targetUrl\":\"/\",\"rememberMe\":false}"
+  )
+  if [[ ! "$http_code" =~ ^20[0-9]$ ]]; then
+    log "Failed to authenticate admin session. HTTP status: ${http_code}. Response body:"
+    cat "$RESPONSE_BODY" >&2
+    exit 1
+  fi
+}
+
+enable_basic_auth() {
+  local http_code
+
+  authenticate_admin_session
+
+  log "Enabling basic authentication for bootstrap-driven admin API calls..."
+  http_code=$(
+    curl -s -b "$COOKIE_JAR" -c "$COOKIE_JAR" \
+      -o "$RESPONSE_BODY" -w "%{http_code}" \
+      -X PUT "${BASE_URL}/rest/basicauth/latest/config" \
+      -H 'Accept: application/json' \
+      -H 'Content-Type: application/json' \
+      -d '{"block-requests":false,"allowed-paths":[],"allowed-users":[],"show-warning-message":false}'
+  )
+  if [ "$http_code" != "204" ]; then
+    log "Failed to enable basic authentication. HTTP status: ${http_code}. Response body:"
+    cat "$RESPONSE_BODY" >&2
+    exit 1
+  fi
+}
+
 # Print the Bitbucket server state (STARTING, FIRST_RUN, RUNNING, or empty on
 # error) by querying /status.
 query_state() {
@@ -253,5 +293,7 @@ fi
 if [ "$license_configured_during_setup" != "true" ]; then
   apply_license_via_rest
 fi
+
+enable_basic_auth
 
 log "Bitbucket is RUNNING at ${BASE_URL} (admin user: ${ADMIN_USERNAME})"
