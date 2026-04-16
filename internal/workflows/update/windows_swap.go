@@ -57,15 +57,14 @@ func launchDetachedWindowsSwap(ctx context.Context, options windowsSwapLaunchOpt
 }
 
 func buildWindowsSwapCommand(ctx context.Context, options windowsSwapLaunchOptions) (*exec.Cmd, error) {
+	_ = ctx
+
 	script, err := buildWindowsSwapScript(options)
 	if err != nil {
 		return nil, err
 	}
 	encoded := encodePowerShellCommand(script)
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	return exec.CommandContext(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded), nil
+	return exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-WindowStyle", "Hidden", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded), nil
 }
 
 func buildWindowsSwapScript(options windowsSwapLaunchOptions) (string, error) {
