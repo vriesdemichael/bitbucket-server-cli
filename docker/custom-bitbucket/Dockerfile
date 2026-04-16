@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
     && FAKETIME_COMPILE_CFLAGS="-DFAKE_CLOCK_GETTIME_SYSCALL" make
 
 # Stage 2: final image — only the compiled .so is added, no build tooling.
-FROM atlassian/bitbucket:9.4.16
+FROM atlassian/bitbucket:10.2.1
 
 RUN mkdir -p /usr/lib/x86_64-linux-gnu/faketime
 COPY --from=faketime-builder \

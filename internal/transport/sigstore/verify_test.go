@@ -309,7 +309,7 @@ func marshalLegacyBundle(entity sigverify.SignedEntity) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	certificate := verificationContent.GetCertificate()
+	certificate := verificationContentCertificate(verificationContent)
 	if certificate == nil {
 		return nil, errMissingLegacyFixtureComponent("certificate")
 	}
@@ -361,6 +361,23 @@ func errMissingLegacyFixtureComponent(name string) error {
 	return fmt.Errorf("missing legacy fixture component: %s", name)
 }
 
+func verificationContentCertificate(content sigverify.VerificationContent) *x509.Certificate {
+	type certificateProvider interface {
+		Certificate() *x509.Certificate
+	}
+	type legacyCertificateProvider interface {
+		GetCertificate() *x509.Certificate
+	}
+
+	if provider, ok := any(content).(certificateProvider); ok {
+		return provider.Certificate()
+	}
+	if provider, ok := any(content).(legacyCertificateProvider); ok {
+		return provider.GetCertificate()
+	}
+	return nil
+}
+
 func signedEntryTimestampForTest(entry any) ([]byte, error) {
 	value := reflect.ValueOf(entry)
 	if !value.IsValid() || value.IsNil() {
@@ -394,7 +411,7 @@ func mustLegacyFixture(t *testing.T) ([]byte, sigroot.TrustedMaterial, sigverify
 	if err != nil {
 		t.Fatalf("VerificationContent returned error: %v", err)
 	}
-	certificate := verificationContent.GetCertificate()
+	certificate := verificationContentCertificate(verificationContent)
 	if certificate == nil {
 		t.Fatal("expected certificate")
 	}
