@@ -21,7 +21,7 @@ jobs:
     steps:
       - name: Resolve pull request metadata
         id: pr
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
@@ -65,7 +65,7 @@ jobs:
 
       - name: Approve Dependabot pull request
         if: steps.pr.outputs.should_merge == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         with:
@@ -106,7 +106,7 @@ jobs:
 
       - name: Merge or enable rebase auto-merge
         if: steps.pr.outputs.should_merge == 'true'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v9
         env:
           PR_NUMBER: ${{ steps.pr.outputs.number }}
         with:
