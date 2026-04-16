@@ -8,8 +8,9 @@
 #   2. On FIRST_RUN: walks the setup wizard, handling the licensing/settings
 #      step when present and the admin-user step.
 #   3. Polls /status until RUNNING.
-#   4. If BITBUCKET_LICENSE_KEY is still not consumed by setup, applies it via
-#      the REST API (/rest/api/latest/admin/license).
+#   4. If BITBUCKET_LICENSE_KEY is set and licensing was not completed during
+#      the setup wizard, applies it via the REST API
+#      (/rest/api/latest/admin/license).
 #
 # Usage:
 #   BITBUCKET_LICENSE_KEY=<key> bash scripts/bootstrap-bitbucket.sh [base_url] [username] [password]
