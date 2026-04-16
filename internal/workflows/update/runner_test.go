@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"compress/gzip"
 	"context"
+	"encoding/base64"
 	"fmt"
 	"io/fs"
 	"os"
@@ -881,6 +882,78 @@ func TestStageWindowsBinary(t *testing.T) {
 }
 
 func TestWindowsSwapHelpers(t *testing.T) {
+	t.Run("build worker command encodes script", func(t *testing.T) {
+		command, err := buildWindowsSwapCommand(context.Background(), windowsSwapLaunchOptions{ParentPID: 321, TargetPath: `C:\Tools\bb.exe`, StagedPath: `C:\Tools\bb.exe.new`, ResultPath: `C:\Tools\bb.exe.update-result.json`, WaitTimeout: 30 * time.Second, RetryInterval: 2 * time.Second, RetryTimeout: 45 * time.Second})
+		if err != nil {
+			t.Fatalf("buildWindowsSwapCommand: %v", err)
+		}
+		if len(command.Args) < 2 || command.Args[0] != "powershell.exe" {
+			t.Fatalf("unexpected command args: %+v", command.Args)
+		}
+		encodedIndex := -1
+		for index, arg := range command.Args {
+			if arg == "-EncodedCommand" {
+				encodedIndex = index + 1
+				break
+			}
+		}
+		if encodedIndex <= 0 || encodedIndex >= len(command.Args) {
+			t.Fatalf("expected -EncodedCommand argument, got %+v", command.Args)
+		}
+		decoded, err := decodePowerShellEncodedCommand(command.Args[encodedIndex])
+		if err != nil {
+			t.Fatalf("decodePowerShellEncodedCommand: %v", err)
+		}
+		checks := []string{"$parentPid = 321", "$targetPath = 'C:\\Tools\\bb.exe'", "$retryIntervalMilliseconds = 2000", "$retrySeconds = 45"}
+		for _, check := range checks {
+			if !strings.Contains(decoded, check) {
+				t.Fatalf("expected decoded command to contain %q\nscript=%s", check, decoded)
+			}
+		}
+	})
+
+	t.Run("duration helpers fall back to defaults", func(t *testing.T) {
+		if got := durationSecondsOrDefault(0, 12*time.Second); got != 12 {
+			t.Fatalf("expected default seconds, got %d", got)
+		}
+		if got := durationMillisecondsOrDefault(0, 1500*time.Millisecond); got != 1500 {
+			t.Fatalf("expected default milliseconds, got %d", got)
+		}
+	})
+
+	t.Run("detached launch starts worker command", func(t *testing.T) {
+		tempDir := t.TempDir()
+		argsPath := filepath.Join(tempDir, "args.txt")
+		launcherPath := filepath.Join(tempDir, "powershell.exe")
+		launcherScript := "#!/bin/sh\nprintf '%s\\n' \"$@\" >\"$BB_TEST_ARGS_FILE\"\n"
+		if err := os.WriteFile(launcherPath, []byte(launcherScript), 0o755); err != nil {
+			t.Fatalf("write launcher: %v", err)
+		}
+		originalPath := os.Getenv("PATH")
+		t.Setenv("PATH", tempDir+string(os.PathListSeparator)+originalPath)
+		t.Setenv("BB_TEST_ARGS_FILE", argsPath)
+
+		if err := launchDetachedWindowsSwap(context.Background(), windowsSwapLaunchOptions{ParentPID: 77, TargetPath: `C:\Tools\bb.exe`, StagedPath: `C:\Tools\bb.exe.new`, ResultPath: `C:\Tools\bb.exe.update-result.json`}); err != nil {
+			t.Fatalf("launchDetachedWindowsSwap: %v", err)
+		}
+
+		deadline := time.Now().Add(5 * time.Second)
+		for {
+			payload, err := os.ReadFile(argsPath)
+			if err == nil {
+				text := string(payload)
+				if !strings.Contains(text, "-EncodedCommand") || !strings.Contains(text, "-WindowStyle") {
+					t.Fatalf("unexpected launched args: %s", text)
+				}
+				break
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("timed out waiting for launched args file: %v", err)
+			}
+			time.Sleep(50 * time.Millisecond)
+		}
+	})
+
 	t.Run("build worker script", func(t *testing.T) {
 		script, err := buildWindowsSwapScript(windowsSwapLaunchOptions{ParentPID: 123, TargetPath: `C:\Tools\bb.exe`, StagedPath: `C:\Tools\bb.exe.new`, ResultPath: `C:\Tools\bb.exe.update-result.json`, WaitTimeout: 45 * time.Second, RetryInterval: 1500 * time.Millisecond, RetryTimeout: 90 * time.Second})
 		if err != nil {
@@ -1122,4 +1195,27 @@ func wslPathToWindowsPath(path string) (string, error) {
 	}
 	remainder := strings.TrimPrefix(cleaned, prefix)
 	return `C:\` + strings.ReplaceAll(remainder, "/", `\`), nil
+}
+
+func decodePowerShellEncodedCommand(value string) (string, error) {
+	raw, err := base64.StdEncoding.DecodeString(value)
+	if err != nil {
+		return "", err
+	}
+	if len(raw)%2 != 0 {
+		return "", fmt.Errorf("encoded command length must be even, got %d", len(raw))
+	}
+	words := make([]uint16, 0, len(raw)/2)
+	for index := 0; index < len(raw); index += 2 {
+		words = append(words, uint16(raw[index])|uint16(raw[index+1])<<8)
+	}
+	return string(wordsToRunes(words)), nil
+}
+
+func wordsToRunes(words []uint16) []rune {
+	result := make([]rune, 0, len(words))
+	for _, word := range words {
+		result = append(result, rune(word))
+	}
+	return result
 }

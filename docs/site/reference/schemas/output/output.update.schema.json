@@ -52,6 +52,18 @@
         "release_url": {
           "type": "string"
         },
+        "scheduled": {
+          "type": "boolean"
+        },
+        "staged": {
+          "type": "boolean"
+        },
+        "staged_path": {
+          "type": "string"
+        },
+        "swap_result_path": {
+          "type": "string"
+        },
         "target_platform": {
           "type": "string"
         },
@@ -68,6 +80,8 @@
         "update_available",
         "up_to_date",
         "applied",
+        "scheduled",
+        "staged",
         "dry_run",
         "checksum_available",
         "checksum_verified",
