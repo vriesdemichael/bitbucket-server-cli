@@ -289,7 +289,7 @@ func (runner *Runner) Run(ctx context.Context, options Options) (Result, error) 
 			RetryInterval:  windowsSwapRetryInterval,
 			RetryTimeout:   windowsSwapRetryTimeout,
 		}
-		if err := runner.launchWindows(ctx, launchOptions); err != nil {
+		if err := runner.launchWindows(context.Background(), launchOptions); err != nil {
 			kind := apperrors.KindOf(err)
 			if kind == "" {
 				kind = apperrors.KindInternal

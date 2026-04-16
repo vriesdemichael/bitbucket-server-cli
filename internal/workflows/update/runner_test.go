@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -1248,7 +1249,6 @@ func findWindowsPowerShellPath(t *testing.T) string {
 	t.Helper()
 	candidates := []string{
 		"/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
-		"/mnt/c/Program Files/PowerShell/7/pwsh.exe",
 		"/mnt/c/Windows/SysWOW64/WindowsPowerShell/v1.0/powershell.exe",
 	}
 	for _, candidate := range candidates {
@@ -1263,10 +1263,14 @@ func findWindowsPowerShellPath(t *testing.T) string {
 
 func findWSLWindowsSmokeDir(t *testing.T) string {
 	t.Helper()
-	candidates := []string{
-		"/mnt/c/Users/vries/AppData/Local/Temp",
-		"/mnt/c/Users/Public",
+	candidates := []string{}
+	if configured := strings.TrimSpace(os.Getenv("BB_WINDOWS_SMOKE_DIR")); configured != "" {
+		candidates = append(candidates, configured)
 	}
+	if tempDir, err := discoverWindowsTempDirFromWSL(); err == nil && strings.TrimSpace(tempDir) != "" {
+		candidates = append(candidates, tempDir)
+	}
+	candidates = append(candidates, "/mnt/c/Users/Public")
 	for _, candidate := range candidates {
 		info, err := os.Stat(candidate)
 		if err != nil || !info.IsDir() {
@@ -1284,6 +1288,19 @@ func findWSLWindowsSmokeDir(t *testing.T) string {
 	return ""
 }
 
+func discoverWindowsTempDirFromWSL() (string, error) {
+	cmdPath := "/mnt/c/Windows/System32/cmd.exe"
+	if _, err := os.Stat(cmdPath); err != nil {
+		return "", err
+	}
+	command := exec.Command(cmdPath, "/c", "echo", "%TEMP%")
+	raw, err := command.Output()
+	if err != nil {
+		return "", err
+	}
+	return windowsPathToWSLPath(strings.TrimSpace(string(raw)))
+}
+
 func wslPathToWindowsPath(path string) (string, error) {
 	cleaned := filepath.Clean(path)
 	prefix := "/mnt/c/"
@@ -1292,6 +1309,19 @@ func wslPathToWindowsPath(path string) (string, error) {
 	}
 	remainder := strings.TrimPrefix(cleaned, prefix)
 	return `C:\` + strings.ReplaceAll(remainder, "/", `\`), nil
+}
+
+func windowsPathToWSLPath(path string) (string, error) {
+	trimmed := strings.TrimSpace(strings.ReplaceAll(path, "\r", ""))
+	if len(trimmed) < 3 || trimmed[1] != ':' {
+		return "", fmt.Errorf("path %q is not a Windows drive path", path)
+	}
+	drive := strings.ToLower(string(trimmed[0]))
+	remainder := strings.TrimLeft(strings.ReplaceAll(trimmed[2:], `\`, "/"), "/")
+	if remainder == "" {
+		return "/mnt/" + drive, nil
+	}
+	return "/mnt/" + drive + "/" + remainder, nil
 }
 
 func decodePowerShellEncodedCommand(value string) (string, error) {
