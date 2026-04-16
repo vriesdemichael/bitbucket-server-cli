@@ -879,6 +879,37 @@ func TestStageWindowsBinary(t *testing.T) {
 			t.Fatalf("expected existing mode preserved, got %o", info.Mode().Perm())
 		}
 	})
+
+	t.Run("stage new target uses provided mode and replaces previous staged file", func(t *testing.T) {
+		targetDir := t.TempDir()
+		targetPath := filepath.Join(targetDir, "bb.exe")
+		stagedPath := targetPath + ".new"
+		if err := os.WriteFile(stagedPath, []byte("stale"), 0o600); err != nil {
+			t.Fatalf("seed stale staged file: %v", err)
+		}
+
+		actualStagedPath, err := stageWindowsBinary(targetPath, []byte("fresh"), 0o755)
+		if err != nil {
+			t.Fatalf("stageWindowsBinary: %v", err)
+		}
+		if actualStagedPath != stagedPath {
+			t.Fatalf("expected staged path %q, got %q", stagedPath, actualStagedPath)
+		}
+		payload, err := os.ReadFile(actualStagedPath)
+		if err != nil {
+			t.Fatalf("read staged payload: %v", err)
+		}
+		if string(payload) != "fresh" {
+			t.Fatalf("expected fresh payload, got %q", string(payload))
+		}
+		info, err := os.Stat(actualStagedPath)
+		if err != nil {
+			t.Fatalf("stat staged path: %v", err)
+		}
+		if info.Mode().Perm() != 0o755 {
+			t.Fatalf("expected provided mode, got %o", info.Mode().Perm())
+		}
+	})
 }
 
 func TestWindowsSwapHelpers(t *testing.T) {
@@ -912,12 +943,34 @@ func TestWindowsSwapHelpers(t *testing.T) {
 		}
 	})
 
+	t.Run("build worker command accepts nil context", func(t *testing.T) {
+		command, err := buildWindowsSwapCommand(nil, windowsSwapLaunchOptions{ParentPID: 12, TargetPath: `C:\Tools\bb.exe`, StagedPath: `C:\Tools\bb.exe.new`, ResultPath: `C:\Tools\bb.exe.update-result.json`})
+		if err != nil {
+			t.Fatalf("buildWindowsSwapCommand: %v", err)
+		}
+		if command == nil || len(command.Args) == 0 {
+			t.Fatalf("expected command args, got %+v", command)
+		}
+	})
+
+	t.Run("build worker command returns validation error", func(t *testing.T) {
+		if _, err := buildWindowsSwapCommand(context.Background(), windowsSwapLaunchOptions{}); !apperrors.IsKind(err, apperrors.KindValidation) {
+			t.Fatalf("expected validation error, got %v", err)
+		}
+	})
+
 	t.Run("duration helpers fall back to defaults", func(t *testing.T) {
 		if got := durationSecondsOrDefault(0, 12*time.Second); got != 12 {
 			t.Fatalf("expected default seconds, got %d", got)
 		}
+		if got := durationSecondsOrDefault(3*time.Second, 12*time.Second); got != 3 {
+			t.Fatalf("expected explicit seconds, got %d", got)
+		}
 		if got := durationMillisecondsOrDefault(0, 1500*time.Millisecond); got != 1500 {
 			t.Fatalf("expected default milliseconds, got %d", got)
+		}
+		if got := durationMillisecondsOrDefault(250*time.Millisecond, 1500*time.Millisecond); got != 250 {
+			t.Fatalf("expected explicit milliseconds, got %d", got)
 		}
 	})
 
@@ -951,6 +1004,20 @@ func TestWindowsSwapHelpers(t *testing.T) {
 				t.Fatalf("timed out waiting for launched args file: %v", err)
 			}
 			time.Sleep(50 * time.Millisecond)
+		}
+	})
+
+	t.Run("detached launch returns start failure", func(t *testing.T) {
+		t.Setenv("PATH", t.TempDir())
+		err := launchDetachedWindowsSwap(context.Background(), windowsSwapLaunchOptions{ParentPID: 77, TargetPath: `C:\Tools\bb.exe`, StagedPath: `C:\Tools\bb.exe.new`, ResultPath: `C:\Tools\bb.exe.update-result.json`})
+		if !apperrors.IsKind(err, apperrors.KindInternal) {
+			t.Fatalf("expected internal start failure, got %v", err)
+		}
+	})
+
+	t.Run("build worker script validates required paths", func(t *testing.T) {
+		if _, err := buildWindowsSwapScript(windowsSwapLaunchOptions{}); !apperrors.IsKind(err, apperrors.KindValidation) {
+			t.Fatalf("expected validation error, got %v", err)
 		}
 	})
 
@@ -1061,6 +1128,36 @@ func TestWindowsSwapHelpers(t *testing.T) {
 		}
 		if string(payload) != "old" {
 			t.Fatalf("expected original payload restored, got %q", string(payload))
+		}
+	})
+
+	t.Run("swap validates required paths", func(t *testing.T) {
+		if _, err := executeWindowsSwap(windowsSwapLaunchOptions{}, windowsSwapRuntime{}); !apperrors.IsKind(err, apperrors.KindValidation) {
+			t.Fatalf("expected validation error, got %v", err)
+		}
+	})
+
+	t.Run("swap uses default runtime with missing target", func(t *testing.T) {
+		targetDir := t.TempDir()
+		targetPath := filepath.Join(targetDir, "bb.exe")
+		stagedPath := targetPath + ".new"
+		if err := os.WriteFile(stagedPath, []byte("fresh"), 0o755); err != nil {
+			t.Fatalf("seed staged: %v", err)
+		}
+
+		outcome, err := executeWindowsSwap(windowsSwapLaunchOptions{TargetPath: targetPath, StagedPath: stagedPath, RetryInterval: 10 * time.Millisecond, RetryTimeout: time.Second}, windowsSwapRuntime{})
+		if err != nil {
+			t.Fatalf("executeWindowsSwap: %v", err)
+		}
+		if !outcome.Applied || outcome.Attempts != 1 {
+			t.Fatalf("unexpected outcome: %+v", outcome)
+		}
+		payload, err := os.ReadFile(targetPath)
+		if err != nil {
+			t.Fatalf("read target: %v", err)
+		}
+		if string(payload) != "fresh" {
+			t.Fatalf("expected fresh payload, got %q", string(payload))
 		}
 	})
 }
