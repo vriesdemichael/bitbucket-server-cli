@@ -1,12 +1,12 @@
 module github.com/vriesdemichael/bitbucket-server-cli
 
-go 1.25.0
+go 1.25.5
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/go-openapi/runtime v0.29.4
 	github.com/joho/godotenv v1.5.1
-	github.com/mark3labs/mcp-go v0.48.0
+	github.com/mark3labs/mcp-go v0.49.0
 	github.com/muesli/termenv v0.16.0
 	github.com/oapi-codegen/runtime v1.4.0
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2
