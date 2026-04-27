@@ -2,7 +2,7 @@ name: bitbucket-server-cli
 
 services:
   postgres:
-    image: postgres:17
+    image: postgres:18
     container_name: bb-postgres
     environment:
       POSTGRES_DB: bitbucket
