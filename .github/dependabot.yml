@@ -9,6 +9,8 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+    allow:
+      - dependency-type: "all"
     groups:
       gomod-minor-patch:
         patterns:
@@ -44,10 +46,18 @@ updates:
           - "minor"
           - "patch"
 
+  - package-ecosystem: "docker-compose"
+    directory: "/docker"
+    schedule:
+      interval: "daily"
+      time: "06:00"
+      timezone: "UTC"
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
   - package-ecosystem: "docker"
-    directories:
-      - "/docker"
-      - "/docker/custom-bitbucket"
+    directory: "/docker/custom-bitbucket"
     schedule:
       interval: "daily"
       time: "06:00"
