@@ -1,6 +1,6 @@
 module github.com/vriesdemichael/bitbucket-server-cli
 
-go 1.25.5
+go 1.26.0
 
 require (
 	github.com/charmbracelet/lipgloss v1.1.0
@@ -72,7 +72,7 @@ require (
 	github.com/in-toto/in-toto-golang v0.10.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/jedisct1/go-minisign v0.0.0-20211028175153-1c139d1cc84b // indirect
-	github.com/letsencrypt/boulder v0.20260420.0 // indirect
+	github.com/letsencrypt/boulder v0.20260428.0 // indirect
 	github.com/lucasb-eyer/go-colorful v1.4.0 // indirect
 	github.com/mattn/go-isatty v0.0.22 // indirect
 	github.com/mattn/go-runewidth v0.0.23 // indirect
