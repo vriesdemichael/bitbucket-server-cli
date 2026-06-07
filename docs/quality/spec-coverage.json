@@ -1,9 +1,9 @@
 {
   "version": 1,
   "spec": "docs/reference/atlassian/bitbucket-9.4-openapi.json",
-  "covered": 115,
+  "covered": 119,
   "total": 546,
-  "coverage_percent": 21.062271062271062,
+  "coverage_percent": 21.794871794871796,
   "by_tag": [
     {
       "tag": "",
@@ -67,7 +67,7 @@
     },
     {
       "tag": "Pull Requests",
-      "covered": 33,
+      "covered": 37,
       "total": 69
     },
     {
@@ -1252,18 +1252,6 @@
       "summary": "Complete pull request review"
     },
     {
-      "method": "DELETE",
-      "path": "/api/latest/projects/{projectKey}/repos/{repositorySlug}/pull-requests/{pullRequestId}/watch",
-      "tag": "Pull Requests",
-      "summary": "Stop watching pull request"
-    },
-    {
-      "method": "POST",
-      "path": "/api/latest/projects/{projectKey}/repos/{repositorySlug}/pull-requests/{pullRequestId}/watch",
-      "tag": "Pull Requests",
-      "summary": "Watch pull request"
-    },
-    {
       "method": "GET",
       "path": "/api/latest/projects/{projectKey}/repos/{repositorySlug}/readme",
       "tag": "Project",
@@ -2072,18 +2060,6 @@
       "path": "/default-tasks/latest/projects/{projectKey}/tasks/{taskId}",
       "tag": "Project",
       "summary": "Update a default task"
-    },
-    {
-      "method": "GET",
-      "path": "/git/latest/projects/{projectKey}/repos/{repositorySlug}/pull-requests/{pullRequestId}/rebase",
-      "tag": "Pull Requests",
-      "summary": "Check PR rebase precondition"
-    },
-    {
-      "method": "POST",
-      "path": "/git/latest/projects/{projectKey}/repos/{repositorySlug}/pull-requests/{pullRequestId}/rebase",
-      "tag": "Pull Requests",
-      "summary": "Rebase pull request"
     },
     {
       "method": "POST",

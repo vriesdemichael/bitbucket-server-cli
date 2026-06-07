@@ -2172,3 +2172,119 @@ func TestRepoSettingsPermissionsMissingConfigCLI(t *testing.T) {
 	cmd6.SetArgs([]string{"repo", "settings", "security", "permissions", "users", "revoke", "u1", "--repo", "PRJ/demo"})
 	_ = cmd6.Execute()
 }
+
+func TestPRWatchUnwatchRebaseCLI(t *testing.T) {
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
+			if request.URL.Query().Get("projectkey") == "FORBIDDEN" {
+				writer.WriteHeader(http.StatusForbidden)
+				_, _ = writer.Write([]byte(`{"errors":[{"message":"permission denied"}]}`))
+				return
+			}
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"PRJ"}}],"isLastPage":true}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/pull-requests/30/watch":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/pull-requests/30/watch":
+			writer.WriteHeader(http.StatusNoContent)
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/git/latest/projects/PRJ/repos/demo/pull-requests/30/rebase":
+			_, _ = writer.Write([]byte(`{"vetoes":[]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/git/latest/projects/PRJ/repos/demo/pull-requests/31/rebase":
+			_, _ = writer.Write([]byte(`{"vetoes":[{"summaryMessage":"blocked","detailedMessage":"conflict"}]}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/git/latest/projects/PRJ/repos/demo/pull-requests/30/rebase":
+			_, _ = writer.Write([]byte(`{"refChange":{"toHash":"newhash"}}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/pull-requests/30":
+			_, _ = writer.Write([]byte(`{"id":30,"title":"T","version":1}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/pull-requests/99":
+			writer.WriteHeader(http.StatusNotFound)
+			_, _ = writer.Write([]byte(`{"errors":[{"message":"not found"}]}`))
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/pull-requests/99/watch":
+			writer.WriteHeader(http.StatusInternalServerError)
+		case request.Method == http.MethodDelete && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/pull-requests/99/watch":
+			writer.WriteHeader(http.StatusInternalServerError)
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/git/latest/projects/PRJ/repos/demo/pull-requests/99/rebase":
+			writer.WriteHeader(http.StatusInternalServerError)
+		case request.Method == http.MethodPost && request.URL.Path == "/rest/git/latest/projects/PRJ/repos/demo/pull-requests/99/rebase":
+			writer.WriteHeader(http.StatusInternalServerError)
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	commands := [][]string{
+		{"pr", "watch", "30", "--repo", "PRJ/demo"},
+		{"--json", "pr", "watch", "30", "--repo", "PRJ/demo"},
+		{"--dry-run", "pr", "watch", "30", "--repo", "PRJ/demo"},
+		{"--json", "--dry-run", "pr", "watch", "30", "--repo", "PRJ/demo"},
+
+		{"pr", "unwatch", "30", "--repo", "PRJ/demo"},
+		{"--json", "pr", "unwatch", "30", "--repo", "PRJ/demo"},
+		{"--dry-run", "pr", "unwatch", "30", "--repo", "PRJ/demo"},
+		{"--json", "--dry-run", "pr", "unwatch", "30", "--repo", "PRJ/demo"},
+
+		{"pr", "rebase", "30", "--repo", "PRJ/demo"},
+		{"--json", "pr", "rebase", "30", "--repo", "PRJ/demo"},
+		{"--dry-run", "pr", "rebase", "30", "--repo", "PRJ/demo"},
+		{"--json", "--dry-run", "pr", "rebase", "30", "--repo", "PRJ/demo"},
+
+		{"--dry-run", "pr", "rebase", "31", "--repo", "PRJ/demo"},
+	}
+
+	for _, args := range commands {
+		cmd := NewRootCommand()
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v %v", args, err)
+		}
+	}
+
+	// Test config load error path
+	{
+		t.Setenv("BITBUCKET_URL", "")
+		for _, op := range []string{"watch", "unwatch", "rebase"} {
+			cmd := NewRootCommand()
+			cmd.SetArgs([]string{"pr", op, "30", "--repo", "PRJ/demo"})
+			_ = cmd.Execute()
+		}
+		t.Setenv("BITBUCKET_URL", server.URL)
+	}
+
+	// Test repo resolution error path
+	{
+		for _, op := range []string{"watch", "unwatch", "rebase"} {
+			cmd := NewRootCommand()
+			cmd.SetArgs([]string{"pr", op, "30", "--repo", "invalid"})
+			_ = cmd.Execute()
+		}
+	}
+
+	// Test permission checker error path in dry-run
+	{
+		for _, op := range []string{"watch", "unwatch", "rebase"} {
+			cmd := NewRootCommand()
+			cmd.SetArgs([]string{"--dry-run", "pr", op, "30", "--repo", "FORBIDDEN/demo"})
+			_ = cmd.Execute()
+		}
+	}
+
+	// Test validation & live errors
+	errorCommands := [][]string{
+		{"--dry-run", "pr", "watch", "99", "--repo", "PRJ/demo"},
+		{"pr", "watch", "99", "--repo", "PRJ/demo"},
+		{"--dry-run", "pr", "unwatch", "99", "--repo", "PRJ/demo"},
+		{"pr", "unwatch", "99", "--repo", "PRJ/demo"},
+		{"--dry-run", "pr", "rebase", "99", "--repo", "PRJ/demo"},
+		{"pr", "rebase", "99", "--repo", "PRJ/demo"},
+	}
+	for _, args := range errorCommands {
+		cmd := NewRootCommand()
+		cmd.SetArgs(args)
+		_ = cmd.Execute()
+	}
+}
+

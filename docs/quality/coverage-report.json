@@ -1,40 +1,40 @@
 {
   "version": 2,
   "coverage": {
-    "unit_raw_percent": 19.0955178240927,
-    "unit_scoped_percent": 87.9852649475772,
-    "live_raw_percent": 18.766827664166065,
-    "live_scoped_percent": 50.63194906395515,
-    "combined_raw_percent": 27.15860626056168,
-    "combined_scoped_percent": 89.92160196467366,
-    "patch_percent": 100,
+    "unit_raw_percent": 20.38982282572279,
+    "unit_scoped_percent": 88.25975404759798,
+    "live_raw_percent": 18.952421461991857,
+    "live_scoped_percent": 48.40288281875612,
+    "combined_raw_percent": 28.509489367572577,
+    "combined_scoped_percent": 90.05573741484561,
+    "patch_percent": 92.70833333333334,
     "unit_statements": {
-      "covered": 9492,
-      "total": 49708
+      "covered": 10346,
+      "total": 50741
     },
     "live_statements": {
-      "covered": 9131,
-      "total": 48655
+      "covered": 9357,
+      "total": 49371
     },
     "combined_statements": {
-      "covered": 13500,
-      "total": 49708
+      "covered": 14466,
+      "total": 50741
     },
     "unit_scoped_statements": {
-      "covered": 9315,
-      "total": 10587
+      "covered": 9976,
+      "total": 11303
     },
     "live_scoped_statements": {
-      "covered": 5328,
-      "total": 10523
+      "covered": 5440,
+      "total": 11239
     },
     "combined_scoped_statements": {
-      "covered": 9520,
-      "total": 10587
+      "covered": 10179,
+      "total": 11303
     },
     "patch_lines": {
-      "covered": 0,
-      "total": 0
+      "covered": 267,
+      "total": 288
     },
     "scope": {
       "include_prefixes": [
@@ -48,10 +48,11 @@
     }
   },
   "generated_contracts": {
-    "coverage_percent": 43.15789473684211,
+    "coverage_percent": 39.80582524271845,
     "used_operations": [
       "AddAnnotationsWithResponse",
       "AddBuildStatusWithResponse",
+      "CanRebaseWithResponse",
       "CreateBranchWithResponse",
       "CreateComment2WithResponse",
       "CreateCommentWithResponse",
@@ -67,6 +68,7 @@
       "DeleteBranchWithResponse",
       "DeleteComment2WithResponse",
       "DeleteCommentWithResponse",
+      "DeleteJSON",
       "DeleteProjectWithResponse",
       "DeletePullRequestCondition1WithResponse",
       "DeletePullRequestConditionWithResponse",
@@ -100,6 +102,7 @@
       "GetDiffStatsSummary2WithResponse",
       "GetGroupsWithAnyPermission1WithResponse",
       "GetGroupsWithAnyPermission2WithResponse",
+      "GetJSON",
       "GetPageOfRequiredBuildsMergeChecksWithResponse",
       "GetProjectWithResponse",
       "GetProjectsWithResponse",
@@ -117,6 +120,9 @@
       "GetTagsWithResponse",
       "GetUsersWithAnyPermission1WithResponse",
       "GetUsersWithAnyPermission2WithResponse",
+      "PostJSON",
+      "PutJSON",
+      "RebaseWithResponse",
       "RevokePermissionsForGroup1WithResponse",
       "RevokePermissionsForGroup2WithResponse",
       "RevokePermissionsForUser1WithResponse",
@@ -137,6 +143,7 @@
       "StreamRawDiff1WithResponse",
       "StreamRawDiff2WithResponse",
       "StreamRawWithResponse",
+      "Unwatch1WithResponse",
       "UpdateComment2WithResponse",
       "UpdateCommentWithResponse",
       "UpdateProjectWithResponse",
@@ -144,7 +151,8 @@
       "UpdatePullRequestConditionWithResponse",
       "UpdatePullRequestSettings1WithBody",
       "UpdateRepositoryWithResponse",
-      "UpdateRequiredBuildsMergeCheckWithBodyWithResponse"
+      "UpdateRequiredBuildsMergeCheckWithBodyWithResponse",
+      "Watch1WithResponse"
     ],
     "mapped_operations": [
       "AddAnnotationsWithResponse",
@@ -190,12 +198,14 @@
       "UpdateRequiredBuildsMergeCheckWithBodyWithResponse"
     ],
     "unmapped_operations": [
+      "CanRebaseWithResponse",
       "CreateBranchWithResponse",
       "CreateProjectWithResponse",
       "CreatePullRequestCondition1WithResponse",
       "CreatePullRequestConditionWithResponse",
       "CreateRepositoryWithResponse",
       "DeleteBranchWithResponse",
+      "DeleteJSON",
       "DeleteProjectWithResponse",
       "DeletePullRequestCondition1WithResponse",
       "DeletePullRequestConditionWithResponse",
@@ -215,6 +225,7 @@
       "GetDefaultBranch2WithResponse",
       "GetGroupsWithAnyPermission1WithResponse",
       "GetGroupsWithAnyPermission2WithResponse",
+      "GetJSON",
       "GetProjectWithResponse",
       "GetProjectsWithResponse",
       "GetPullRequestConditions1WithResponse",
@@ -226,6 +237,9 @@
       "GetSettings1WithResponse",
       "GetSettingsWithResponse",
       "GetUsersWithAnyPermission1WithResponse",
+      "PostJSON",
+      "PutJSON",
+      "RebaseWithResponse",
       "RevokePermissionsForGroup1WithResponse",
       "RevokePermissionsForGroup2WithResponse",
       "RevokePermissionsForUser1WithResponse",
@@ -240,10 +254,12 @@
       "StreamFiles1WithResponse",
       "StreamFilesWithResponse",
       "StreamRawWithResponse",
+      "Unwatch1WithResponse",
       "UpdateProjectWithResponse",
       "UpdatePullRequestCondition1WithResponse",
       "UpdatePullRequestConditionWithResponse",
-      "UpdateRepositoryWithResponse"
+      "UpdateRepositoryWithResponse",
+      "Watch1WithResponse"
     ]
   }
 }

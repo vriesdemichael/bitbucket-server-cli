@@ -2086,6 +2086,222 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 	autoMergeCmd.AddCommand(autoMergeDisableCmd)
 	prCmd.AddCommand(autoMergeCmd)
 
+	watchCmd := &cobra.Command{
+		Use:   "watch <id>",
+		Short: "Watch a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, apiClient, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg)).WithAPIClient(apiClient)
+			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
+				if _, err := service.Get(cmd.Context(), repo, args[0]); err != nil {
+					return err
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.watch",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "update",
+						PredictedAction: "update",
+						Supported:       true,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, UpdateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			err = service.Watch(cmd.Context(), repo, args[0])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request_id": args[0], "watched": true})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Watching pull request #%s\n", args[0])
+			return nil
+		},
+	}
+	prCmd.AddCommand(watchCmd)
+
+	unwatchCmd := &cobra.Command{
+		Use:   "unwatch <id>",
+		Short: "Unwatch a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, apiClient, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg)).WithAPIClient(apiClient)
+			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOREAD); err != nil {
+					return err
+				}
+
+				if _, err := service.Get(cmd.Context(), repo, args[0]); err != nil {
+					return err
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.unwatch",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "delete",
+						PredictedAction: "delete",
+						Supported:       true,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, DeleteCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			err = service.Unwatch(cmd.Context(), repo, args[0])
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "pull_request_id": args[0], "watched": false})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Unwatching pull request #%s\n", args[0])
+			return nil
+		},
+	}
+	prCmd.AddCommand(unwatchCmd)
+
+	var rebaseVersion int
+	rebaseCmd := &cobra.Command{
+		Use:   "rebase <id>",
+		Short: "Rebase a pull request",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, apiClient, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg)).WithAPIClient(apiClient)
+			if options.DryRun {
+				checker := options.permissionCheckerFor(apiClient)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOWRITE); err != nil {
+					return err
+				}
+
+				rebaseability, err := service.CanRebase(cmd.Context(), repo, args[0])
+				if err != nil {
+					return err
+				}
+
+				predicted := "update"
+				reason := "pull request will be rebased"
+				blocking := []string{}
+				if rebaseability != nil && rebaseability.Vetoes != nil && len(*rebaseability.Vetoes) > 0 {
+					predicted = "blocked"
+					reason = "rebase is vetoed"
+					for _, veto := range *rebaseability.Vetoes {
+						msg := ""
+						if veto.SummaryMessage != nil {
+							msg = *veto.SummaryMessage
+						}
+						if veto.DetailedMessage != nil {
+							if msg != "" {
+								msg += ": "
+							}
+							msg += *veto.DetailedMessage
+						}
+						if msg != "" {
+							blocking = append(blocking, msg)
+						}
+					}
+					if len(blocking) > 0 {
+						reason = strings.Join(blocking, "; ")
+					}
+				}
+
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "pr.rebase",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "id": args[0]},
+						Action:          "update",
+						PredictedAction: predicted,
+						Supported:       true,
+						Reason:          reason,
+						Confidence:      capabilityFull,
+						RequiredState:   []string{"pull request"},
+						BlockingReasons: blocking,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1},
+				}
+				if predicted == "update" {
+					preview.Summary.UpdateCount = 1
+				} else {
+					preview.Summary.UnknownCount = 1
+				}
+
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			var version *int
+			if cmd.Flags().Changed("version") {
+				version = &rebaseVersion
+			}
+
+			result, err := service.Rebase(cmd.Context(), repo, args[0], version)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "rebase_result": result})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Rebased pull request #%s\n", args[0])
+			return nil
+		},
+	}
+	rebaseCmd.Flags().IntVar(&rebaseVersion, "version", 0, "Expected pull request version")
+	prCmd.AddCommand(rebaseCmd)
+
 	return prCmd
 }
 

@@ -118,6 +118,9 @@ var dryRunProfiles = map[string]dryRunProfile{
 	"pr task delete":            {Intent: "pr.task.delete", Action: "delete", Stateful: true},
 	"pr auto-merge enable":      {Intent: "pr.auto-merge.enable", Action: "update", Stateful: true},
 	"pr auto-merge disable":     {Intent: "pr.auto-merge.disable", Action: "delete", Stateful: true},
+	"pr watch":                  {Intent: "pr.watch", Action: "update", Stateful: true},
+	"pr unwatch":                {Intent: "pr.unwatch", Action: "delete", Stateful: true},
+	"pr rebase":                 {Intent: "pr.rebase", Action: "update", Stateful: true},
 	// reviewer conditions
 	"reviewer condition create": {Intent: "reviewer.condition.create", Action: "create", Stateful: true},
 	"reviewer condition update": {Intent: "reviewer.condition.update", Action: "update", Stateful: true},
