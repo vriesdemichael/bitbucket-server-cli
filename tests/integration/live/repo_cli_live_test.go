@@ -1098,6 +1098,50 @@ func TestLiveCLIPRUnapproveDryRunNoSideEffect(t *testing.T) {
 	}
 }
 
+func TestLiveCLIPRWatchUnwatchRebase(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	// Watch dry-run
+	watchDryRun, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "watch", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr watch dry-run failed: %v\noutput: %s", err, watchDryRun)
+	}
+	if !strings.Contains(watchDryRun, `"intent": "pr.watch"`) {
+		t.Fatalf("expected pr.watch intent, got: %s", watchDryRun)
+	}
+
+	// Watch live
+	watchLive, err := executeLiveCLI(t, "--json", "pr", "watch", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr watch live failed: %v\noutput: %s", err, watchLive)
+	}
+
+	// Unwatch dry-run
+	unwatchDryRun, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "unwatch", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr unwatch dry-run failed: %v\noutput: %s", err, unwatchDryRun)
+	}
+	if !strings.Contains(unwatchDryRun, `"intent": "pr.unwatch"`) {
+		t.Fatalf("expected pr.unwatch intent, got: %s", unwatchDryRun)
+	}
+
+	// Unwatch live
+	unwatchLive, err := executeLiveCLI(t, "--json", "pr", "unwatch", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr unwatch live failed: %v\noutput: %s", err, unwatchLive)
+	}
+
+	// Rebase dry-run (checking rebaseability)
+	rebaseDryRun, err := executeLiveCLI(t, "--json", "--dry-run", "pr", "rebase", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr rebase dry-run failed: %v\noutput: %s", err, rebaseDryRun)
+	}
+	if !strings.Contains(rebaseDryRun, `"intent": "pr.rebase"`) {
+		t.Fatalf("expected pr.rebase intent, got: %s", rebaseDryRun)
+	}
+}
+
 func TestLiveCLIRepoCommentCreateDryRunNoSideEffect(t *testing.T) {
 	harness := newLiveHarness(t)
 

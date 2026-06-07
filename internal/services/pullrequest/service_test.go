@@ -11,6 +11,7 @@ import (
 
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/config"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
 )
 
@@ -1094,3 +1095,166 @@ func TestEnableAutoMergeDefaultStrategy(t *testing.T) {
 		t.Fatalf("expected request body to contain no-ff, got: %s", receivedBody)
 	}
 }
+
+func TestWatchUnwatchRebase(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodPost && r.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/42/watch":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodDelete && r.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/pull-requests/42/watch":
+			w.WriteHeader(http.StatusNoContent)
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/git/latest/projects/TEST/repos/demo/pull-requests/42/rebase":
+			_, _ = fmt.Fprint(w, `{"vetoes":[{"summaryMessage":"blocked","detailedMessage":"conflict"}]}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/rest/git/latest/projects/TEST/repos/demo/pull-requests/42/rebase":
+			_, _ = fmt.Fprint(w, `{"refChange":{"toHash":"newhash"}}`)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := openapigenerated.NewClientWithResponses(server.URL + "/rest")
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	service := NewService(nil).WithAPIClient(client)
+	repo := RepositoryRef{ProjectKey: "TEST", Slug: "demo"}
+
+	// Test Watch
+	err = service.Watch(context.Background(), repo, "42")
+	if err != nil {
+		t.Fatalf("unexpected error on Watch: %v", err)
+	}
+
+	// Test Unwatch
+	err = service.Unwatch(context.Background(), repo, "42")
+	if err != nil {
+		t.Fatalf("unexpected error on Unwatch: %v", err)
+	}
+
+	// Test CanRebase
+	rebaseability, err := service.CanRebase(context.Background(), repo, "42")
+	if err != nil {
+		t.Fatalf("unexpected error on CanRebase: %v", err)
+	}
+	if rebaseability == nil || rebaseability.Vetoes == nil || len(*rebaseability.Vetoes) != 1 || *(*rebaseability.Vetoes)[0].SummaryMessage != "blocked" {
+		t.Fatalf("unexpected rebaseability: %+v", rebaseability)
+	}
+
+	// Test Rebase
+	version := 3
+	result, err := service.Rebase(context.Background(), repo, "42", &version)
+	if err != nil {
+		t.Fatalf("unexpected error on Rebase: %v", err)
+	}
+	if result == nil || result.RefChange == nil || *result.RefChange.ToHash != "newhash" {
+		t.Fatalf("unexpected rebase result: %+v", result)
+	}
+}
+
+func TestWatchUnwatchRebaseValidation(t *testing.T) {
+	service := NewService(nil)
+	repo := RepositoryRef{ProjectKey: "TEST", Slug: "demo"}
+
+	// Nil client error
+	err := service.Watch(context.Background(), repo, "42")
+	if err == nil || !strings.Contains(err.Error(), "openapi client is not configured") {
+		t.Fatalf("expected nil client error, got: %v", err)
+	}
+
+	err = service.Unwatch(context.Background(), repo, "42")
+	if err == nil || !strings.Contains(err.Error(), "openapi client is not configured") {
+		t.Fatalf("expected nil client error, got: %v", err)
+	}
+
+	_, err = service.CanRebase(context.Background(), repo, "42")
+	if err == nil || !strings.Contains(err.Error(), "openapi client is not configured") {
+		t.Fatalf("expected nil client error, got: %v", err)
+	}
+
+	_, err = service.Rebase(context.Background(), repo, "42", nil)
+	if err == nil || !strings.Contains(err.Error(), "openapi client is not configured") {
+		t.Fatalf("expected nil client error, got: %v", err)
+	}
+
+	// Validation errors (missing repository)
+	client := &openapigenerated.ClientWithResponses{}
+	service.WithAPIClient(client)
+
+	for _, op := range []string{"watch", "unwatch", "canrebase", "rebase"} {
+		var err error
+		if op == "watch" {
+			err = service.Watch(context.Background(), RepositoryRef{}, "42")
+		} else if op == "unwatch" {
+			err = service.Unwatch(context.Background(), RepositoryRef{}, "42")
+		} else if op == "canrebase" {
+			_, err = service.CanRebase(context.Background(), RepositoryRef{}, "42")
+		} else {
+			_, err = service.Rebase(context.Background(), RepositoryRef{}, "42", nil)
+		}
+		if err == nil || apperrors.ExitCode(err) != 2 {
+			t.Fatalf("expected validation error (repo) on %s, got: %v", op, err)
+		}
+	}
+
+	// Validation errors (invalid PR ID)
+	for _, op := range []string{"watch", "unwatch", "canrebase", "rebase"} {
+		var err error
+		if op == "watch" {
+			err = service.Watch(context.Background(), repo, "invalid")
+		} else if op == "unwatch" {
+			err = service.Unwatch(context.Background(), repo, "invalid")
+		} else if op == "canrebase" {
+			_, err = service.CanRebase(context.Background(), repo, "invalid")
+		} else {
+			_, err = service.Rebase(context.Background(), repo, "invalid", nil)
+		}
+		if err == nil || apperrors.ExitCode(err) != 2 {
+			t.Fatalf("expected validation error (pr id) on %s, got: %v", op, err)
+		}
+	}
+}
+
+func TestWatchUnwatchRebaseAPIErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprint(w, `{"errors":[{"message":"internal error"}]}`)
+	}))
+	defer server.Close()
+
+	client, err := openapigenerated.NewClientWithResponses(server.URL + "/rest")
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	service := NewService(nil).WithAPIClient(client)
+	repo := RepositoryRef{ProjectKey: "TEST", Slug: "demo"}
+
+	// Test Watch error
+	err = service.Watch(context.Background(), repo, "42")
+	if err == nil {
+		t.Fatalf("expected error on Watch")
+	}
+
+	// Test Unwatch error
+	err = service.Unwatch(context.Background(), repo, "42")
+	if err == nil {
+		t.Fatalf("expected error on Unwatch")
+	}
+
+	// Test CanRebase error
+	_, err = service.CanRebase(context.Background(), repo, "42")
+	if err == nil {
+		t.Fatalf("expected error on CanRebase")
+	}
+
+	// Test Rebase error
+	_, err = service.Rebase(context.Background(), repo, "42", nil)
+	if err == nil {
+		t.Fatalf("expected error on Rebase")
+	}
+}
+

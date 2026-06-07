@@ -8,7 +8,10 @@ import (
 	"strings"
 
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
+	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
+
 )
 
 type RepositoryRef struct {
@@ -111,12 +114,19 @@ type Task struct {
 }
 
 type Service struct {
-	client *httpclient.Client
+	client    *httpclient.Client
+	apiClient *openapigenerated.ClientWithResponses
 }
 
 func NewService(client *httpclient.Client) *Service {
 	return &Service{client: client}
 }
+
+func (service *Service) WithAPIClient(apiClient *openapigenerated.ClientWithResponses) *Service {
+	service.apiClient = apiClient
+	return service
+}
+
 
 type DashboardListOptions struct {
 	State string
@@ -1203,3 +1213,118 @@ type taskValue struct {
 	Author      *pullRequestUserIdentity `json:"author"`
 	Assignee    *pullRequestUserIdentity `json:"assignee"`
 }
+
+func (service *Service) Watch(ctx context.Context, repository RepositoryRef, pullRequestID string) error {
+	if err := validateRepositoryRef(repository); err != nil {
+		return err
+	}
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return err
+	}
+	if service.apiClient == nil {
+		return apperrors.New(apperrors.KindInternal, "openapi client is not configured on pullrequest service", nil)
+	}
+
+	var wrapper struct {
+		client *openapigenerated.ClientWithResponses
+	}
+	wrapper.client = service.apiClient
+
+	response, err := wrapper.client.Watch1WithResponse(ctx, repository.ProjectKey, repository.Slug, resolvedID)
+	if err != nil {
+		return apperrors.New(apperrors.KindTransient, "failed to watch pull request", err)
+	}
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
+}
+
+func (service *Service) Unwatch(ctx context.Context, repository RepositoryRef, pullRequestID string) error {
+	if err := validateRepositoryRef(repository); err != nil {
+		return err
+	}
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return err
+	}
+	if service.apiClient == nil {
+		return apperrors.New(apperrors.KindInternal, "openapi client is not configured on pullrequest service", nil)
+	}
+
+	var wrapper struct {
+		client *openapigenerated.ClientWithResponses
+	}
+	wrapper.client = service.apiClient
+
+	response, err := wrapper.client.Unwatch1WithResponse(ctx, repository.ProjectKey, repository.Slug, resolvedID)
+	if err != nil {
+		return apperrors.New(apperrors.KindTransient, "failed to unwatch pull request", err)
+	}
+	return openapi.MapStatusError(response.StatusCode(), response.Body)
+}
+
+func (service *Service) CanRebase(ctx context.Context, repository RepositoryRef, pullRequestID string) (*openapigenerated.RestPullRequestRebaseability, error) {
+	if err := validateRepositoryRef(repository); err != nil {
+		return nil, err
+	}
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return nil, err
+	}
+	if service.apiClient == nil {
+		return nil, apperrors.New(apperrors.KindInternal, "openapi client is not configured on pullrequest service", nil)
+	}
+
+	var wrapper struct {
+		client *openapigenerated.ClientWithResponses
+	}
+	wrapper.client = service.apiClient
+
+	response, err := wrapper.client.CanRebaseWithResponse(ctx, repository.ProjectKey, repository.Slug, resolvedID)
+	if err != nil {
+		return nil, apperrors.New(apperrors.KindTransient, "failed to check rebase status", err)
+	}
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return nil, err
+	}
+	if response.ApplicationjsonCharsetUTF8200 == nil {
+		return nil, apperrors.New(apperrors.KindInternal, "unexpected empty rebaseability response body", nil)
+	}
+	return response.ApplicationjsonCharsetUTF8200, nil
+}
+
+func (service *Service) Rebase(ctx context.Context, repository RepositoryRef, pullRequestID string, version *int) (*openapigenerated.RestPullRequestRebaseResult, error) {
+	if err := validateRepositoryRef(repository); err != nil {
+		return nil, err
+	}
+	resolvedID, err := normalizePullRequestID(pullRequestID)
+	if err != nil {
+		return nil, err
+	}
+	if service.apiClient == nil {
+		return nil, apperrors.New(apperrors.KindInternal, "openapi client is not configured on pullrequest service", nil)
+	}
+
+	var request openapigenerated.RestPullRequestRebaseRequest
+	if version != nil {
+		v32 := int32(*version)
+		request.Version = &v32
+	}
+
+	var wrapper struct {
+		client *openapigenerated.ClientWithResponses
+	}
+	wrapper.client = service.apiClient
+
+	response, err := wrapper.client.RebaseWithResponse(ctx, repository.ProjectKey, repository.Slug, resolvedID, request)
+	if err != nil {
+		return nil, apperrors.New(apperrors.KindTransient, "failed to rebase pull request", err)
+	}
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return nil, err
+	}
+	if response.ApplicationjsonCharsetUTF8200 == nil {
+		return nil, apperrors.New(apperrors.KindInternal, "unexpected empty rebase response body", nil)
+	}
+	return response.ApplicationjsonCharsetUTF8200, nil
+}
+
