@@ -1258,3 +1258,120 @@ func TestWatchUnwatchRebaseAPIErrors(t *testing.T) {
 	}
 }
 
+func TestListPullRequestsContainingCommitAndSearchParticipants(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/commits/sha123/pull-requests":
+			_, _ = fmt.Fprint(w, `{"values":[{"id":42,"title":"PR Title","state":"OPEN","open":true,"closed":false,"draft":false,"version":1}]}`)
+		case r.Method == http.MethodGet && r.URL.Path == "/rest/api/latest/projects/TEST/repos/demo/participants":
+			if r.URL.Query().Get("filter") == "user1" {
+				_, _ = fmt.Fprint(w, `{"values":[{"active":true,"displayName":"User One","emailAddress":"user1@example.com","id":1,"name":"user1","slug":"user1"}]}`)
+			} else {
+				_, _ = fmt.Fprint(w, `{"values":[]}`)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	client, err := openapigenerated.NewClientWithResponses(server.URL + "/rest")
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	service := NewService(nil).WithAPIClient(client)
+	repo := RepositoryRef{ProjectKey: "TEST", Slug: "demo"}
+
+	// Test ListPullRequestsContainingCommit
+	prs, err := service.ListPullRequestsContainingCommit(context.Background(), repo, "sha123")
+	if err != nil {
+		t.Fatalf("unexpected error on ListPullRequestsContainingCommit: %v", err)
+	}
+	if len(prs) != 1 || prs[0].ID != 42 || prs[0].Title != "PR Title" {
+		t.Fatalf("unexpected PRs: %+v", prs)
+	}
+
+	// Test SearchParticipants
+	users, err := service.SearchParticipants(context.Background(), repo, "user1")
+	if err != nil {
+		t.Fatalf("unexpected error on SearchParticipants: %v", err)
+	}
+	if len(users) != 1 || users[0].Name != "user1" || users[0].DisplayName != "User One" || users[0].EmailAddress != "user1@example.com" || !users[0].Active {
+		t.Fatalf("unexpected participants: %+v", users)
+	}
+}
+
+func TestListPullRequestsContainingCommitAndSearchParticipantsValidation(t *testing.T) {
+	service := NewService(nil)
+	repo := RepositoryRef{ProjectKey: "TEST", Slug: "demo"}
+
+	// Nil client error
+	_, err := service.ListPullRequestsContainingCommit(context.Background(), repo, "sha123")
+	if err == nil || !strings.Contains(err.Error(), "openapi client is not configured") {
+		t.Fatalf("expected nil client error, got: %v", err)
+	}
+
+	_, err = service.SearchParticipants(context.Background(), repo, "filter")
+	if err == nil || !strings.Contains(err.Error(), "openapi client is not configured") {
+		t.Fatalf("expected nil client error, got: %v", err)
+	}
+
+	// Validation errors (missing repository)
+	client := &openapigenerated.ClientWithResponses{}
+	service.WithAPIClient(client)
+
+	for _, op := range []string{"commit_prs", "participants"} {
+		var err error
+		if op == "commit_prs" {
+			_, err = service.ListPullRequestsContainingCommit(context.Background(), RepositoryRef{}, "sha123")
+		} else {
+			_, err = service.SearchParticipants(context.Background(), RepositoryRef{}, "filter")
+		}
+		if err == nil || apperrors.ExitCode(err) != 2 {
+			t.Fatalf("expected validation error (repo) on %s, got: %v", op, err)
+		}
+	}
+
+	// Validation errors (missing inputs)
+	_, err = service.ListPullRequestsContainingCommit(context.Background(), repo, "")
+	if err == nil || apperrors.ExitCode(err) != 2 {
+		t.Fatalf("expected validation error (commit ID) on commit_prs, got: %v", err)
+	}
+
+	_, err = service.SearchParticipants(context.Background(), repo, "")
+	if err == nil || apperrors.ExitCode(err) != 2 {
+		t.Fatalf("expected validation error (filter) on participants, got: %v", err)
+	}
+}
+
+func TestListPullRequestsContainingCommitAndSearchParticipantsAPIErrors(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		_, _ = fmt.Fprint(w, `{"errors":[{"message":"internal error"}]}`)
+	}))
+	defer server.Close()
+
+	client, err := openapigenerated.NewClientWithResponses(server.URL + "/rest")
+	if err != nil {
+		t.Fatalf("failed to create client: %v", err)
+	}
+
+	service := NewService(nil).WithAPIClient(client)
+	repo := RepositoryRef{ProjectKey: "TEST", Slug: "demo"}
+
+	// Test commit prs error
+	_, err = service.ListPullRequestsContainingCommit(context.Background(), repo, "sha123")
+	if err == nil {
+		t.Fatalf("expected error on ListPullRequestsContainingCommit")
+	}
+
+	// Test participants error
+	_, err = service.SearchParticipants(context.Background(), repo, "filter")
+	if err == nil {
+		t.Fatalf("expected error on SearchParticipants")
+	}
+}
+

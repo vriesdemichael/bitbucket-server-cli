@@ -1,9 +1,9 @@
 {
   "version": 1,
   "spec": "docs/reference/atlassian/bitbucket-9.4-openapi.json",
-  "covered": 119,
+  "covered": 121,
   "total": 546,
-  "coverage_percent": 21.794871794871796,
+  "coverage_percent": 22.16117216117216,
   "by_tag": [
     {
       "tag": "",
@@ -67,7 +67,7 @@
     },
     {
       "tag": "Pull Requests",
-      "covered": 37,
+      "covered": 39,
       "total": 69
     },
     {
@@ -1036,12 +1036,6 @@
       "summary": "Get the common ancestor between two commits"
     },
     {
-      "method": "GET",
-      "path": "/api/latest/projects/{projectKey}/repos/{repositorySlug}/commits/{commitId}/pull-requests",
-      "tag": "Pull Requests",
-      "summary": "Get repository pull requests containing commit"
-    },
-    {
       "method": "DELETE",
       "path": "/api/latest/projects/{projectKey}/repos/{repositorySlug}/commits/{commitId}/watch",
       "tag": "Repository",
@@ -1136,12 +1130,6 @@
       "path": "/api/latest/projects/{projectKey}/repos/{repositorySlug}/license",
       "tag": "Project",
       "summary": "Get repository license"
-    },
-    {
-      "method": "GET",
-      "path": "/api/latest/projects/{projectKey}/repos/{repositorySlug}/participants",
-      "tag": "Pull Requests",
-      "summary": "Search pull request participants"
     },
     {
       "method": "DELETE",

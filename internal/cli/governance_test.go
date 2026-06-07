@@ -2288,3 +2288,99 @@ func TestPRWatchUnwatchRebaseCLI(t *testing.T) {
 	}
 }
 
+func TestCommitPRsAndParticipantsCLI(t *testing.T) {
+	t.Setenv("BB_DISABLE_STORED_CONFIG", "1")
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		writer.Header().Set("Content-Type", "application/json")
+		switch {
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/repos":
+			_, _ = writer.Write([]byte(`{"values":[{"slug":"demo","name":"demo","project":{"key":"PRJ"}}],"isLastPage":true}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/commits/sha123/pull-requests":
+			_, _ = writer.Write([]byte(`{"values":[{"id":42,"title":"PR Title","state":"OPEN","open":true,"closed":false,"draft":false,"version":1}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/commits/sha999/pull-requests":
+			_, _ = writer.Write([]byte(`{"values":[]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/commits/shaError/pull-requests":
+			writer.WriteHeader(http.StatusInternalServerError)
+			_, _ = writer.Write([]byte(`{"errors":[{"message":"internal error"}]}`))
+		case request.Method == http.MethodGet && request.URL.Path == "/rest/api/latest/projects/PRJ/repos/demo/participants":
+			filter := request.URL.Query().Get("filter")
+			if filter == "user1" {
+				_, _ = writer.Write([]byte(`{"values":[{"active":true,"displayName":"User One","emailAddress":"user1@example.com","id":1,"name":"user1","slug":"user1"}]}`))
+			} else if filter == "userInactive" {
+				_, _ = writer.Write([]byte(`{"values":[{"active":false,"displayName":"User Inactive","emailAddress":"inactive@example.com","id":2,"name":"userinactive","slug":"userinactive"}]}`))
+			} else if filter == "userError" {
+				writer.WriteHeader(http.StatusInternalServerError)
+				_, _ = writer.Write([]byte(`{"errors":[{"message":"internal error"}]}`))
+			} else {
+				_, _ = writer.Write([]byte(`{"values":[]}`))
+			}
+		default:
+			http.NotFound(writer, request)
+		}
+	}))
+	defer server.Close()
+
+	t.Setenv("BITBUCKET_URL", server.URL)
+
+	commands := [][]string{
+		{"commit", "prs", "sha123", "--repo", "PRJ/demo"},
+		{"--json", "commit", "prs", "sha123", "--repo", "PRJ/demo"},
+		{"commit", "prs", "sha999", "--repo", "PRJ/demo"},
+
+		{"pr", "participants", "--search", "user1", "--repo", "PRJ/demo"},
+		{"--json", "pr", "participants", "--search", "user1", "--repo", "PRJ/demo"},
+		{"pr", "participants", "--search", "user999", "--repo", "PRJ/demo"},
+		{"pr", "participants", "--search", "userInactive", "--repo", "PRJ/demo"},
+	}
+
+	for _, args := range commands {
+		cmd := NewRootCommand()
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err != nil {
+			t.Fatalf("command failed: %v %v", args, err)
+		}
+	}
+
+	// Test config load error path
+	{
+		t.Setenv("BITBUCKET_URL", "")
+		cmd1 := NewRootCommand()
+		cmd1.SetArgs([]string{"commit", "prs", "sha123", "--repo", "PRJ/demo"})
+		_ = cmd1.Execute()
+
+		cmd2 := NewRootCommand()
+		cmd2.SetArgs([]string{"pr", "participants", "--search", "user1", "--repo", "PRJ/demo"})
+		_ = cmd2.Execute()
+		t.Setenv("BITBUCKET_URL", server.URL)
+	}
+
+	// Test repo resolution error path
+	{
+		cmd1 := NewRootCommand()
+		cmd1.SetArgs([]string{"commit", "prs", "sha123", "--repo", "invalid"})
+		_ = cmd1.Execute()
+
+		cmd2 := NewRootCommand()
+		cmd2.SetArgs([]string{"pr", "participants", "--search", "user1", "--repo", "invalid"})
+		_ = cmd2.Execute()
+	}
+
+	// Test missing search query validation
+	{
+		cmd := NewRootCommand()
+		cmd.SetArgs([]string{"pr", "participants", "--repo", "PRJ/demo"})
+		_ = cmd.Execute()
+	}
+
+	// Test CLI service error paths
+	{
+		cmd1 := NewRootCommand()
+		cmd1.SetArgs([]string{"commit", "prs", "shaError", "--repo", "PRJ/demo"})
+		_ = cmd1.Execute()
+
+		cmd2 := NewRootCommand()
+		cmd2.SetArgs([]string{"pr", "participants", "--search", "userError", "--repo", "PRJ/demo"})
+		_ = cmd2.Execute()
+	}
+}
+

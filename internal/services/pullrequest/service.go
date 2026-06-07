@@ -2,6 +2,7 @@ package pullrequest
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"strconv"
@@ -11,7 +12,6 @@ import (
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/openapi"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
-
 )
 
 type RepositoryRef struct {
@@ -1326,5 +1326,115 @@ func (service *Service) Rebase(ctx context.Context, repository RepositoryRef, pu
 		return nil, apperrors.New(apperrors.KindInternal, "unexpected empty rebase response body", nil)
 	}
 	return response.ApplicationjsonCharsetUTF8200, nil
+}
+
+type Participant struct {
+	Name         string `json:"name"`
+	DisplayName  string `json:"displayName"`
+	EmailAddress string `json:"emailAddress"`
+	Active       bool   `json:"active"`
+}
+
+func (service *Service) ListPullRequestsContainingCommit(ctx context.Context, repository RepositoryRef, commitID string) ([]PullRequest, error) {
+	if err := validateRepositoryRef(repository); err != nil {
+		return nil, err
+	}
+	trimmedCommit := strings.TrimSpace(commitID)
+	if trimmedCommit == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "commit ID is required", nil)
+	}
+	if service.apiClient == nil {
+		return nil, apperrors.New(apperrors.KindInternal, "openapi client is not configured on pullrequest service", nil)
+	}
+
+	var wrapper struct {
+		client *openapigenerated.ClientWithResponses
+	}
+	wrapper.client = service.apiClient
+
+	response, err := wrapper.client.GetPullRequestsWithResponse(ctx, repository.ProjectKey, repository.Slug, trimmedCommit, nil)
+	if err != nil {
+		return nil, apperrors.New(apperrors.KindTransient, "failed to list pull requests containing commit", err)
+	}
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return nil, err
+	}
+	if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
+		return []PullRequest{}, nil
+	}
+
+	rawValues := *response.ApplicationjsonCharsetUTF8200.Values
+	results := make([]PullRequest, 0, len(rawValues))
+	for _, openapiPR := range rawValues {
+		data, err := json.Marshal(openapiPR)
+		if err != nil {
+			return nil, apperrors.New(apperrors.KindInternal, "failed to marshal openapi pull request", err)
+		}
+		var raw pullRequestValue
+		if err := json.Unmarshal(data, &raw); err != nil {
+			return nil, apperrors.New(apperrors.KindInternal, "failed to unmarshal pull request value", err)
+		}
+		results = append(results, mapPullRequest(raw))
+	}
+	return results, nil
+}
+
+func (service *Service) SearchParticipants(ctx context.Context, repository RepositoryRef, filter string) ([]Participant, error) {
+	if err := validateRepositoryRef(repository); err != nil {
+		return nil, err
+	}
+	trimmedFilter := strings.TrimSpace(filter)
+	if trimmedFilter == "" {
+		return nil, apperrors.New(apperrors.KindValidation, "search query/filter is required", nil)
+	}
+	if service.apiClient == nil {
+		return nil, apperrors.New(apperrors.KindInternal, "openapi client is not configured on pullrequest service", nil)
+	}
+
+	var wrapper struct {
+		client *openapigenerated.ClientWithResponses
+	}
+	wrapper.client = service.apiClient
+
+	response, err := wrapper.client.SearchWithResponse(ctx, repository.ProjectKey, repository.Slug, &openapigenerated.SearchParams{
+		Filter: &trimmedFilter,
+	})
+	if err != nil {
+		return nil, apperrors.New(apperrors.KindTransient, "failed to search participants", err)
+	}
+	if err := openapi.MapStatusError(response.StatusCode(), response.Body); err != nil {
+		return nil, err
+	}
+	if response.ApplicationjsonCharsetUTF8200 == nil || response.ApplicationjsonCharsetUTF8200.Values == nil {
+		return []Participant{}, nil
+	}
+
+	rawUsers := *response.ApplicationjsonCharsetUTF8200.Values
+	results := make([]Participant, 0, len(rawUsers))
+	for _, rawUser := range rawUsers {
+		name := ""
+		if rawUser.Name != nil {
+			name = *rawUser.Name
+		}
+		displayName := ""
+		if rawUser.DisplayName != nil {
+			displayName = *rawUser.DisplayName
+		}
+		email := ""
+		if rawUser.EmailAddress != nil {
+			email = *rawUser.EmailAddress
+		}
+		active := false
+		if rawUser.Active != nil {
+			active = *rawUser.Active
+		}
+		results = append(results, Participant{
+			Name:         name,
+			DisplayName:  displayName,
+			EmailAddress: email,
+			Active:       active,
+		})
+	}
+	return results, nil
 }
 

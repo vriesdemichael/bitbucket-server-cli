@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/cli/style"
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
@@ -2301,6 +2302,51 @@ func newPRCommand(options *rootOptions) *cobra.Command {
 	}
 	rebaseCmd.Flags().IntVar(&rebaseVersion, "version", 0, "Expected pull request version")
 	prCmd.AddCommand(rebaseCmd)
+
+	var searchFilter string
+	participantsCmd := &cobra.Command{
+		Use:   "participants",
+		Short: "Search pull request participants across a repository",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, apiClient, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+			repo, err := resolvePullRequestRepositoryReference(repository, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := pullrequestservice.NewService(httpclient.NewFromConfig(cfg)).WithAPIClient(apiClient)
+			participants, err := service.SearchParticipants(cmd.Context(), repo, searchFilter)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]any{"repository": repo, "participants": participants})
+			}
+
+			if len(participants) == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render("No participants found"))
+				return nil
+			}
+
+			rows := make([][]string, len(participants))
+			for i, p := range participants {
+				activeStr := "active"
+				if !p.Active {
+					activeStr = "inactive"
+				}
+				rows[i] = []string{p.Name, p.DisplayName, p.EmailAddress, activeStr}
+			}
+			style.WriteTable(cmd.OutOrStdout(), rows)
+			return nil
+		},
+	}
+	participantsCmd.Flags().StringVar(&searchFilter, "search", "", "Query filter (checks username, name, or email)")
+	_ = participantsCmd.MarkFlagRequired("search")
+	prCmd.AddCommand(participantsCmd)
 
 	return prCmd
 }

@@ -1142,6 +1142,52 @@ func TestLiveCLIPRWatchUnwatchRebase(t *testing.T) {
 	}
 }
 
+func TestLiveCommitPRsAndParticipants(t *testing.T) {
+	harness, seeded, repo, pullRequestID := prepareOpenPRDryRunFixture(t)
+	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
+
+	// Get the PR to find its source commit
+	prGetJSON, err := executeLiveCLI(t, "--json", "pr", "get", pullRequestID)
+	if err != nil {
+		t.Fatalf("pr get failed: %v\noutput: %s", err, prGetJSON)
+	}
+
+	var envelope map[string]any
+	if err := json.Unmarshal([]byte(prGetJSON), &envelope); err != nil {
+		t.Fatalf("failed to parse pr get JSON: %v", err)
+	}
+	data, ok := envelope["data"].(map[string]any)
+	if !ok {
+		t.Fatalf("data field not found or not a map in envelope: %s", prGetJSON)
+	}
+	prData, ok := data["pull_request"].(map[string]any)
+	if !ok {
+		t.Fatalf("pull_request field not found or not a map in data: %s", prGetJSON)
+	}
+	sourceCommit, ok := prData["source_commit"].(string)
+	if !ok || sourceCommit == "" {
+		t.Fatalf("source_commit not found or empty in get output: %s", prGetJSON)
+	}
+
+	// 1. Test List pull requests containing commit
+	commitPRsJSON, err := executeLiveCLI(t, "--json", "commit", "prs", sourceCommit)
+	if err != nil {
+		t.Fatalf("commit prs failed: %v\noutput: %s", err, commitPRsJSON)
+	}
+	if !strings.Contains(commitPRsJSON, fmt.Sprintf(`"id": %s`, pullRequestID)) {
+		t.Fatalf("expected PR ID %s in commit prs output, got: %s", pullRequestID, commitPRsJSON)
+	}
+
+	// 2. Test Search participants
+	participantsJSON, err := executeLiveCLI(t, "--json", "pr", "participants", "--search", "admin")
+	if err != nil {
+		t.Fatalf("pr participants failed: %v\noutput: %s", err, participantsJSON)
+	}
+	if !strings.Contains(participantsJSON, `"name": "admin"`) {
+		t.Fatalf("expected participant admin in output, got: %s", participantsJSON)
+	}
+}
+
 func TestLiveCLIRepoCommentCreateDryRunNoSideEffect(t *testing.T) {
 	harness := newLiveHarness(t)
 

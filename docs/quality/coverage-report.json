@@ -1,40 +1,40 @@
 {
   "version": 2,
   "coverage": {
-    "unit_raw_percent": 20.38982282572279,
-    "unit_scoped_percent": 88.25975404759798,
-    "live_raw_percent": 18.952421461991857,
-    "live_scoped_percent": 48.40288281875612,
-    "combined_raw_percent": 28.509489367572577,
-    "combined_scoped_percent": 90.05573741484561,
-    "patch_percent": 92.70833333333334,
+    "unit_raw_percent": 20.55532613611783,
+    "unit_scoped_percent": 88.33114323258869,
+    "live_raw_percent": 3.4678576480811594,
+    "live_scoped_percent": 12.430622852612103,
+    "combined_raw_percent": 21.160993451713765,
+    "combined_scoped_percent": 88.35742444152432,
+    "patch_percent": 89.28571428571429,
     "unit_statements": {
-      "covered": 10346,
-      "total": 50741
+      "covered": 10453,
+      "total": 50853
     },
     "live_statements": {
-      "covered": 9357,
-      "total": 49371
+      "covered": 1716,
+      "total": 49483
     },
     "combined_statements": {
-      "covered": 14466,
-      "total": 50741
+      "covered": 10761,
+      "total": 50853
     },
     "unit_scoped_statements": {
-      "covered": 9976,
-      "total": 11303
+      "covered": 10083,
+      "total": 11415
     },
     "live_scoped_statements": {
-      "covered": 5440,
-      "total": 11239
+      "covered": 1411,
+      "total": 11351
     },
     "combined_scoped_statements": {
-      "covered": 10179,
-      "total": 11303
+      "covered": 10086,
+      "total": 11415
     },
     "patch_lines": {
-      "covered": 267,
-      "total": 288
+      "covered": 150,
+      "total": 168
     },
     "scope": {
       "include_prefixes": [
@@ -48,7 +48,7 @@
     }
   },
   "generated_contracts": {
-    "coverage_percent": 39.80582524271845,
+    "coverage_percent": 39.04761904761905,
     "used_operations": [
       "AddAnnotationsWithResponse",
       "AddBuildStatusWithResponse",
@@ -109,6 +109,7 @@
       "GetPullRequestConditions1WithResponse",
       "GetPullRequestConditionsWithResponse",
       "GetPullRequestSettings1",
+      "GetPullRequestsWithResponse",
       "GetReportsWithResponse",
       "GetRepositoryHooks1WithResponse",
       "GetRepositoryHooksWithResponse",
@@ -127,6 +128,7 @@
       "RevokePermissionsForGroup2WithResponse",
       "RevokePermissionsForUser1WithResponse",
       "RevokePermissionsForUser2WithResponse",
+      "SearchWithResponse",
       "SetACodeInsightsReportWithResponse",
       "SetDefaultBranch2WithResponse",
       "SetPermissionForGroupWithResponse",
@@ -230,6 +232,7 @@
       "GetProjectsWithResponse",
       "GetPullRequestConditions1WithResponse",
       "GetPullRequestConditionsWithResponse",
+      "GetPullRequestsWithResponse",
       "GetRepositoryHooks1WithResponse",
       "GetRepositoryHooksWithResponse",
       "GetRestriction1WithResponse",
@@ -244,6 +247,7 @@
       "RevokePermissionsForGroup2WithResponse",
       "RevokePermissionsForUser1WithResponse",
       "RevokePermissionsForUser2WithResponse",
+      "SearchWithResponse",
       "SetDefaultBranch2WithResponse",
       "SetPermissionForGroupWithResponse",
       "SetPermissionForGroups1WithResponse",
