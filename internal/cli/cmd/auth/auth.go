@@ -461,6 +461,7 @@ func New(deps Dependencies) *cobra.Command {
 	authCmd.AddCommand(serverCmd)
 
 	authCmd.AddCommand(newTokenCommand(deps))
+	authCmd.AddCommand(newGpgKeyCommand(deps))
 
 	return authCmd
 }

@@ -11,6 +11,7 @@ import (
 	apperrors "github.com/vriesdemichael/bitbucket-server-cli/internal/domain/errors"
 	openapigenerated "github.com/vriesdemichael/bitbucket-server-cli/internal/openapi/generated"
 	commentservice "github.com/vriesdemichael/bitbucket-server-cli/internal/services/comment"
+	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/forksync"
 	reposettings "github.com/vriesdemichael/bitbucket-server-cli/internal/services/reposettings"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/services/repository"
 	"github.com/vriesdemichael/bitbucket-server-cli/internal/transport/httpclient"
@@ -87,6 +88,7 @@ func newRepoCommand(options *rootOptions) *cobra.Command {
 	repoCmd.AddCommand(newRepoCompareCommand(options))
 	repoCmd.AddCommand(newRepoArchiveCommand(options))
 	repoCmd.AddCommand(newRepoHookScriptCommand(options))
+	repoCmd.AddCommand(newRepoSyncCommand(options))
 
 	return repoCmd
 }
@@ -2322,3 +2324,203 @@ func newRepoDefaultTaskCommand(options *rootOptions) *cobra.Command {
 	defaultTaskCmd.AddCommand(deleteCmd)
 	return defaultTaskCmd
 }
+
+func newRepoSyncCommand(options *rootOptions) *cobra.Command {
+	var repositorySelector string
+
+	syncCmd := &cobra.Command{
+		Use:   "sync",
+		Short: "Manage repository fork synchronization",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := forksync.NewService(client)
+			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.sync.trigger",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug)},
+						Action:          "update",
+						PredictedAction: "update",
+						Supported:       true,
+						Reason:          "manual synchronization will be triggered",
+						Confidence:      capabilityFull,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, UpdateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			if err := service.Synchronize(cmd.Context(), repo.ProjectKey, repo.Slug); err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), map[string]string{"status": "ok", "sync": "triggered"})
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Synchronization triggered for fork %s/%s from upstream\n", repo.ProjectKey, repo.Slug)
+			return nil
+		},
+	}
+	syncCmd.PersistentFlags().StringVar(&repositorySelector, "repo", "", "Repository as PROJECT/slug (defaults to BITBUCKET_PROJECT_KEY + BITBUCKET_REPO_SLUG)")
+
+	statusCmd := &cobra.Command{
+		Use:   "status",
+		Short: "Query synchronization status, divergence, and settings",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := forksync.NewService(client)
+			status, err := service.GetSyncStatus(cmd.Context(), repo.ProjectKey, repo.Slug)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), status)
+			}
+
+			enabled := false
+			if status.Enabled != nil {
+				enabled = *status.Enabled
+			}
+			available := false
+			if status.Available != nil {
+				available = *status.Available
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "Auto-sync enabled: %t\n", enabled)
+			fmt.Fprintf(cmd.OutOrStdout(), "Auto-sync available: %t\n", available)
+			return nil
+		},
+	}
+
+	enableCmd := &cobra.Command{
+		Use:   "enable",
+		Short: "Enable automatic background synchronization",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := forksync.NewService(client)
+			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.sync.enable",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "enabled": true},
+						Action:          "update",
+						PredictedAction: "update",
+						Supported:       true,
+						Reason:          "automatic synchronization will be enabled",
+						Confidence:      capabilityFull,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, UpdateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			status, err := service.SetEnabled(cmd.Context(), repo.ProjectKey, repo.Slug, true)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), status)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Automatic synchronization enabled for fork %s/%s\n", repo.ProjectKey, repo.Slug)
+			return nil
+		},
+	}
+
+	disableCmd := &cobra.Command{
+		Use:   "disable",
+		Short: "Disable automatic background synchronization",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cfg, client, err := loadConfigAndClient()
+			if err != nil {
+				return err
+			}
+			repo, err := resolveRepositorySettingsReference(repositorySelector, cfg)
+			if err != nil {
+				return err
+			}
+
+			service := forksync.NewService(client)
+			if options.DryRun {
+				checker := options.permissionCheckerFor(client)
+				if err := checker.CheckRepoPermission(cmd.Context(), repo.ProjectKey, repo.Slug, openapigenerated.REPOADMIN); err != nil {
+					return err
+				}
+				preview := dryRunPreview{
+					DryRun:       true,
+					PlanningMode: planningModeStateful,
+					Capability:   capabilityFull,
+					Items: []dryRunItem{{
+						Intent:          "repo.sync.disable",
+						Target:          map[string]any{"repository": fmt.Sprintf("%s/%s", repo.ProjectKey, repo.Slug), "enabled": false},
+						Action:          "update",
+						PredictedAction: "update",
+						Supported:       true,
+						Reason:          "automatic synchronization will be disabled",
+						Confidence:      capabilityFull,
+					}},
+					Summary: dryRunSummary{Total: 1, Supported: 1, UpdateCount: 1},
+				}
+				return writeDryRunPreview(cmd.OutOrStdout(), options.JSON, preview)
+			}
+
+			status, err := service.SetEnabled(cmd.Context(), repo.ProjectKey, repo.Slug, false)
+			if err != nil {
+				return err
+			}
+
+			if options.JSON {
+				return writeJSON(cmd.OutOrStdout(), status)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Automatic synchronization disabled for fork %s/%s\n", repo.ProjectKey, repo.Slug)
+			return nil
+		},
+	}
+
+	syncCmd.AddCommand(statusCmd)
+	syncCmd.AddCommand(enableCmd)
+	syncCmd.AddCommand(disableCmd)
+	return syncCmd
+}
+

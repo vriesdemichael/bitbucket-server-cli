@@ -1,9 +1,9 @@
 {
   "version": 1,
   "spec": "docs/reference/atlassian/bitbucket-9.4-openapi.json",
-  "covered": 202,
+  "covered": 209,
   "total": 546,
-  "coverage_percent": 36.996336996337,
+  "coverage_percent": 38.27838827838828,
   "by_tag": [
     {
       "tag": "",
@@ -72,12 +72,12 @@
     },
     {
       "tag": "Repository",
-      "covered": 64,
+      "covered": 67,
       "total": 96
     },
     {
       "tag": "Security",
-      "covered": 0,
+      "covered": 4,
       "total": 42
     },
     {
@@ -1636,30 +1636,6 @@
       "summary": "Create tag"
     },
     {
-      "method": "DELETE",
-      "path": "/gpg/latest/keys",
-      "tag": "Security",
-      "summary": "Delete all GPG keys for user"
-    },
-    {
-      "method": "GET",
-      "path": "/gpg/latest/keys",
-      "tag": "Security",
-      "summary": "Get all GPG keys"
-    },
-    {
-      "method": "POST",
-      "path": "/gpg/latest/keys",
-      "tag": "Security",
-      "summary": "Create a GPG key"
-    },
-    {
-      "method": "DELETE",
-      "path": "/gpg/latest/keys/{fingerprintOrId}",
-      "tag": "Security",
-      "summary": "Delete a GPG key"
-    },
-    {
       "method": "POST",
       "path": "/jira/latest/comments/{commentId}/issues",
       "tag": "Jira Integration",
@@ -2018,24 +1994,6 @@
       "path": "/ssh/latest/settings",
       "tag": "Authentication",
       "summary": "Get SSH settings"
-    },
-    {
-      "method": "GET",
-      "path": "/sync/latest/projects/{projectKey}/repos/{repositorySlug}",
-      "tag": "Repository",
-      "summary": "Get synchronization status"
-    },
-    {
-      "method": "POST",
-      "path": "/sync/latest/projects/{projectKey}/repos/{repositorySlug}",
-      "tag": "Repository",
-      "summary": "Disable synchronization"
-    },
-    {
-      "method": "POST",
-      "path": "/sync/latest/projects/{projectKey}/repos/{repositorySlug}/synchronize",
-      "tag": "Repository",
-      "summary": "Manual synchronization"
     },
     {
       "method": "POST",
