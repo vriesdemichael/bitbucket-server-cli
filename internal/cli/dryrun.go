@@ -178,6 +178,10 @@ var dryRunProfiles = map[string]dryRunProfile{
 	// repo ssh-key
 	"repo ssh-key add":    {Intent: "repo.ssh-key.add", Action: "create", Stateful: false},
 	"repo ssh-key remove": {Intent: "repo.ssh-key.remove", Action: "delete", Stateful: false},
+	// repo sync
+	"repo sync":         {Intent: "repo.sync.trigger", Action: "update", Stateful: true},
+	"repo sync enable":  {Intent: "repo.sync.enable", Action: "update", Stateful: true},
+	"repo sync disable": {Intent: "repo.sync.disable", Action: "update", Stateful: true},
 }
 
 func registerGlobalDryRunInterceptors(root *cobra.Command, options *rootOptions) {

@@ -1,40 +1,40 @@
 {
   "version": 2,
   "coverage": {
-    "unit_raw_percent": 24.942762186115214,
-    "unit_scoped_percent": 89.24738486618666,
-    "live_raw_percent": 20.070089032013637,
-    "live_scoped_percent": 41.19934506753991,
-    "combined_raw_percent": 33.729689807976364,
-    "combined_scoped_percent": 90.62627360412986,
-    "patch_percent": 89.10411622276028,
+    "unit_raw_percent": 25.2906709769851,
+    "unit_scoped_percent": 89.29618768328446,
+    "live_raw_percent": 19.929529695507988,
+    "live_scoped_percent": 40.568942436412314,
+    "combined_raw_percent": 33.955723482694744,
+    "combined_scoped_percent": 90.34610794324361,
+    "patch_percent": 85.21739130434783,
     "unit_statements": {
-      "covered": 13509,
-      "total": 54160
+      "covered": 13769,
+      "total": 54443
     },
     "live_statements": {
-      "covered": 10595,
-      "total": 52790
+      "covered": 10577,
+      "total": 53072
     },
     "combined_statements": {
-      "covered": 18268,
-      "total": 54160
+      "covered": 18513,
+      "total": 54521
     },
     "unit_scoped_statements": {
-      "covered": 13139,
-      "total": 14722
+      "covered": 13398,
+      "total": 15004
     },
     "live_scoped_statements": {
-      "covered": 6039,
-      "total": 14658
+      "covered": 6061,
+      "total": 14940
     },
     "combined_scoped_statements": {
-      "covered": 13342,
-      "total": 14722
+      "covered": 13626,
+      "total": 15082
     },
     "patch_lines": {
-      "covered": 736,
-      "total": 826
+      "covered": 392,
+      "total": 460
     },
     "scope": {
       "include_prefixes": [
@@ -48,13 +48,14 @@
     }
   },
   "generated_contracts": {
-    "coverage_percent": 22.043010752688172,
+    "coverage_percent": 21.243523316062177,
     "used_operations": [
       "AddAnnotationsWithResponse",
       "AddBuildStatusWithResponse",
       "AddDefaultTask1WithResponse",
       "AddForProjectWithResponse",
       "AddForRepositoryWithResponse",
+      "AddKeyWithResponse",
       "AddLabelWithResponse",
       "AddSshKeyWithResponse",
       "AddWithBodyWithResponse",
@@ -92,7 +93,9 @@
       "DeleteComment2WithResponse",
       "DeleteCommentWithResponse",
       "DeleteDefaultTask1WithResponse",
+      "DeleteForUserWithResponse",
       "DeleteJSON",
+      "DeleteKeyWithResponse",
       "DeleteProjectWithResponse",
       "DeletePullRequestCondition1WithResponse",
       "DeletePullRequestConditionWithResponse",
@@ -146,6 +149,7 @@
       "GetGroupsWithAnyPermission1WithResponse",
       "GetGroupsWithAnyPermission2WithResponse",
       "GetJSON",
+      "GetKeysForUserWithResponse",
       "GetLatestInvocation1WithResponse",
       "GetMultipleBuildStatusStatsWithResponse",
       "GetPageOfRequiredBuildsMergeChecksWithResponse",
@@ -171,6 +175,7 @@
       "GetSshKeysWithResponse",
       "GetStatistics1WithResponse",
       "GetStatisticsSummary1WithResponse",
+      "GetStatus2WithResponse",
       "GetTagWithResponse",
       "GetTagsWithResponse",
       "GetUsersWithAnyPermission1WithResponse",
@@ -198,6 +203,7 @@
       "SetAutoDeclineSettings1WithResponse",
       "SetConfiguration1WithResponse",
       "SetDefaultBranch2WithResponse",
+      "SetEnabledWithResponse",
       "SetPermissionForGroupWithResponse",
       "SetPermissionForGroups1WithResponse",
       "SetPermissionForUserWithResponse",
@@ -214,6 +220,7 @@
       "StreamRawDiff1WithResponse",
       "StreamRawDiff2WithResponse",
       "StreamRawWithResponse",
+      "SynchronizeWithResponse",
       "TestWebhook1WithResponse",
       "UnReact1WithResponse",
       "Unwatch1WithResponse",
@@ -284,6 +291,7 @@
       "AddDefaultTask1WithResponse",
       "AddForProjectWithResponse",
       "AddForRepositoryWithResponse",
+      "AddKeyWithResponse",
       "AddLabelWithResponse",
       "AddSshKeyWithResponse",
       "AddWithBodyWithResponse",
@@ -312,7 +320,9 @@
       "DeleteByIdWithResponse",
       "DeleteComment1WithResponse",
       "DeleteDefaultTask1WithResponse",
+      "DeleteForUserWithResponse",
       "DeleteJSON",
+      "DeleteKeyWithResponse",
       "DeleteProjectWithResponse",
       "DeletePullRequestCondition1WithResponse",
       "DeletePullRequestConditionWithResponse",
@@ -352,6 +362,7 @@
       "GetGroupsWithAnyPermission1WithResponse",
       "GetGroupsWithAnyPermission2WithResponse",
       "GetJSON",
+      "GetKeysForUserWithResponse",
       "GetLatestInvocation1WithResponse",
       "GetMultipleBuildStatusStatsWithResponse",
       "GetProjectWithResponse",
@@ -374,6 +385,7 @@
       "GetSshKeysWithResponse",
       "GetStatistics1WithResponse",
       "GetStatisticsSummary1WithResponse",
+      "GetStatus2WithResponse",
       "GetUsersWithAnyPermission1WithResponse",
       "GetUsersWithResponse",
       "GetWebhook1WithResponse",
@@ -397,6 +409,7 @@
       "SetAutoDeclineSettings1WithResponse",
       "SetConfiguration1WithResponse",
       "SetDefaultBranch2WithResponse",
+      "SetEnabledWithResponse",
       "SetPermissionForGroupWithResponse",
       "SetPermissionForGroups1WithResponse",
       "SetPermissionForUsers1WithResponse",
@@ -408,6 +421,7 @@
       "StreamFiles1WithResponse",
       "StreamFilesWithResponse",
       "StreamRawWithResponse",
+      "SynchronizeWithResponse",
       "TestWebhook1WithResponse",
       "UnReact1WithResponse",
       "Unwatch1WithResponse",
