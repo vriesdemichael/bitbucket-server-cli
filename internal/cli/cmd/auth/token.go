@@ -104,7 +104,7 @@ func newTokenCommand(deps Dependencies) *cobra.Command {
 			}
 
 			if isJSON() {
-				return deps.WriteJSON(cmd.OutOrStdout(), accessTokensFrom(tokens))
+				return deps.WriteJSONList(cmd.OutOrStdout(), accessTokensFrom(tokens), paging.LimitReached(listPaging, len(tokens)))
 			}
 
 			if len(tokens) == 0 {
@@ -128,6 +128,7 @@ func newTokenCommand(deps Dependencies) *cobra.Command {
 				}
 				fmt.Fprintf(cmd.OutOrStdout(), "%-12s %-30s %-25s\n", id, name, created)
 			}
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(tokens))
 			return nil
 		},
 	}

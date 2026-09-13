@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/vriesdemichael/bitbucket-data-center-cli/internal/cli"
+	"github.com/vriesdemichael/bitbucket-data-center-cli/internal/testsupport"
 )
 
 // secretCanary and passwordCanary are what a leak looks like when it happens.
@@ -224,7 +225,7 @@ func TestLiveWebhookFieldsAreSettableAndPublished(t *testing.T) {
 	repo := seeded.Repos[0]
 	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
 
-	name := fmt.Sprintf("live-fields-%d", time.Now().UnixNano()%100000)
+	name := testsupport.UniqueName("live-fields-")
 
 	// The secret on stdin, the endpoint password in the environment: the two
 	// routes ADR-047 leaves open, and the combination automation actually needs
@@ -736,7 +737,7 @@ func TestLiveWebhookListingsAreUsable(t *testing.T) {
 	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
 
 	for index := range 2 {
-		name := fmt.Sprintf("listing-%d-%d", index, time.Now().UnixNano()%100000)
+		name := fmt.Sprintf("listing-%d-%s", index, testsupport.UniqueSuffix())
 		if output, err := executeLiveCLI(t, "--json", "webhook", "create", name, "http://localhost:7990/status"); err != nil {
 			t.Fatalf("create webhook %d failed: %v\noutput: %s", index, err, output)
 		}
@@ -753,6 +754,16 @@ func TestLiveWebhookListingsAreUsable(t *testing.T) {
 		full := mustLiveCLI(t, "--json", "webhook", "list", "--limit", "50")
 		if !strings.Contains(full, `"limitReached": false`) {
 			t.Errorf("a complete listing did not say so:\n%s", full)
+		}
+
+		// A person reading the text listing has the same question, and is
+		// answered on stderr. executeLiveCLI rather than mustLiveCLI, which
+		// adds --json.
+		if text, err := executeLiveCLI(t, "webhook", "list", "--limit", "1"); err != nil || !strings.Contains(text, "Stopped at the limit of 1") {
+			t.Errorf("a text listing cut to one of two did not say so (err: %v):\n%s", err, text)
+		}
+		if text, err := executeLiveCLI(t, "webhook", "list", "--limit", "50"); err != nil || strings.Contains(text, "Stopped at the limit") {
+			t.Errorf("a complete text listing said it was cut (err: %v):\n%s", err, text)
 		}
 	})
 

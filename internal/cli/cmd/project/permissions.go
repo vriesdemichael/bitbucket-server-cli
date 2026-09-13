@@ -127,11 +127,11 @@ func newProjectPermissionListCommand(deps Dependencies, subjectFor projectPermis
 			entries = paging.Truncate(listPaging, entries)
 
 			if deps.JSONEnabled() {
-				return deps.WriteJSON(cmd.OutOrStdout(), GrantedPermissions{
+				return deps.WriteJSONList(cmd.OutOrStdout(), GrantedPermissions{
 					Project: args[0],
 					Subject: subject.noun,
 					Entries: permissionEntriesFrom(entries),
-				})
+				}, paging.LimitReached(listPaging, len(entries)))
 			}
 			if len(entries) == 0 {
 				fmt.Fprintln(cmd.OutOrStdout(), style.Empty.Render(fmt.Sprintf("No %ss with project permissions found", subject.noun)))
@@ -143,6 +143,7 @@ func newProjectPermissionListCommand(deps Dependencies, subjectFor projectPermis
 				rows[index] = []string{style.Resource.Render(entry.display), entry.permission}
 			}
 			style.WriteTable(cmd.OutOrStdout(), rows)
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(entries))
 
 			return nil
 		},

@@ -130,6 +130,7 @@ func newSearchReposCommand(deps Dependencies) *cobra.Command {
 				rows[i] = []string{style.Resource.Render(repo.ProjectKey + "/" + repo.Slug), repo.Name}
 			}
 			style.WriteTable(cmd.OutOrStdout(), rows)
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(reported))
 
 			return nil
 		},
@@ -188,7 +189,7 @@ func newSearchCommitsCommand(deps Dependencies) *cobra.Command {
 			}
 
 			if deps.JSONEnabled() {
-				return deps.WriteJSON(cmd.OutOrStdout(), reported)
+				return deps.WriteJSONList(cmd.OutOrStdout(), reported, paging.LimitReached(listPaging, len(commits)))
 			}
 
 			if len(reported.Commits) == 0 {
@@ -201,6 +202,7 @@ func newSearchCommitsCommand(deps Dependencies) *cobra.Command {
 				rows[i] = []string{style.Secondary.Render(commit.DisplayID), commit.Subject()}
 			}
 			style.WriteTable(cmd.OutOrStdout(), rows)
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(commits))
 
 			return nil
 		},
@@ -285,7 +287,7 @@ func newSearchPRsCommand(deps Dependencies) *cobra.Command {
 			reported := PullRequests{PullRequests: result.PullRequestsFrom(prs)}
 
 			if deps.JSONEnabled() {
-				return deps.WriteJSON(cmd.OutOrStdout(), reported)
+				return deps.WriteJSONList(cmd.OutOrStdout(), reported, paging.LimitReached(listPaging, len(prs)))
 			}
 
 			if len(reported.PullRequests) == 0 {
@@ -302,6 +304,7 @@ func newSearchPRsCommand(deps Dependencies) *cobra.Command {
 				rows[i] = []string{style.Resource.Render(fmt.Sprintf("%s#%d", repoStr, pr.ID)), style.ActionStyle(pr.State).Render(pr.State), pr.Title}
 			}
 			style.WriteTable(cmd.OutOrStdout(), rows)
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(prs))
 
 			return nil
 		},

@@ -58,7 +58,7 @@ func newRepoBrowseCommand(deps Dependencies) *cobra.Command {
 			}
 
 			if deps.JSONEnabled() {
-				return deps.WriteJSON(cmd.OutOrStdout(), Tree{Repository: browseRepositoryOf(repo), Path: path, Files: files})
+				return deps.WriteJSONList(cmd.OutOrStdout(), Tree{Repository: browseRepositoryOf(repo), Path: path, Files: files}, paging.LimitReached(treePaging, len(files)))
 			}
 
 			if len(files) == 0 {
@@ -69,6 +69,7 @@ func newRepoBrowseCommand(deps Dependencies) *cobra.Command {
 			for _, file := range files {
 				fmt.Fprintln(cmd.OutOrStdout(), file)
 			}
+			paging.Hint(cmd.ErrOrStderr(), treePaging, len(files))
 
 			return nil
 		},
@@ -259,7 +260,7 @@ func newRepoBrowseCommand(deps Dependencies) *cobra.Command {
 			}
 
 			if deps.JSONEnabled() {
-				return deps.WriteJSON(cmd.OutOrStdout(), FileHistory{Repository: result.Repository{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, Path: args[0], Commits: result.CommitsFrom(commits)})
+				return deps.WriteJSONList(cmd.OutOrStdout(), FileHistory{Repository: result.Repository{ProjectKey: repo.ProjectKey, Slug: repo.Slug}, Path: args[0], Commits: result.CommitsFrom(commits)}, paging.LimitReached(historyPaging, len(commits)))
 			}
 
 			if len(commits) == 0 {
@@ -272,6 +273,7 @@ func newRepoBrowseCommand(deps Dependencies) *cobra.Command {
 				rows[i] = []string{style.Secondary.Render(safederef.String(commit.DisplayId)), strings.Split(safederef.String(commit.Message), "\n")[0]}
 			}
 			style.WriteTable(cmd.OutOrStdout(), rows)
+			paging.Hint(cmd.ErrOrStderr(), historyPaging, len(commits))
 
 			return nil
 		},

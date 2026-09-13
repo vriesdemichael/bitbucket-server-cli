@@ -50,7 +50,7 @@ func newGpgKeyCommand(deps Dependencies) *cobra.Command {
 			}
 
 			if isJSON() {
-				return deps.WriteJSON(cmd.OutOrStdout(), gpgKeysFrom(keys))
+				return deps.WriteJSONList(cmd.OutOrStdout(), gpgKeysFrom(keys), paging.LimitReached(listPaging, len(keys)))
 			}
 
 			if len(keys) == 0 {
@@ -80,6 +80,7 @@ func newGpgKeyCommand(deps Dependencies) *cobra.Command {
 				rows[i] = []string{style.Secondary.Render(id), style.Resource.Render(email), expiryStr, fingerprint}
 			}
 			style.WriteTable(cmd.OutOrStdout(), rows)
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(keys))
 			return nil
 		},
 	}

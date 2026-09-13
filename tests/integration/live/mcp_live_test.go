@@ -19,6 +19,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/vriesdemichael/bitbucket-data-center-cli/internal/cli"
 	bbmcp "github.com/vriesdemichael/bitbucket-data-center-cli/internal/mcp"
+	"github.com/vriesdemichael/bitbucket-data-center-cli/internal/testsupport"
 )
 
 // executeLiveMCPServer runs `bb ai mcp serve` and drives a real MCP client
@@ -320,6 +321,7 @@ func TestLiveMCPReadOnlyToolsAgreeWithCLI(t *testing.T) {
 				Commits []struct {
 					ID string `json:"id"`
 				} `json:"commits"`
+				LimitReached bool `json:"limit_reached"`
 			}
 			callAndDecode(t, session, callCtx, "list_commits", map[string]any{
 				"project": seeded.Key, "repo": repo.Slug, "limit": 10,
@@ -332,6 +334,29 @@ func TestLiveMCPReadOnlyToolsAgreeWithCLI(t *testing.T) {
 			sort.Strings(got)
 			if strings.Join(got, ",") != strings.Join(wantCommits, ",") {
 				t.Errorf("list_commits returned %v, but bb commit list returned %v", got, wantCommits)
+			}
+
+			// #573: every commit under a limit of ten is all of them and must
+			// say so, and a limit of one stops short and must say that instead.
+			if len(wantCommits) < 2 {
+				t.Fatalf("the seeded repository has %d commits; telling a cut listing from a whole one needs two", len(wantCommits))
+			}
+			if payload.LimitReached {
+				t.Errorf("list_commits returned all %d commits under a limit of 10 but reported limit_reached", len(payload.Commits))
+			}
+
+			var cut struct {
+				Commits []struct {
+					ID string `json:"id"`
+				} `json:"commits"`
+				LimitReached bool `json:"limit_reached"`
+			}
+			callAndDecode(t, session, callCtx, "list_commits", map[string]any{
+				"project": seeded.Key, "repo": repo.Slug, "limit": 1,
+			}, &cut)
+			if len(cut.Commits) != 1 || !cut.LimitReached {
+				t.Errorf("list_commits with limit 1 over %d commits returned %d with limit_reached %v, want 1 with true",
+					len(wantCommits), len(cut.Commits), cut.LimitReached)
 			}
 		})
 
@@ -385,7 +410,7 @@ func TestLiveMCPReadOnlyToolsAgreeWithCLI(t *testing.T) {
 		// something a caller can do, and a server does not report it -- the
 		// field is what the contract actually offers.
 		t.Run("get_pull_request skip_review_summary", func(t *testing.T) {
-			branch := fmt.Sprintf("lt-mcp-skip-%d", time.Now().UnixNano()%100000)
+			branch := testsupport.UniqueName("lt-mcp-skip-")
 			if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, "mcp-skip.txt"); err != nil {
 				t.Fatalf("push commit on branch failed: %v", err)
 			}
@@ -883,7 +908,7 @@ func TestLiveMCPSubmitReviewMutatesForReal(t *testing.T) {
 	repo := seeded.Repos[0]
 	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
 
-	branch := fmt.Sprintf("lt-mcp-review-%d", time.Now().UnixNano()%100000)
+	branch := testsupport.UniqueName("lt-mcp-review-")
 	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, "mcp-review.txt"); err != nil {
 		t.Fatalf("push commit on branch failed: %v", err)
 	}
@@ -1034,7 +1059,7 @@ func TestLiveMCPAddPRCommentRoutesInlineAndReply(t *testing.T) {
 	configureLiveCLIEnv(t, harness, seeded.Key, repo.Slug)
 
 	const anchoredFile = "mcp-comment.txt"
-	branch := fmt.Sprintf("lt-mcp-comment-%d", time.Now().UnixNano()%100000)
+	branch := testsupport.UniqueName("lt-mcp-comment-")
 	if err := harness.pushCommitOnBranch(seeded.Key, repo.Slug, branch, anchoredFile); err != nil {
 		t.Fatalf("push commit on branch failed: %v", err)
 	}

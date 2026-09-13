@@ -107,7 +107,7 @@ func New(deps Dependencies) *cobra.Command {
 			}
 
 			if d.JSONEnabled() {
-				return d.WriteJSON(cmd.OutOrStdout(), Projects{Projects: projectsFrom(projects)})
+				return d.WriteJSONList(cmd.OutOrStdout(), Projects{Projects: projectsFrom(projects)}, paging.LimitReached(listPaging, len(projects)))
 			}
 
 			if len(projects) == 0 {
@@ -120,6 +120,7 @@ func New(deps Dependencies) *cobra.Command {
 				rows[i] = []string{style.Resource.Render(safederef.String(p.Key)), safederef.String(p.Name)}
 			}
 			style.WriteTable(cmd.OutOrStdout(), rows)
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(projects))
 
 			return nil
 		},

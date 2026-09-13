@@ -199,6 +199,7 @@ func New(deps Dependencies) *cobra.Command {
 					indicator,
 				)
 			}
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(pullRequests))
 
 			return nil
 		},
@@ -314,7 +315,7 @@ func New(deps Dependencies) *cobra.Command {
 			}
 
 			if deps.JSONEnabled() {
-				return deps.WriteJSON(cmd.OutOrStdout(), PullRequestCommits{Repository: repositoryOf(repo), PullRequestID: target.PullRequestID, Commits: commitsFrom(commits)})
+				return deps.WriteJSONList(cmd.OutOrStdout(), PullRequestCommits{Repository: repositoryOf(repo), PullRequestID: target.PullRequestID, Commits: commitsFrom(commits)}, paging.LimitReached(commitsPaging, len(commits)))
 			}
 
 			if len(commits) == 0 {
@@ -324,6 +325,7 @@ func New(deps Dependencies) *cobra.Command {
 			for _, commit := range commits {
 				fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\n", shortCommitID(commit), firstMessageLine(commit.Message))
 			}
+			paging.Hint(cmd.ErrOrStderr(), commitsPaging, len(commits))
 			return nil
 		},
 	}
@@ -357,7 +359,7 @@ func New(deps Dependencies) *cobra.Command {
 			}
 
 			if deps.JSONEnabled() {
-				return deps.WriteJSON(cmd.OutOrStdout(), PullRequestChanges{Repository: repositoryOf(repo), PullRequestID: target.PullRequestID, Changes: changesFrom(changes)})
+				return deps.WriteJSONList(cmd.OutOrStdout(), PullRequestChanges{Repository: repositoryOf(repo), PullRequestID: target.PullRequestID, Changes: changesFrom(changes)}, paging.LimitReached(filesPaging, len(changes)))
 			}
 
 			if len(changes) == 0 {
@@ -375,6 +377,7 @@ func New(deps Dependencies) *cobra.Command {
 				}
 				fmt.Fprintln(cmd.OutOrStdout(), line)
 			}
+			paging.Hint(cmd.ErrOrStderr(), filesPaging, len(changes))
 			return nil
 		},
 	}
@@ -1919,7 +1922,7 @@ changes as readily as an approval, which its name does not suggest.`,
 				if deps.JSONEnabled() {
 					// Present even when empty: its absence is what says --full
 					// was not passed, so an empty file must still carry the key.
-					return deps.WriteJSON(cmd.OutOrStdout(), CommentThreads{
+					return deps.WriteJSONList(cmd.OutOrStdout(), CommentThreads{
 						Repository:    repositoryOf(repo),
 						PullRequestID: target.PullRequestID,
 						Source:        source,
@@ -1928,7 +1931,7 @@ changes as readily as an approval, which its name does not suggest.`,
 						Summary:       threadSummaryFrom(summary),
 						Threads:       threadsFrom(threads),
 						Comments:      &ungrouped,
-					})
+					}, paging.LimitReached(commentPaging, len(threads)))
 				}
 
 				if len(ungrouped) == 0 {
@@ -1938,12 +1941,13 @@ changes as readily as an approval, which its name does not suggest.`,
 				for _, comment := range ungrouped {
 					fmt.Fprintln(cmd.OutOrStdout(), result.FormatComment(comment))
 				}
+				paging.Hint(cmd.ErrOrStderr(), commentPaging, len(threads))
 
 				return nil
 			}
 
 			if deps.JSONEnabled() {
-				return deps.WriteJSON(cmd.OutOrStdout(), CommentThreads{
+				return deps.WriteJSONList(cmd.OutOrStdout(), CommentThreads{
 					Repository:    repositoryOf(repo),
 					PullRequestID: target.PullRequestID,
 					Source:        source,
@@ -1951,7 +1955,7 @@ changes as readily as an approval, which its name does not suggest.`,
 					State:         normalizedState,
 					Summary:       threadSummaryFrom(summary),
 					Threads:       threadsFrom(threads),
-				})
+				}, paging.LimitReached(commentPaging, len(threads)))
 			}
 
 			if summary.TotalThreads == 0 {
@@ -1970,6 +1974,7 @@ changes as readily as an approval, which its name does not suggest.`,
 			for _, thread := range threads {
 				fmt.Fprintln(cmd.OutOrStdout(), formatThread(thread))
 			}
+			paging.Hint(cmd.ErrOrStderr(), commentPaging, len(threads))
 
 			return nil
 		},
@@ -2361,12 +2366,12 @@ appears in the pull request diff, so the line has to be inside a changed hunk an
 				return err
 			}
 
-			// PageSize is named honestly here and reads to exhaustion, so the
-			// cap has to be applied on the way out (#473).
+			// The service already stops at the cap (ADR-074); this keeps --limit
+			// honest if one ever does not. A no-op under --all.
 			activities = paging.Truncate(activityPaging, activities)
 
 			if deps.JSONEnabled() {
-				return deps.WriteJSON(cmd.OutOrStdout(), Activities{Repository: repositoryOf(repo), PullRequestID: target.PullRequestID, Activities: activitiesFrom(activities)})
+				return deps.WriteJSONList(cmd.OutOrStdout(), Activities{Repository: repositoryOf(repo), PullRequestID: target.PullRequestID, Activities: activitiesFrom(activities)}, paging.LimitReached(activityPaging, len(activities)))
 			}
 
 			if len(activities) == 0 {
@@ -2377,6 +2382,7 @@ appears in the pull request diff, so the line has to be inside a changed hunk an
 			for _, activity := range activities {
 				fmt.Fprintln(cmd.OutOrStdout(), formatPullRequestActivitySummary(activity))
 			}
+			paging.Hint(cmd.ErrOrStderr(), activityPaging, len(activities))
 
 			return nil
 		},
@@ -2414,15 +2420,16 @@ appears in the pull request diff, so the line has to be inside a changed hunk an
 					return err
 				}
 
-				// Reads to exhaustion, so --limit only sized the pages (#473).
+				// The service already stops at the cap (ADR-074); this keeps --limit
+				// honest if one ever does not. A no-op under --all.
 				statuses = paging.Truncate(statusPaging, statuses)
 
 				if deps.JSONEnabled() {
-					return deps.WriteJSON(cmd.OutOrStdout(), BuildStatuses{
+					return deps.WriteJSONList(cmd.OutOrStdout(), BuildStatuses{
 						Repository:    repositoryOf(repo),
 						PullRequestID: target.PullRequestID,
 						Statuses:      buildStatusesFrom(statuses),
-					})
+					}, paging.LimitReached(statusPaging, len(statuses)))
 				}
 
 				if len(statuses) == 0 {
@@ -2433,6 +2440,7 @@ appears in the pull request diff, so the line has to be inside a changed hunk an
 				for _, s := range statuses {
 					fmt.Fprintf(cmd.OutOrStdout(), "%s\t%s\t%s\n", s.Key, s.State, s.URL)
 				}
+				paging.Hint(cmd.ErrOrStderr(), statusPaging, len(statuses))
 
 				return nil
 			},

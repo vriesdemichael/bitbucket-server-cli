@@ -20,7 +20,8 @@ type ListCommitsInput struct {
 
 // ListCommitsOutput names the collection it holds.
 type ListCommitsOutput struct {
-	Commits []openapigenerated.RestCommit `json:"commits"`
+	Commits      []openapigenerated.RestCommit `json:"commits"`
+	LimitReached bool                          `json:"limit_reached" jsonschema:"True when the result stopped at limit, so there may be more; call again with a higher limit to see them"`
 }
 
 func specListCommits() Spec {
@@ -32,18 +33,20 @@ func specListCommits() Spec {
 	return toolSpec(tool, true, func(c Clients) mcp.ToolHandlerFor[ListCommitsInput, ListCommitsOutput] {
 		svc := commitservice.NewService(c.OpenAPI)
 		return func(ctx context.Context, _ *mcp.CallToolRequest, in ListCommitsInput) (*mcp.CallToolResult, ListCommitsOutput, error) {
+			limit := limitOrDefault(in.Limit)
 			commits, err := svc.List(ctx,
 				commitservice.RepositoryRef{ProjectKey: in.Project, Slug: in.Repo},
 				commitservice.ListOptions{
 					Since:      in.Since,
 					Until:      in.Until,
-					MaxResults: limitOrDefault(in.Limit),
+					MaxResults: limit,
 				},
 			)
 			if err != nil {
 				return nil, ListCommitsOutput{}, fmt.Errorf("list_commits failed: %w", err)
 			}
-			return nil, ListCommitsOutput{Commits: commits}, nil
+			commits, reached := capped(limit, commits)
+			return nil, ListCommitsOutput{Commits: commits, LimitReached: reached}, nil
 		}
 	})
 }
@@ -85,37 +88,40 @@ func specGetCommit() Spec {
 type CompareRefsInput struct {
 	Project string `json:"project" jsonschema:"Bitbucket project key"`
 	Repo    string `json:"repo" jsonschema:"Repository slug"`
-	From    string `json:"from" jsonschema:"Base ref or commit (older side of comparison)"`
-	To      string `json:"to" jsonschema:"Target ref or commit (newer side of comparison)"`
+	From    string `json:"from" jsonschema:"The ref whose commits you want. Bitbucket returns commits reachable from this ref but not from 'to', so this is the feature side -- the opposite way round from git log base..feature"`
+	To      string `json:"to" jsonschema:"The ref to compare against. Commits already reachable from this ref are excluded, so this is the base side"`
 	Limit   int    `json:"limit,omitempty" jsonschema:"Maximum number of commits to return (default 25)"`
 }
 
 // CompareRefsOutput names the collection it holds.
 type CompareRefsOutput struct {
-	Commits []openapigenerated.RestCommit `json:"commits"`
+	Commits      []openapigenerated.RestCommit `json:"commits"`
+	LimitReached bool                          `json:"limit_reached" jsonschema:"True when the result stopped at limit, so there may be more; call again with a higher limit to see them"`
 }
 
 func specCompareRefs() Spec {
 	tool := &mcp.Tool{
 		Name:        "compare_refs",
-		Description: "List commits between two refs. Returns the commits reachable from 'to' but not from 'from'.",
+		Description: "List commits between two refs. Returns the commits reachable from 'from' but not from 'to' -- Bitbucket's direction, which is the reverse of git log base..feature. To list what a feature branch adds, pass from=feature and to=base; the git-natural order returns nothing.",
 		Annotations: readOnly(),
 	}
 	return toolSpec(tool, true, func(c Clients) mcp.ToolHandlerFor[CompareRefsInput, CompareRefsOutput] {
 		svc := commitservice.NewService(c.OpenAPI)
 		return func(ctx context.Context, _ *mcp.CallToolRequest, in CompareRefsInput) (*mcp.CallToolResult, CompareRefsOutput, error) {
+			limit := limitOrDefault(in.Limit)
 			commits, err := svc.Compare(ctx,
 				commitservice.RepositoryRef{ProjectKey: in.Project, Slug: in.Repo},
 				commitservice.CompareOptions{
 					From:       in.From,
 					To:         in.To,
-					MaxResults: limitOrDefault(in.Limit),
+					MaxResults: limit,
 				},
 			)
 			if err != nil {
 				return nil, CompareRefsOutput{}, fmt.Errorf("compare_refs failed: %w", err)
 			}
-			return nil, CompareRefsOutput{Commits: commits}, nil
+			commits, reached := capped(limit, commits)
+			return nil, CompareRefsOutput{Commits: commits, LimitReached: reached}, nil
 		}
 	})
 }

@@ -120,7 +120,7 @@ func New(deps Dependencies) *cobra.Command {
 			}
 
 			if d.JSONEnabled() {
-				return d.WriteJSON(cmd.OutOrStdout(), reported)
+				return d.WriteJSONList(cmd.OutOrStdout(), reported, paging.LimitReached(listPaging, len(commits)))
 			}
 
 			if len(reported.Commits) == 0 {
@@ -133,6 +133,7 @@ func New(deps Dependencies) *cobra.Command {
 				rows[i] = []string{style.Secondary.Render(commit.DisplayID), commit.Subject()}
 			}
 			style.WriteTable(cmd.OutOrStdout(), rows)
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(commits))
 
 			return nil
 		},
@@ -210,7 +211,7 @@ func New(deps Dependencies) *cobra.Command {
 			}
 
 			if d.JSONEnabled() {
-				return d.WriteJSON(cmd.OutOrStdout(), reported)
+				return d.WriteJSONList(cmd.OutOrStdout(), reported, paging.LimitReached(listPaging, len(commits)))
 			}
 
 			if len(reported.Commits) == 0 {
@@ -223,6 +224,7 @@ func New(deps Dependencies) *cobra.Command {
 				rows[i] = []string{style.Secondary.Render(commit.DisplayID), commit.Subject()}
 			}
 			style.WriteTable(cmd.OutOrStdout(), rows)
+			paging.Hint(cmd.ErrOrStderr(), listPaging, len(commits))
 
 			return nil
 		},
